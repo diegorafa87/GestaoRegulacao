@@ -1,7 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response, session, flash
 import os
-import psycopg2
-import psycopg2.extras
+import psycopg
 from datetime import datetime
 import csv
 import io
@@ -609,7 +608,7 @@ def novo_paciente():
             c.execute("INSERT INTO paciente (id, nome, nascimento, telefone, endereco) VALUES (%s, %s, %s, %s, %s)",
                       (id, nome, nascimento, telefone, endereco))
             conn.commit()
-        except psycopg2.errors.UniqueViolation:
+        except Exception:
             conn.rollback()
         conn.close()
         return redirect(url_for('pacientes'))

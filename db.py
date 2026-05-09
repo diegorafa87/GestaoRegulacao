@@ -1,6 +1,5 @@
 import os
-import psycopg2
-import psycopg2.extras
+import psycopg
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -9,7 +8,7 @@ load_dotenv()
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 def conectar():
-    conn = psycopg2.connect(DATABASE_URL)
+    conn = psycopg.connect(DATABASE_URL)
     return conn
 
 def criar_tabelas():
