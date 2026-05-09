@@ -1,13 +1,64 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
+from flask import Flask, render_template, request, redirect, url_for, jsonify, Response, session, flash
 import os
 import psycopg2
 import psycopg2.extras
 from datetime import datetime
 import csv
 import io
+from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
+from dotenv import load_dotenv
 from db import conectar, criar_tabelas
 
+load_dotenv()
+
 app = Flask(__name__)
+app.secret_key = os.environ.get('SECRET_KEY', 'trocar-esta-chave-em-producao')
+
+PUBLIC_ENDPOINTS = {'login', 'logout', 'static'}
+
+def usuario_logado():
+    return bool(session.get('usuario_id'))
+
+def apenas_admin():
+    return session.get('usuario_perfil') == 'ADMIN'
+
+def login_required_admin(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if not usuario_logado():
+            return redirect(url_for('login'))
+        if not apenas_admin():
+            flash('Apenas usuários administradores podem acessar esta área.', 'warning')
+            return redirect(url_for('index'))
+        return func(*args, **kwargs)
+    return wrapper
+
+@app.before_request
+def exigir_login_global():
+    endpoint = request.endpoint or ''
+    if endpoint in PUBLIC_ENDPOINTS or endpoint.startswith('static'):
+        return
+    if not usuario_logado():
+        return redirect(url_for('login'))
+
+def garantir_usuario_admin():
+    admin_user = os.environ.get('ADMIN_USER', '').strip()
+    admin_password = os.environ.get('ADMIN_PASSWORD', '').strip()
+    if not admin_user or not admin_password:
+        return
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute('SELECT id FROM usuario WHERE username = %s', (admin_user,))
+    existente = c.fetchone()
+    if not existente:
+        c.execute(
+            'INSERT INTO usuario (nome, username, senha_hash, perfil, ativo) VALUES (%s, %s, %s, %s, %s)',
+            ('Administrador', admin_user, generate_password_hash(admin_password), 'ADMIN', True)
+        )
+        conn.commit()
+    conn.close()
 
 def normalizar_data_para_iso(data_str):
     if not data_str:
@@ -386,6 +437,51 @@ def gerar_pdf_relatorio_resumo(resumo, tipo, especialidade, data_inicio, data_fi
 
 app.jinja_env.filters['formatar_data'] = formatar_data_br
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if usuario_logado():
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        senha = request.form.get('senha', '')
+
+        conn = conectar()
+        c = conn.cursor()
+        c.execute(
+            'SELECT id, nome, username, senha_hash, perfil, ativo FROM usuario WHERE username = %s',
+            (username,)
+        )
+        usuario = c.fetchone()
+        conn.close()
+
+        if not usuario:
+            flash('Usuário ou senha inválidos.', 'danger')
+            return render_template('login.html')
+
+        if not usuario[5]:
+            flash('Usuário inativo. Contate um administrador.', 'warning')
+            return render_template('login.html')
+
+        if not check_password_hash(usuario[3], senha):
+            flash('Usuário ou senha inválidos.', 'danger')
+            return render_template('login.html')
+
+        session['usuario_id'] = usuario[0]
+        session['usuario_nome'] = usuario[1]
+        session['usuario_username'] = usuario[2]
+        session['usuario_perfil'] = usuario[4]
+        flash(f'Bem-vindo, {usuario[1]}!', 'success')
+        return redirect(url_for('index'))
+
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    flash('Sessão encerrada com sucesso.', 'info')
+    return redirect(url_for('login'))
+
 def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
     status_upper = status.upper()
     modo_urgencia_em_espera = (
@@ -453,8 +549,8 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
             ) AS status_atual
         FROM paciente p
         LEFT JOIN solicitacao s ON s.paciente_id = p.id
-        WHERE 1=%%s
-    '''.replace('1=%%s', '1=1')
+        WHERE 1=1
+    '''
 
     filtros_id = []
     if cpf:
@@ -760,8 +856,49 @@ def api_buscar_paciente():
     resultado = [{'id': p[0], 'nome': p[1]} for p in pacientes]
     return jsonify(resultado)
 
+@app.route('/usuarios', methods=['GET', 'POST'])
+@login_required_admin
+def usuarios():
+    if request.method == 'POST':
+        nome = request.form.get('nome', '').strip()
+        username = request.form.get('username', '').strip()
+        senha = request.form.get('senha', '')
+        perfil = request.form.get('perfil', 'OPERADOR').strip().upper()
+
+        if not nome or not username or not senha:
+            flash('Preencha nome, usuário e senha.', 'warning')
+            return redirect(url_for('usuarios'))
+
+        if perfil not in ('ADMIN', 'OPERADOR'):
+            perfil = 'OPERADOR'
+
+        conn = conectar()
+        c = conn.cursor()
+        c.execute('SELECT id FROM usuario WHERE username = %s', (username,))
+        if c.fetchone():
+            conn.close()
+            flash('Nome de usuário já existe. Use outro.', 'danger')
+            return redirect(url_for('usuarios'))
+
+        c.execute(
+            'INSERT INTO usuario (nome, username, senha_hash, perfil, ativo) VALUES (%s, %s, %s, %s, %s)',
+            (nome, username, generate_password_hash(senha), perfil, True)
+        )
+        conn.commit()
+        conn.close()
+        flash('Usuário criado com sucesso!', 'success')
+        return redirect(url_for('usuarios'))
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute('SELECT id, nome, username, perfil, ativo, criado_em FROM usuario ORDER BY id DESC')
+    lista_usuarios = c.fetchall()
+    conn.close()
+    return render_template('usuarios.html', usuarios=lista_usuarios)
+
 with app.app_context():
     criar_tabelas()
+    garantir_usuario_admin()
 
 if __name__ == '__main__':
     app.run(debug=True)

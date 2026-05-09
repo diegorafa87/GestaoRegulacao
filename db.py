@@ -2,6 +2,9 @@ import os
 import psycopg2
 import psycopg2.extras
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv()
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
@@ -12,6 +15,15 @@ def conectar():
 def criar_tabelas():
     conn = conectar()
     c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS usuario (
+        id SERIAL PRIMARY KEY,
+        nome TEXT NOT NULL,
+        username TEXT UNIQUE NOT NULL,
+        senha_hash TEXT NOT NULL,
+        perfil TEXT NOT NULL DEFAULT 'OPERADOR',
+        ativo BOOLEAN NOT NULL DEFAULT TRUE,
+        criado_em TIMESTAMP NOT NULL DEFAULT NOW()
+    )''')
     c.execute('''CREATE TABLE IF NOT EXISTS paciente (
         id TEXT PRIMARY KEY,
         nome TEXT NOT NULL,

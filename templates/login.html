@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block title %}Login - Regulação Saúde{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-5 col-lg-4">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <div class="text-center mb-4">
+                    <h4 class="fw-bold text-primary mb-1">Acesso ao Sistema</h4>
+                    <div class="text-muted small">Secretaria Municipal de Saúde de Fernando Pedroza</div>
+                </div>
+                <form method="post" class="d-grid gap-3">
+                    <div>
+                        <label class="form-label">Usuário</label>
+                        <input type="text" name="username" class="form-control" required autocomplete="username">
+                    </div>
+                    <div>
+                        <label class="form-label">Senha</label>
+                        <input type="password" name="senha" class="form-control" required autocomplete="current-password">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Entrar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
