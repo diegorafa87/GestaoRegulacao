@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block title %}Pacientes{% endblock %}
+{% block content %}
+<div class="text-center mb-4 pb-3 border-bottom border-2">
+    <div class="text-primary fw-bold text-uppercase small mb-1">Secretaria Municipal de Saúde de Fernando Pedroza</div>
+    <h2 class="mb-1 fw-bold text-primary">Pacientes Cadastrados</h2>
+    <div class="text-muted small">Listagem de todos os pacientes registrados no sistema</div>
+</div>
+<div class="mb-3 d-flex gap-2">
+    <a href="/novo_paciente" class="btn btn-primary">Novo Paciente</a>
+    <button class="btn btn-outline-success" data-bs-toggle="modal" data-bs-target="#modalBuscarPaciente">Buscar Paciente</button>
+</div>
+
+<!-- Modal Buscar Paciente -->
+<div class="modal fade" id="modalBuscarPaciente" tabindex="-1" aria-labelledby="labelModalBuscar" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="labelModalBuscar">Buscar Paciente</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <label class="form-label">CPF, Cartão SUS ou nome do paciente:</label>
+                <input type="text" id="buscaPacienteInput" class="form-control mb-2" placeholder="Digite ao menos 3 caracteres..." autocomplete="off">
+                <div id="buscaPacienteResultados" class="list-group mt-2"></div>
+                <div id="buscaPacienteMensagem" class="text-muted small mt-1"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<table class="table table-striped table-bordered">
+    <thead class="table-dark">
+        <tr><th>ID</th><th>Nome</th><th>Nascimento</th><th>Telefone</th><th>Endereço</th></tr>
+    </thead>
+    <tbody>
+    {% for p in pacientes %}
+        <tr>
+            <td>{{ p[0] }}</td>
+            <td>{{ p[1] }}</td>
+            <td>{{ p[2]|formatar_data }}</td>
+            <td>{{ p[3] }}</td>
+            <td>{{ p[4] }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<a href="/" class="btn btn-secondary">Voltar</a>
+
+<script>
+(() => {
+    const input = document.getElementById('buscaPacienteInput');
+    const resultados = document.getElementById('buscaPacienteResultados');
+    const mensagem = document.getElementById('buscaPacienteMensagem');
+    let timer;
+
+    input.addEventListener('input', () => {
+        const termo = input.value.trim();
+        resultados.innerHTML = '';
+        mensagem.textContent = '';
+
+        clearTimeout(timer);
+        if (termo.length < 3) {
+            mensagem.textContent = 'Digite ao menos 3 caracteres para buscar.';
+            return;
+        }
+
+        timer = setTimeout(async () => {
+            try {
+                const resp = await fetch(`/api/buscar_paciente?termo=${encodeURIComponent(termo)}`);
+                const pacientes = await resp.json();
+                resultados.innerHTML = '';
+
+                if (pacientes.length === 0) {
+                    mensagem.textContent = 'Nenhum paciente encontrado.';
+                    return;
+                }
+
+                mensagem.textContent = `${pacientes.length} paciente(s) encontrado(s).`;
+                pacientes.forEach(p => {
+                    const item = document.createElement('a');
+                    item.href = `/paciente/${encodeURIComponent(p.id)}`;
+                    item.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+                    item.innerHTML = `
+                        <div>
+                            <div class="fw-semibold">${p.nome}</div>
+                            <small class="text-muted">ID: ${p.id}</small>
+                        </div>
+                        <span class="badge bg-primary rounded-pill">Ver histórico</span>
+                    `;
+                    resultados.appendChild(item);
+                });
+            } catch {
+                mensagem.textContent = 'Erro ao realizar a busca.';
+            }
+        }, 300);
+    });
+
+    document.getElementById('modalBuscarPaciente').addEventListener('hidden.bs.modal', () => {
+        input.value = '';
+        resultados.innerHTML = '';
+        mensagem.textContent = '';
+    });
+})();
+</script>
+{% endblock %}

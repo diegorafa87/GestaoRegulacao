@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block title %}Editar Solicitação{% endblock %}
+{% block content %}
+<div class="text-center mb-4 pb-3 border-bottom border-2">
+    <div class="text-primary fw-bold text-uppercase small mb-1">Secretaria Municipal de Saúde de Fernando Pedroza</div>
+    <h2 class="mb-1 fw-bold text-primary">Editar Solicitação</h2>
+    <div class="text-muted small">Paciente: {{ paciente_id }} &mdash; Solicitação #{{ solicitacao[0] }} &mdash; Status: {{ solicitacao[7] if solicitacao[7] else '-' }}</div>
+</div>
+
+<form method="post" class="row g-3">
+    <input type="hidden" name="paciente_id" value="{{ paciente_id }}">
+
+    <div class="col-md-6">
+        <label class="form-label">Data de Realização (DD/MM/AAAA):</label>
+        <input id="data_realizacao" name="data_realizacao" class="form-control" required maxlength="10" placeholder="DD/MM/AAAA" value="{{ solicitacao[8]|formatar_data }}">
+    </div>
+
+    <div class="col-md-6">
+        <label class="form-label">Unidade Realizadora:</label>
+        <input name="unidade_realizadora" class="form-control" required value="{{ solicitacao[9] if solicitacao[9] else '' }}">
+    </div>
+
+    <div class="col-12">
+        <button type="submit" class="btn btn-success">Salvar</button>
+        <a href="{{ url_for('historico_paciente', paciente_id=paciente_id) }}" class="btn btn-secondary">Cancelar</a>
+    </div>
+</form>
+
+<script>
+(() => {
+    const campoData = document.getElementById('data_realizacao');
+    if (!campoData) return;
+
+    campoData.addEventListener('input', (e) => {
+        let valor = e.target.value.replace(/\D/g, '');
+        if (valor.length > 8) valor = valor.slice(0, 8);
+
+        let formatado = '';
+        for (let i = 0; i < valor.length; i++) {
+            if (i === 2 || i === 4) formatado += '/';
+            formatado += valor[i];
+        }
+        e.target.value = formatado;
+    });
+
+    campoData.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && e.target.value.endsWith('/')) {
+            e.target.value = e.target.value.slice(0, -1);
+        }
+    });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+{% block title %}Relatórios{% endblock %}
+{% block content %}
+<div class="text-center mb-4 pb-3 border-bottom border-2">
+    <div class="text-primary fw-bold text-uppercase small mb-1">Secretaria Municipal de Saúde de Fernando Pedroza</div>
+    <h2 class="mb-1 fw-bold text-primary">Relatórios de Especialidades Realizadas</h2>
+    <div class="text-muted small">Painel consolidado de procedimentos concluídos por especialidade</div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header bg-secondary text-white">Atalhos de Relatórios</div>
+    <div class="card-body d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-primary btn-sm" href="/relatorios">Consultas e Exames Realizados</a>
+        <a class="btn btn-outline-primary btn-sm" href="/solicitacoes">Resumo de Solicitações</a>
+        <a class="btn btn-outline-primary btn-sm" href="/solicitacoes?status=URGENTE">Urgentes em Espera</a>
+        <a class="btn btn-outline-primary btn-sm" href="/pacientes">Pacientes Cadastrados</a>
+    </div>
+</div>
+
+<form method="get" class="row g-2 align-items-end mb-4">
+    <div class="col-md-3">
+        <label class="form-label">Tipo</label>
+        <select name="tipo" class="form-control">
+            <option value="" {% if not tipo %}selected{% endif %}>Todos</option>
+            <option value="CONSULTA" {% if tipo == 'CONSULTA' %}selected{% endif %}>Consulta</option>
+            <option value="EXAME" {% if tipo == 'EXAME' %}selected{% endif %}>Exame</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Especialidade</label>
+        <input type="text" name="especialidade" class="form-control" value="{{ especialidade }}" placeholder="Ex.: Cardiologia">
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Data Inicial</label>
+        <input id="data_inicio" type="text" name="data_inicio" class="form-control" value="{{ data_inicio }}" placeholder="DD/MM/AAAA" maxlength="10">
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Data Final</label>
+        <input id="data_fim" type="text" name="data_fim" class="form-control" value="{{ data_fim }}" placeholder="DD/MM/AAAA" maxlength="10">
+    </div>
+    <div class="col-md-2 d-grid gap-2">
+        <button type="submit" class="btn btn-success">Gerar Relatório</button>
+        <button type="submit" name="formato" value="csv" class="btn btn-outline-primary">Exportar CSV</button>
+        <button type="submit" name="formato" value="pdf" class="btn btn-outline-danger">Exportar PDF</button>
+    </div>
+</form>
+
+<div class="text-muted small mb-3">
+    As exportações em CSV e PDF respeitam os filtros preenchidos acima.
+</div>
+
+{% if filtros_aplicados %}
+<div class="alert alert-info py-2">
+    Total de procedimentos realizados encontrados: <strong>{{ total_registros }}</strong>
+</div>
+{% endif %}
+
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">Resumo por Especialidade</div>
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>Especialidade</th>
+                    <th>Quantidade Realizada</th>
+                    <th>Resumo</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% if resumo %}
+                {% for r in resumo %}
+                <tr>
+                    <td>{{ r[0] if r[0] else '-' }}</td>
+                    <td>{{ r[1] }}</td>
+                    <td>{{ r[1] }} {{ r[0] if r[0] else 'procedimentos sem especialidade informada' }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="3" class="text-center text-muted">Nenhum registro encontrado para os filtros informados.</td>
+                </tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+(() => {
+    function aplicarMascaraData(campo) {
+        if (!campo) return;
+
+        campo.addEventListener('input', (e) => {
+            let valor = e.target.value.replace(/\D/g, '');
+            if (valor.length > 8) valor = valor.slice(0, 8);
+
+            let formatado = '';
+            for (let i = 0; i < valor.length; i++) {
+                if (i === 2 || i === 4) formatado += '/';
+                formatado += valor[i];
+            }
+            e.target.value = formatado;
+        });
+
+        campo.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && e.target.value.endsWith('/')) {
+                e.target.value = e.target.value.slice(0, -1);
+            }
+        });
+    }
+
+    aplicarMascaraData(document.getElementById('data_inicio'));
+    aplicarMascaraData(document.getElementById('data_fim'));
+})();
+</script>
+{% endblock %}

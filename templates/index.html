@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Início - Regulação Saúde{% endblock %}
+{% block content %}
+<div class="text-center mb-4 pb-3 border-bottom border-2">
+    <div class="text-primary fw-bold text-uppercase small mb-1">Secretaria Municipal de Saúde de Fernando Pedroza</div>
+    <h1 class="mb-1 fw-bold text-primary">Sistema de Regulação de Saúde</h1>
+    <div class="text-muted small">Painel inicial para acesso rápido aos módulos do sistema</div>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body text-center py-5">
+        <h2 class="h4 mb-3">Acesso rápido</h2>
+        <p class="text-muted mb-4">Escolha uma das opções abaixo para gerenciar pacientes, solicitações e relatórios.</p>
+        <div class="d-flex flex-wrap justify-content-center gap-2">
+            <a href="/pacientes" class="btn btn-primary btn-lg">Pacientes</a>
+            <a href="/solicitacoes" class="btn btn-success btn-lg">Solicitações</a>
+            <a href="/relatorios" class="btn btn-outline-primary btn-lg">Relatórios</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

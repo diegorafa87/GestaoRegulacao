@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Pesquisar' if mostrar_filtros else 'Solicitações' }}{% endblock %}
+{% block content %}
+<div class="text-center mb-4 pb-3 border-bottom border-2">
+    <div class="text-primary fw-bold text-uppercase small mb-1">Secretaria Municipal de Saúde de Fernando Pedroza</div>
+    <h2 class="mb-1 fw-bold text-primary">{{ 'Pesquisar Solicitações' if mostrar_filtros else 'Solicitações' }}</h2>
+    <div class="text-muted small">{{ 'Busca de solicitações por filtros' if mostrar_filtros else 'Gerenciamento de solicitações dos pacientes' }}</div>
+</div>
+{% if not mostrar_filtros %}
+<div class="mb-3">
+    <a href="/nova_solicitacao" class="btn btn-primary">Nova Solicitação</a>
+</div>
+{% endif %}
+
+{% if mostrar_filtros %}
+<form class="row g-2 mb-3" method="get">
+        <div class="col-md-2">
+                <input type="text" name="cpf" class="form-control form-control-sm" placeholder="CPF" value="{{ cpf }}">
+        </div>
+        <div class="col-md-2">
+                <input type="text" name="sus" class="form-control form-control-sm" placeholder="Cartão SUS" value="{{ sus }}">
+        </div>
+        <div class="col-md-2">
+                <input type="text" name="especialidade" class="form-control form-control-sm" placeholder="Especialidade" value="{{ especialidade }}">
+        </div>
+        <div class="col-md-2">
+                <input type="text" name="prioridade" class="form-control form-control-sm" placeholder="Prioridade" value="{{ prioridade }}">
+        </div>
+        <div class="col-md-2">
+                <input type="text" name="status" class="form-control form-control-sm" placeholder="Status" value="{{ status }}">
+        </div>
+        <div class="col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-success btn-sm w-100">Buscar</button>
+                <a href="/pesquisar" class="btn btn-outline-secondary btn-sm w-100">Limpar</a>
+        </div>
+</form>
+{% endif %}
+
+<table class="table table-striped table-bordered">
+        <thead class="table-dark">
+                {% if modo_urgencia_em_espera %}
+                <tr>
+                        <th>ID (CPF/SUS)</th><th>Paciente</th><th>Especialidade</th><th>Prioridade</th><th>Status</th><th>Data Solicitação</th><th>Data Entrada</th><th>Ação</th>
+                </tr>
+                {% else %}
+                <tr>
+                        <th>ID (CPF/SUS)</th><th>Paciente</th><th>Total Solicitações</th><th>Última Entrada</th><th>Status Atual</th><th>Ação</th>
+                </tr>
+                {% endif %}
+        </thead>
+        <tbody>
+        {% for s in solicitacoes %}
+                {% if modo_urgencia_em_espera %}
+                <tr>
+                        <td>{{ s[0] }}</td>
+                        <td>{{ s[1] }}</td>
+                        <td>{{ s[2] if s[2] else '-' }}</td>
+                        <td>{{ s[3] if s[3] else '-' }}</td>
+                        <td>{{ s[4] if s[4] else '-' }}</td>
+                        <td>{{ s[5]|formatar_data }}</td>
+                        <td>{{ s[6]|formatar_data }}</td>
+                        <td><a href="/paciente/{{ s[0] }}" class="btn btn-sm btn-info">Ver Histórico</a></td>
+                </tr>
+                {% else %}
+                <tr>
+                        <td>{{ s[0] }}</td>
+                        <td>{{ s[1] }}</td>
+                        <td>{{ s[2] }}</td>
+                        <td>{{ s[3]|formatar_data }}</td>
+                        <td>{{ s[4] if s[4] else '-' }}</td>
+                        <td><a href="/paciente/{{ s[0] }}" class="btn btn-sm btn-info">Ver Histórico</a></td>
+                </tr>
+                {% endif %}
+        {% endfor %}
+        </tbody>
+</table>
+<a href="/" class="btn btn-secondary">Voltar</a>
+{% endblock %}

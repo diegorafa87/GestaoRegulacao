@@ -1,0 +1,185 @@
+{% extends 'base.html' %}
+{% block title %}Nova Solicitação{% endblock %}
+{% block content %}
+<div class="text-center mb-4 pb-3 border-bottom border-2">
+    <div class="text-primary fw-bold text-uppercase small mb-1">Secretaria Municipal de Saúde de Fernando Pedroza</div>
+    <h2 class="mb-1 fw-bold text-primary">Nova Solicitação</h2>
+    <div class="text-muted small">Registro de nova solicitação de consulta ou exame</div>
+</div>
+<form method="post" class="row g-3">
+    <div class="col-md-4">
+        <label class="form-label">Paciente (CPF/SUS):</label>
+        <input id="paciente_id" name="paciente_id" class="form-control" required list="pacientes-sugestoes" autocomplete="off" placeholder="Digite CPF, SUS ou nome">
+        <datalist id="pacientes-sugestoes"></datalist>
+        <small id="paciente-info" class="text-muted"></small>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Data Solicitação (DD/MM/AAAA):</label>
+        <input id="data_solicitacao" name="data_solicitacao" class="form-control" required placeholder="DD/MM/AAAA" maxlength="10">
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Data Entrada (DD/MM/AAAA):</label>
+        <input id="data_entrada" name="data_entrada" class="form-control" required placeholder="DD/MM/AAAA" maxlength="10">
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Tipo de Requisição:</label>
+        <select name="tipo" class="form-control" required>
+            <option value="">Selecione uma opção</option>
+            <option value="CONSULTA">Consulta</option>
+            <option value="EXAME">Exame</option>
+            <option value="CIRURGIA">Cirurgia</option>
+        </select>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Especialidade/Descrição:</label>
+        <input name="especialidade" class="form-control" required>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Prioridade:</label>
+        <select name="prioridade" class="form-control" required>
+            <option value="">Selecione uma opção</option>
+            <option value="SIM">Sim</option>
+            <option value="NÃO">Não</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Status:</label>
+        <select name="status" class="form-control" required>
+            <option value="">Selecione uma opção</option>
+            <option value="ELETIVO">Eletivo</option>
+            <option value="URGENTE">Urgente</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Sistema de Inserção:</label>
+        <select name="sistema_insercao" class="form-control" required>
+            <option value="">Selecione uma opção</option>
+            <option value="COPIRN">Copirn</option>
+            <option value="REGULA RN">Regula RN</option>
+            <option value="REGULA CIRURGIA">Regula Cirurgia</option>
+            <option value="SISREG">Sisreg</option>
+            <option value="SMS FERNANDO PEDROZA">SMS Fernando Pedroza</option>
+            <option value="CONVÊNIO">Convênio</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <label class="form-label">Data de Inserção (DD/MM/AAAA):</label>
+        <input id="data_insercao" name="data_insercao" class="form-control" placeholder="DD/MM/AAAA" maxlength="10">
+    </div>
+    <div class="col-12">
+        <button type="submit" class="btn btn-success">Salvar</button>
+        <a href="/solicitacoes" class="btn btn-secondary">Voltar</a>
+    </div>
+</form>
+
+<script>
+(() => {
+    const campoPaciente = document.getElementById('paciente_id');
+    const listaSugestoes = document.getElementById('pacientes-sugestoes');
+    const infoPaciente = document.getElementById('paciente-info');
+    let debounceTimer;
+
+    campoPaciente.addEventListener('input', () => {
+        const termo = campoPaciente.value.trim();
+
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(async () => {
+            if (termo.length < 3) {
+                listaSugestoes.innerHTML = '';
+                infoPaciente.textContent = '';
+                return;
+            }
+
+            try {
+                const resposta = await fetch(`/api/buscar_paciente?termo=${encodeURIComponent(termo)}`);
+                if (!resposta.ok) {
+                    infoPaciente.textContent = 'Erro ao buscar paciente.';
+                    return;
+                }
+
+                const pacientes = await resposta.json();
+                listaSugestoes.innerHTML = '';
+
+                if (pacientes.length === 0) {
+                    infoPaciente.textContent = 'Nenhum paciente encontrado.';
+                    return;
+                }
+
+                pacientes.forEach((p) => {
+                    const option = document.createElement('option');
+                    option.value = p.id;
+                    option.label = `${p.nome} (${p.id})`;
+                    listaSugestoes.appendChild(option);
+                });
+
+                const matchExato = pacientes.find((p) => p.id === termo);
+                if (matchExato) {
+                    infoPaciente.textContent = `Paciente: ${matchExato.nome}`;
+                } else {
+                    infoPaciente.textContent = `${pacientes.length} paciente(s) encontrado(s) por CPF/SUS ou nome.`;
+                }
+            } catch (e) {
+                infoPaciente.textContent = 'Erro ao buscar paciente.';
+            }
+        }, 250);
+    });
+
+    // Máscara de data com barras fixas (DD/MM/AAAA)
+    function aplicarMascaraData(campo) {
+        campo.addEventListener('input', (e) => {
+            let valor = e.target.value.replace(/\D/g, '');
+            
+            if (valor.length > 8) {
+                valor = valor.slice(0, 8);
+            }
+
+            let formatado = '';
+            for (let i = 0; i < valor.length; i++) {
+                if (i === 2 || i === 4) {
+                    formatado += '/';
+                }
+                formatado += valor[i];
+            }
+
+            e.target.value = formatado;
+        });
+
+        campo.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && e.target.value.endsWith('/')) {
+                e.target.value = e.target.value.slice(0, -1);
+            }
+        });
+    }
+
+    // Aplicar máscara aos campos de data
+    const camposSolicitacao = document.getElementById('data_solicitacao');
+    const camposEntrada = document.getElementById('data_entrada');
+    const camposRealizacao = document.getElementById('data_realizacao');
+    const camposInsercao = document.getElementById('data_insercao');
+
+    if (camposSolicitacao) aplicarMascaraData(camposSolicitacao);
+    if (camposEntrada) aplicarMascaraData(camposEntrada);
+    if (camposRealizacao) aplicarMascaraData(camposRealizacao);
+    if (camposInsercao) aplicarMascaraData(camposInsercao);
+
+    // Preenchimento automático de datas
+    function obterDataAtual() {
+        const hoje = new Date();
+        const dia = String(hoje.getDate()).padStart(2, '0');
+        const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+        const ano = hoje.getFullYear();
+        return `${dia}/${mes}/${ano}`;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const dataAtual = obterDataAtual();
+        if (camposSolicitacao && !camposSolicitacao.value) {
+            camposSolicitacao.value = dataAtual;
+        }
+        if (camposEntrada && !camposEntrada.value) {
+            camposEntrada.value = dataAtual;
+        }
+    });
+})();
+</script>
+{% endblock %}
