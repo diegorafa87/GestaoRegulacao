@@ -855,6 +855,42 @@ def api_buscar_paciente():
     resultado = [{'id': p[0], 'nome': p[1]} for p in pacientes]
     return jsonify(resultado)
 
+@app.route('/api/sugestoes_solicitacao')
+def api_sugestoes_solicitacao():
+    campo = request.args.get('campo', '').strip()
+    termo = request.args.get('termo', '').strip()
+
+    colunas_permitidas = {
+        'especialidade': 'especialidade',
+        'unidade_realizadora': 'unidade_realizadora',
+    }
+
+    coluna = colunas_permitidas.get(campo)
+    if not coluna:
+        return jsonify([])
+
+    if len(termo) < 1:
+        return jsonify([])
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        f'''
+        SELECT DISTINCT TRIM({coluna}) AS valor
+        FROM solicitacao
+        WHERE {coluna} IS NOT NULL
+          AND TRIM({coluna}) <> ''
+          AND {coluna} ILIKE %s
+        ORDER BY valor
+        LIMIT 10
+        ''',
+        (f"%{termo}%",)
+    )
+    resultados = c.fetchall()
+    conn.close()
+
+    return jsonify([r[0] for r in resultados if r and r[0]])
+
 @app.route('/usuarios', methods=['GET', 'POST'])
 @login_required_admin
 def usuarios():

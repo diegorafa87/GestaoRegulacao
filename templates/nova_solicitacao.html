@@ -32,7 +32,13 @@
     </div>
     <div class="col-md-4">
         <label class="form-label">Especialidade/Descrição:</label>
-        <input name="especialidade" class="form-control" required>
+        <input id="especialidade" name="especialidade" class="form-control" required list="especialidades-sugestoes" autocomplete="off" placeholder="Digite para sugerir">
+        <datalist id="especialidades-sugestoes"></datalist>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Unidade Realizadora:</label>
+        <input id="unidade_realizadora" name="unidade_realizadora" class="form-control" list="unidades-sugestoes" autocomplete="off" placeholder="Digite para sugerir prestador">
+        <datalist id="unidades-sugestoes"></datalist>
     </div>
     <div class="col-md-4">
         <label class="form-label">Prioridade:</label>
@@ -77,6 +83,10 @@
     const campoPaciente = document.getElementById('paciente_id');
     const listaSugestoes = document.getElementById('pacientes-sugestoes');
     const infoPaciente = document.getElementById('paciente-info');
+    const campoEspecialidade = document.getElementById('especialidade');
+    const listaEspecialidades = document.getElementById('especialidades-sugestoes');
+    const campoUnidade = document.getElementById('unidade_realizadora');
+    const listaUnidades = document.getElementById('unidades-sugestoes');
     let debounceTimer;
 
     campoPaciente.addEventListener('input', () => {
@@ -161,6 +171,43 @@
     if (camposEntrada) aplicarMascaraData(camposEntrada);
     if (camposRealizacao) aplicarMascaraData(camposRealizacao);
     if (camposInsercao) aplicarMascaraData(camposInsercao);
+
+    function configurarAutocomplete(campo, lista, tipoCampo) {
+        if (!campo || !lista) return;
+
+        let timer;
+        campo.addEventListener('input', () => {
+            const termo = campo.value.trim();
+            clearTimeout(timer);
+
+            timer = setTimeout(async () => {
+                if (termo.length < 2) {
+                    lista.innerHTML = '';
+                    return;
+                }
+
+                try {
+                    const resposta = await fetch(`/api/sugestoes_solicitacao?campo=${encodeURIComponent(tipoCampo)}&termo=${encodeURIComponent(termo)}`);
+                    if (!resposta.ok) {
+                        return;
+                    }
+
+                    const itens = await resposta.json();
+                    lista.innerHTML = '';
+                    itens.forEach((item) => {
+                        const option = document.createElement('option');
+                        option.value = item;
+                        lista.appendChild(option);
+                    });
+                } catch (e) {
+                    // Falha silenciosa para não atrapalhar digitação
+                }
+            }, 220);
+        });
+    }
+
+    configurarAutocomplete(campoEspecialidade, listaEspecialidades, 'especialidade');
+    configurarAutocomplete(campoUnidade, listaUnidades, 'unidade_realizadora');
 
     // Preenchimento automático de datas
     function obterDataAtual() {

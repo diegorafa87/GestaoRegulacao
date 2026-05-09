@@ -17,7 +17,8 @@
 
     <div class="col-md-6">
         <label class="form-label">Unidade Realizadora:</label>
-        <input name="unidade_realizadora" class="form-control" required value="{{ solicitacao[9] if solicitacao[9] else '' }}">
+        <input id="unidade_realizadora" name="unidade_realizadora" class="form-control" required value="{{ solicitacao[9] if solicitacao[9] else '' }}" list="unidades-sugestoes" autocomplete="off" placeholder="Digite para sugerir prestador">
+        <datalist id="unidades-sugestoes"></datalist>
     </div>
 
     <div class="col-12">
@@ -29,6 +30,8 @@
 <script>
 (() => {
     const campoData = document.getElementById('data_realizacao');
+    const campoUnidade = document.getElementById('unidade_realizadora');
+    const listaUnidades = document.getElementById('unidades-sugestoes');
     if (!campoData) return;
 
     campoData.addEventListener('input', (e) => {
@@ -48,6 +51,35 @@
             e.target.value = e.target.value.slice(0, -1);
         }
     });
+
+    if (campoUnidade && listaUnidades) {
+        let timer;
+        campoUnidade.addEventListener('input', () => {
+            const termo = campoUnidade.value.trim();
+            clearTimeout(timer);
+
+            timer = setTimeout(async () => {
+                if (termo.length < 2) {
+                    listaUnidades.innerHTML = '';
+                    return;
+                }
+
+                try {
+                    const resposta = await fetch(`/api/sugestoes_solicitacao?campo=unidade_realizadora&termo=${encodeURIComponent(termo)}`);
+                    if (!resposta.ok) return;
+                    const itens = await resposta.json();
+                    listaUnidades.innerHTML = '';
+                    itens.forEach((item) => {
+                        const option = document.createElement('option');
+                        option.value = item;
+                        listaUnidades.appendChild(option);
+                    });
+                } catch (e) {
+                    // Falha silenciosa para não atrapalhar digitação
+                }
+            }, 220);
+        });
+    }
 })();
 </script>
 {% endblock %}
