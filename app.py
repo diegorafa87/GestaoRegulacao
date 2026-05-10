@@ -84,9 +84,15 @@ def formatar_data_br(data_str):
     return data_str
 
 def formatar_endereco_lista(endereco):
+    import re
     endereco = '' if endereco is None else str(endereco).strip()
     if not endereco:
         return ''
+
+    # Remove prefixos "Nº " e "Bairro " gerados pelo formulário de cadastro
+    endereco = re.sub(r'\bN[º°]?\s+', '', endereco)
+    endereco = re.sub(r'\bBairro\s+', '', endereco, flags=re.IGNORECASE)
+    endereco = endereco.strip().strip(',').strip()
 
     sufixo = 'FERNANDO PEDROZA, RN.'
     endereco_normalizado = endereco.upper().replace('.', '')
