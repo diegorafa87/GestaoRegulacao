@@ -29,16 +29,16 @@
     </div>
     <div class="col-md-6">
         <label class="form-label">Rua:</label>
-        <input id="rua" name="rua" class="form-control" autocomplete="address-line1" list="sugestoes-rua">
+        <input id="rua" name="rua" class="form-control" autocomplete="off" list="sugestoes-rua" placeholder="Ex: Rua das Flores">
         <datalist id="sugestoes-rua"></datalist>
     </div>
     <div class="col-md-2">
         <label class="form-label">Número:</label>
-        <input id="numero" name="numero" class="form-control" autocomplete="address-line2" inputmode="numeric">
+        <input id="numero" name="numero" class="form-control" autocomplete="off" inputmode="numeric" placeholder="Ex: 123">
     </div>
     <div class="col-md-4">
         <label class="form-label">Bairro:</label>
-        <input id="bairro" name="bairro" class="form-control" autocomplete="address-level3" list="sugestoes-bairro">
+        <input id="bairro" name="bairro" class="form-control" autocomplete="off" list="sugestoes-bairro" placeholder="Ex: Centro">
         <datalist id="sugestoes-bairro"></datalist>
     </div>
     <div class="col-12">
@@ -81,47 +81,43 @@
 
     const normalizarTexto = (valor) => (valor || '').trim();
 
-    const carregarAutopreenchimento = () => {
-        const atual = parseJsonSeguro(localStorage.getItem(STORAGE_ATUAL), {});
-        if (campoRua && !campoRua.value) campoRua.value = atual.rua || '';
-        if (campoNumero && !campoNumero.value) campoNumero.value = atual.numero || '';
-        if (campoBairro && !campoBairro.value) campoBairro.value = atual.bairro || '';
+    const lerHistorico = () =>
+        parseJsonSeguro(localStorage.getItem(STORAGE_HIST), { ruas: [], bairros: [] });
 
-        const historico = parseJsonSeguro(localStorage.getItem(STORAGE_HIST), { ruas: [], bairros: [] });
-        const ruas = Array.isArray(historico.ruas) ? historico.ruas.slice(0, 20) : [];
-        const bairros = Array.isArray(historico.bairros) ? historico.bairros.slice(0, 20) : [];
-
-        popularDatalist(listaRuas, ruas);
-        popularDatalist(listaBairros, bairros);
+    const carregarSugestoes = () => {
+        const historico = lerHistorico();
+        popularDatalist(listaRuas,   Array.isArray(historico.ruas)   ? historico.ruas   : []);
+        popularDatalist(listaBairros, Array.isArray(historico.bairros) ? historico.bairros : []);
     };
 
-    const salvarAutopreenchimento = () => {
-        const rua = normalizarTexto(campoRua?.value);
-        const numero = normalizarTexto(campoNumero?.value);
-        const bairro = normalizarTexto(campoBairro?.value);
+    // Salva um valor no histórico imediatamente ao sair do campo
+    const salvarValorNoHistorico = (chave, valor) => {
+        valor = normalizarTexto(valor);
+        if (!valor) return;
 
-        localStorage.setItem(STORAGE_ATUAL, JSON.stringify({ rua, numero, bairro }));
+        const historico = lerHistorico();
+        const lista = Array.isArray(historico[chave]) ? historico[chave] : [];
 
-        const historico = parseJsonSeguro(localStorage.getItem(STORAGE_HIST), { ruas: [], bairros: [] });
-        const ruas = Array.isArray(historico.ruas) ? historico.ruas : [];
-        const bairros = Array.isArray(historico.bairros) ? historico.bairros : [];
+        // Normaliza para comparação sem diferença de maiúsculas
+        const jaExiste = lista.some(v => v.toLowerCase() === valor.toLowerCase());
+        if (!jaExiste) {
+            lista.unshift(valor);
+            historico[chave] = lista.slice(0, 30);
+            localStorage.setItem(STORAGE_HIST, JSON.stringify(historico));
+        }
 
-        if (rua && !ruas.includes(rua)) ruas.unshift(rua);
-        if (bairro && !bairros.includes(bairro)) bairros.unshift(bairro);
-
-        localStorage.setItem(
-            STORAGE_HIST,
-            JSON.stringify({
-                ruas: ruas.slice(0, 20),
-                bairros: bairros.slice(0, 20)
-            })
-        );
+        // Atualiza o datalist imediatamente
+        carregarSugestoes();
     };
 
-    carregarAutopreenchimento();
+    carregarSugestoes();
 
-    if (formPaciente) {
-        formPaciente.addEventListener('submit', salvarAutopreenchimento);
+    // Salva ao sair do campo (blur) — captura cada digitação única
+    if (campoRua) {
+        campoRua.addEventListener('blur', () => salvarValorNoHistorico('ruas', campoRua.value));
+    }
+    if (campoBairro) {
+        campoBairro.addEventListener('blur', () => salvarValorNoHistorico('bairros', campoBairro.value));
     }
 
     if (campoBirthdate) {
