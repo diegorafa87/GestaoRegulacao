@@ -27,9 +27,19 @@
         <label class="form-label">Telefone:</label>
         <input id="telefone" name="telefone" class="form-control" placeholder="(00) 00000-00000" maxlength="15">
     </div>
+    <div class="col-md-6">
+        <label class="form-label">Rua:</label>
+        <input id="rua" name="rua" class="form-control" autocomplete="address-line1" list="sugestoes-rua">
+        <datalist id="sugestoes-rua"></datalist>
+    </div>
+    <div class="col-md-2">
+        <label class="form-label">Número:</label>
+        <input id="numero" name="numero" class="form-control" autocomplete="address-line2" inputmode="numeric">
+    </div>
     <div class="col-md-4">
-        <label class="form-label">Endereço:</label>
-        <input name="endereco" class="form-control">
+        <label class="form-label">Bairro:</label>
+        <input id="bairro" name="bairro" class="form-control" autocomplete="address-level3" list="sugestoes-bairro">
+        <datalist id="sugestoes-bairro"></datalist>
     </div>
     <div class="col-12">
         <button type="submit" class="btn btn-success">Salvar</button>
@@ -41,6 +51,78 @@
 (() => {
     const campoBirthdate = document.getElementById('nascimento');
     const campoTelefone = document.getElementById('telefone');
+    const formPaciente = document.querySelector('form[method="post"]');
+    const campoRua = document.getElementById('rua');
+    const campoNumero = document.getElementById('numero');
+    const campoBairro = document.getElementById('bairro');
+    const listaRuas = document.getElementById('sugestoes-rua');
+    const listaBairros = document.getElementById('sugestoes-bairro');
+
+    const STORAGE_ATUAL = 'novoPacienteEnderecoAtual';
+    const STORAGE_HIST = 'novoPacienteEnderecoHistorico';
+
+    const parseJsonSeguro = (raw, fallback) => {
+        try {
+            return JSON.parse(raw);
+        } catch (_) {
+            return fallback;
+        }
+    };
+
+    const popularDatalist = (elemento, valores) => {
+        if (!elemento) return;
+        elemento.innerHTML = '';
+        valores.forEach((valor) => {
+            const opcao = document.createElement('option');
+            opcao.value = valor;
+            elemento.appendChild(opcao);
+        });
+    };
+
+    const normalizarTexto = (valor) => (valor || '').trim();
+
+    const carregarAutopreenchimento = () => {
+        const atual = parseJsonSeguro(localStorage.getItem(STORAGE_ATUAL), {});
+        if (campoRua && !campoRua.value) campoRua.value = atual.rua || '';
+        if (campoNumero && !campoNumero.value) campoNumero.value = atual.numero || '';
+        if (campoBairro && !campoBairro.value) campoBairro.value = atual.bairro || '';
+
+        const historico = parseJsonSeguro(localStorage.getItem(STORAGE_HIST), { ruas: [], bairros: [] });
+        const ruas = Array.isArray(historico.ruas) ? historico.ruas.slice(0, 20) : [];
+        const bairros = Array.isArray(historico.bairros) ? historico.bairros.slice(0, 20) : [];
+
+        popularDatalist(listaRuas, ruas);
+        popularDatalist(listaBairros, bairros);
+    };
+
+    const salvarAutopreenchimento = () => {
+        const rua = normalizarTexto(campoRua?.value);
+        const numero = normalizarTexto(campoNumero?.value);
+        const bairro = normalizarTexto(campoBairro?.value);
+
+        localStorage.setItem(STORAGE_ATUAL, JSON.stringify({ rua, numero, bairro }));
+
+        const historico = parseJsonSeguro(localStorage.getItem(STORAGE_HIST), { ruas: [], bairros: [] });
+        const ruas = Array.isArray(historico.ruas) ? historico.ruas : [];
+        const bairros = Array.isArray(historico.bairros) ? historico.bairros : [];
+
+        if (rua && !ruas.includes(rua)) ruas.unshift(rua);
+        if (bairro && !bairros.includes(bairro)) bairros.unshift(bairro);
+
+        localStorage.setItem(
+            STORAGE_HIST,
+            JSON.stringify({
+                ruas: ruas.slice(0, 20),
+                bairros: bairros.slice(0, 20)
+            })
+        );
+    };
+
+    carregarAutopreenchimento();
+
+    if (formPaciente) {
+        formPaciente.addEventListener('submit', salvarAutopreenchimento);
+    }
 
     if (campoBirthdate) {
         campoBirthdate.addEventListener('input', (e) => {

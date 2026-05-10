@@ -83,6 +83,19 @@ def formatar_data_br(data_str):
         pass
     return data_str
 
+def formatar_endereco_lista(endereco):
+    endereco = '' if endereco is None else str(endereco).strip()
+    if not endereco:
+        return ''
+
+    sufixo = 'FERNANDO PEDROZA, RN.'
+    endereco_normalizado = endereco.upper().replace('.', '')
+    if 'FERNANDO PEDROZA' in endereco_normalizado and 'RN' in endereco_normalizado:
+        return endereco
+
+    separador = ', ' if not endereco.endswith(',') else ' '
+    return f'{endereco}{separador}{sufixo}'
+
 def escapar_texto_pdf(texto):
     texto = '' if texto is None else str(texto)
     texto = texto.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
@@ -435,6 +448,7 @@ def gerar_pdf_relatorio_resumo(resumo, tipo, especialidade, data_inicio, data_fi
     return pdf.getvalue()
 
 app.jinja_env.filters['formatar_data'] = formatar_data_br
+app.jinja_env.filters['formatar_endereco_lista'] = formatar_endereco_lista
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -598,8 +612,24 @@ def novo_paciente():
         sus = request.form.get('sus', '').strip()
         nome = request.form['nome']
         nascimento = normalizar_data_para_iso(request.form['nascimento'])
-        telefone = request.form['telefone']
-        endereco = request.form['endereco']
+        telefone = request.form.get('telefone', '').strip()
+
+        rua = request.form.get('rua', '').strip()
+        numero = request.form.get('numero', '').strip()
+        bairro = request.form.get('bairro', '').strip()
+
+        if rua or numero or bairro:
+            partes_endereco = []
+            if rua:
+                partes_endereco.append(rua)
+            if numero:
+                partes_endereco.append(f'Nº {numero}')
+            if bairro:
+                partes_endereco.append(f'Bairro {bairro}')
+            endereco = ', '.join(partes_endereco)
+        else:
+            endereco = request.form.get('endereco', '').strip()
+
         # Prioridade: se CPF preenchido, usar como id; senão, usar SUS
         id = cpf if cpf else sus
         conn = conectar()
@@ -613,6 +643,44 @@ def novo_paciente():
         conn.close()
         return redirect(url_for('pacientes'))
     return render_template('novo_paciente.html')
+
+@app.route('/paciente/<paciente_id>/editar', methods=['GET', 'POST'])
+def editar_paciente(paciente_id):
+    conn = conectar()
+    c = conn.cursor()
+
+    if request.method == 'POST':
+        nome = request.form.get('nome', '').strip()
+        telefone = request.form.get('telefone', '').strip()
+        endereco = request.form.get('endereco', '').strip()
+
+        if not nome:
+            conn.close()
+            flash('O nome do paciente é obrigatório.', 'warning')
+            return redirect(url_for('editar_paciente', paciente_id=paciente_id))
+
+        c.execute(
+            'UPDATE paciente SET nome = %s, telefone = %s, endereco = %s WHERE id = %s',
+            (nome, telefone, endereco, paciente_id)
+        )
+        conn.commit()
+        conn.close()
+
+        flash('Paciente atualizado com sucesso!', 'success')
+        return redirect(url_for('pacientes'))
+
+    c.execute(
+        'SELECT id, nome, nascimento, telefone, endereco FROM paciente WHERE id = %s',
+        (paciente_id,)
+    )
+    paciente = c.fetchone()
+    conn.close()
+
+    if not paciente:
+        flash('Paciente não encontrado.', 'warning')
+        return redirect(url_for('pacientes'))
+
+    return render_template('editar_paciente.html', paciente=paciente)
 
 @app.route('/paciente/<paciente_id>')
 def historico_paciente(paciente_id):

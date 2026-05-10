@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% block title %}Editar Paciente{% endblock %}
+{% block content %}
+<div class="text-center mb-4 pb-3 border-bottom border-2">
+    <div class="text-primary fw-bold text-uppercase small mb-1">Secretaria Municipal de Saúde de Fernando Pedroza</div>
+    <h2 class="mb-1 fw-bold text-primary">Editar Paciente</h2>
+    <div class="text-muted small">Atualize os dados permitidos do paciente</div>
+</div>
+
+<form method="post" class="row g-3">
+    <div class="col-md-4">
+        <label class="form-label">CPF/Cartão SUS (não editável):</label>
+        <input class="form-control" value="{{ paciente[0] }}" readonly>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Nascimento:</label>
+        <input class="form-control" value="{{ paciente[2]|formatar_data }}" readonly>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Telefone:</label>
+        <input name="telefone" id="telefone" class="form-control" value="{{ paciente[3] or '' }}" maxlength="15" placeholder="(00) 00000-0000">
+    </div>
+
+    <div class="col-md-6">
+        <label class="form-label">Nome:</label>
+        <input name="nome" class="form-control" value="{{ paciente[1] }}" required>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Endereço:</label>
+        <input name="endereco" class="form-control" value="{{ paciente[4] or '' }}">
+    </div>
+
+    <div class="col-12">
+        <button type="submit" class="btn btn-success">Salvar alterações</button>
+        <a href="/pacientes" class="btn btn-secondary">Voltar</a>
+    </div>
+</form>
+
+<script>
+(() => {
+    const campoTelefone = document.getElementById('telefone');
+
+    if (campoTelefone) {
+        campoTelefone.addEventListener('input', (e) => {
+            let valor = e.target.value.replace(/\D/g, '');
+
+            if (valor.length > 11) {
+                valor = valor.slice(0, 11);
+            }
+
+            let formatado = '';
+            if (valor.length > 0) {
+                formatado = '(' + valor.slice(0, 2);
+            }
+            if (valor.length > 2) {
+                formatado += ') ' + valor.slice(2, 7);
+            }
+            if (valor.length > 7) {
+                formatado += '-' + valor.slice(7, 11);
+            }
+
+            e.target.value = formatado;
+        });
+    }
+})();
+</script>
+{% endblock %}
