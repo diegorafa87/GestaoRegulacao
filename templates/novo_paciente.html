@@ -51,126 +51,73 @@
 (() => {
     const campoBirthdate = document.getElementById('nascimento');
     const campoTelefone = document.getElementById('telefone');
-    const formPaciente = document.querySelector('form[method="post"]');
     const campoRua = document.getElementById('rua');
-    const campoNumero = document.getElementById('numero');
     const campoBairro = document.getElementById('bairro');
     const listaRuas = document.getElementById('sugestoes-rua');
     const listaBairros = document.getElementById('sugestoes-bairro');
 
-    const STORAGE_ATUAL = 'novoPacienteEnderecoAtual';
-    const STORAGE_HIST = 'novoPacienteEnderecoHistorico';
-
-    const parseJsonSeguro = (raw, fallback) => {
-        try {
-            return JSON.parse(raw);
-        } catch (_) {
-            return fallback;
-        }
-    };
-
-    const popularDatalist = (elemento, valores) => {
-        if (!elemento) return;
-        elemento.innerHTML = '';
-        valores.forEach((valor) => {
-            const opcao = document.createElement('option');
-            opcao.value = valor;
-            elemento.appendChild(opcao);
+    // --- Autocomplete via API (igual ao campo Especialidade) ---
+    function configurarAutocompleteEndereco(campo, lista, tipoCampo) {
+        if (!campo || !lista) return;
+        let timer;
+        campo.addEventListener('input', () => {
+            const termo = campo.value.trim();
+            clearTimeout(timer);
+            timer = setTimeout(async () => {
+                if (termo.length < 1) {
+                    lista.innerHTML = '';
+                    return;
+                }
+                try {
+                    const resp = await fetch(`/api/sugestoes_endereco?campo=${encodeURIComponent(tipoCampo)}&termo=${encodeURIComponent(termo)}`);
+                    if (!resp.ok) return;
+                    const itens = await resp.json();
+                    lista.innerHTML = '';
+                    itens.forEach((item) => {
+                        const option = document.createElement('option');
+                        option.value = item;
+                        lista.appendChild(option);
+                    });
+                } catch (_) {
+                    // falha silenciosa para não atrapalhar digitação
+                }
+            }, 220);
         });
-    };
-
-    const normalizarTexto = (valor) => (valor || '').trim();
-
-    const lerHistorico = () =>
-        parseJsonSeguro(localStorage.getItem(STORAGE_HIST), { ruas: [], bairros: [] });
-
-    const carregarSugestoes = () => {
-        const historico = lerHistorico();
-        popularDatalist(listaRuas,   Array.isArray(historico.ruas)   ? historico.ruas   : []);
-        popularDatalist(listaBairros, Array.isArray(historico.bairros) ? historico.bairros : []);
-    };
-
-    // Salva um valor no histórico imediatamente ao sair do campo
-    const salvarValorNoHistorico = (chave, valor) => {
-        valor = normalizarTexto(valor);
-        if (!valor) return;
-
-        const historico = lerHistorico();
-        const lista = Array.isArray(historico[chave]) ? historico[chave] : [];
-
-        // Normaliza para comparação sem diferença de maiúsculas
-        const jaExiste = lista.some(v => v.toLowerCase() === valor.toLowerCase());
-        if (!jaExiste) {
-            lista.unshift(valor);
-            historico[chave] = lista.slice(0, 30);
-            localStorage.setItem(STORAGE_HIST, JSON.stringify(historico));
-        }
-
-        // Atualiza o datalist imediatamente
-        carregarSugestoes();
-    };
-
-    carregarSugestoes();
-
-    // Salva ao sair do campo (blur) — captura cada digitação única
-    if (campoRua) {
-        campoRua.addEventListener('blur', () => salvarValorNoHistorico('ruas', campoRua.value));
-    }
-    if (campoBairro) {
-        campoBairro.addEventListener('blur', () => salvarValorNoHistorico('bairros', campoBairro.value));
     }
 
+    configurarAutocompleteEndereco(campoRua, listaRuas, 'rua');
+    configurarAutocompleteEndereco(campoBairro, listaBairros, 'bairro');
+
+    // --- Máscara de nascimento ---
     if (campoBirthdate) {
         campoBirthdate.addEventListener('input', (e) => {
             let valor = e.target.value.replace(/\D/g, '');
-            
-            if (valor.length > 8) {
-                valor = valor.slice(0, 8);
-            }
-
+            if (valor.length > 8) valor = valor.slice(0, 8);
             let formatado = '';
             for (let i = 0; i < valor.length; i++) {
-                if (i === 2 || i === 4) {
-                    formatado += '/';
-                }
+                if (i === 2 || i === 4) formatado += '/';
                 formatado += valor[i];
             }
-
             e.target.value = formatado;
         });
-
         campoBirthdate.addEventListener('keydown', (e) => {
-            const valor = e.target.value.replace(/\D/g, '');
-            
             if (e.key === 'Backspace' && e.target.value.endsWith('/')) {
                 e.target.value = e.target.value.slice(0, -1);
             }
         });
     }
 
-    // Máscara de telefone (00) 00000-00000
+    // --- Máscara de telefone ---
     if (campoTelefone) {
         campoTelefone.addEventListener('input', (e) => {
             let valor = e.target.value.replace(/\D/g, '');
-            
-            if (valor.length > 12) {
-                valor = valor.slice(0, 12);
-            }
-
+            if (valor.length > 12) valor = valor.slice(0, 12);
             let formatado = '';
-            if (valor.length > 0) {
-                formatado = '(' + valor.slice(0, 2);
-            }
-            if (valor.length > 2) {
-                formatado += ') ' + valor.slice(2, 7);
-            }
-            if (valor.length > 7) {
-                formatado += '-' + valor.slice(7, 12);
-            }
-
+            if (valor.length > 0) formatado = '(' + valor.slice(0, 2);
+            if (valor.length > 2) formatado += ') ' + valor.slice(2, 7);
+            if (valor.length > 7) formatado += '-' + valor.slice(7, 12);
             e.target.value = formatado;
         });
-
         campoTelefone.addEventListener('keydown', (e) => {
             if (e.key === 'Backspace' && (e.target.value.endsWith(' ') || e.target.value.endsWith('-'))) {
                 e.target.value = e.target.value.slice(0, -1);

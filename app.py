@@ -643,6 +643,17 @@ def novo_paciente():
         try:
             c.execute("INSERT INTO paciente (id, nome, nascimento, telefone, endereco) VALUES (%s, %s, %s, %s, %s)",
                       (id, nome, nascimento, telefone, endereco))
+            # Salva rua e bairro como sugestoes para futuros cadastros
+            if rua:
+                c.execute(
+                    'INSERT INTO sugestao_endereco (tipo, valor) VALUES (%s, %s) ON CONFLICT DO NOTHING',
+                    ('rua', rua)
+                )
+            if bairro:
+                c.execute(
+                    'INSERT INTO sugestao_endereco (tipo, valor) VALUES (%s, %s) ON CONFLICT DO NOTHING',
+                    ('bairro', bairro)
+                )
             conn.commit()
         except Exception:
             conn.rollback()
@@ -928,6 +939,35 @@ def api_buscar_paciente():
 
     resultado = [{'id': p[0], 'nome': p[1]} for p in pacientes]
     return jsonify(resultado)
+
+@app.route('/api/sugestoes_endereco')
+def api_sugestoes_endereco():
+    campo = request.args.get('campo', '').strip()
+    termo = request.args.get('termo', '').strip()
+
+    if campo not in ('rua', 'bairro'):
+        return jsonify([])
+
+    if len(termo) < 1:
+        return jsonify([])
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        '''
+        SELECT DISTINCT valor
+        FROM sugestao_endereco
+        WHERE tipo = %s
+          AND valor ILIKE %s
+        ORDER BY valor
+        LIMIT 10
+        ''',
+        (campo, f'%{termo}%')
+    )
+    resultados = c.fetchall()
+    conn.close()
+
+    return jsonify([r[0] for r in resultados if r and r[0]])
 
 @app.route('/api/sugestoes_solicitacao')
 def api_sugestoes_solicitacao():

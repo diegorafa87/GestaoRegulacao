@@ -47,6 +47,11 @@ def criar_tabelas():
         sistema_insercao TEXT,
         FOREIGN KEY(paciente_id) REFERENCES paciente(id)
     )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS sugestao_endereco (
+        tipo TEXT NOT NULL,
+        valor TEXT NOT NULL,
+        UNIQUE(tipo, valor)
+    )''')
     conn.commit()
     conn.close()
 
