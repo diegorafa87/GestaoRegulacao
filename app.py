@@ -906,25 +906,32 @@ def pesquisar():
 def relatorios():
     tipo = request.args.get('tipo', '').strip().upper()
     especialidade = request.args.get('especialidade', '').strip()
+    situacao = request.args.get('situacao', 'REALIZADOS').strip().upper()
     data_inicio_raw = request.args.get('data_inicio', '').strip()
     data_fim_raw = request.args.get('data_fim', '').strip()
     formato = request.args.get('formato', 'html').strip().lower()
 
+    if situacao not in ('REALIZADOS', 'EM_ESPERA'):
+        situacao = 'REALIZADOS'
+
     data_inicio = normalizar_data_para_iso(data_inicio_raw) if data_inicio_raw else ''
     data_fim = normalizar_data_para_iso(data_fim_raw) if data_fim_raw else ''
 
-    filtros_aplicados = bool(tipo or especialidade or data_inicio_raw or data_fim_raw)
+    filtros_aplicados = bool(tipo or especialidade or data_inicio_raw or data_fim_raw or situacao == 'EM_ESPERA')
 
     query_resumo = '''
         SELECT
             s.especialidade,
-            COUNT(*) AS total_realizados
+            COUNT(*) AS total_registros
         FROM solicitacao s
-        WHERE s.data_realizacao IS NOT NULL
-          AND TRIM(s.data_realizacao) <> ''
-          AND UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
+        WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
     '''
     params_resumo = []
+
+    if situacao == 'EM_ESPERA':
+        query_resumo += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
+    else:
+        query_resumo += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
 
     if tipo in ('CONSULTA', 'EXAME'):
         query_resumo += ' AND UPPER(s.tipo) = %s'
@@ -936,11 +943,17 @@ def relatorios():
         params_resumo.append(valor)
 
     if data_inicio:
-        query_resumo += ' AND s.data_realizacao >= %s'
+        if situacao == 'EM_ESPERA':
+            query_resumo += ' AND s.data_entrada >= %s'
+        else:
+            query_resumo += ' AND s.data_realizacao >= %s'
         params_resumo.append(data_inicio)
 
     if data_fim:
-        query_resumo += ' AND s.data_realizacao <= %s'
+        if situacao == 'EM_ESPERA':
+            query_resumo += ' AND s.data_entrada <= %s'
+        else:
+            query_resumo += ' AND s.data_realizacao <= %s'
         params_resumo.append(data_fim)
 
     query_resumo += ' GROUP BY s.especialidade ORDER BY total_realizados DESC, s.especialidade'
@@ -968,7 +981,8 @@ def relatorios():
         csv_content = output.getvalue()
         output.close()
 
-        nome_arquivo = f"relatorio_realizados_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        prefixo_arquivo = 'relatorio_em_espera' if situacao == 'EM_ESPERA' else 'relatorio_realizados'
+        nome_arquivo = f"{prefixo_arquivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         return Response(
             '\ufeff' + csv_content,
             mimetype='text/csv; charset=utf-8',
@@ -987,7 +1001,8 @@ def relatorios():
             data_fim_raw,
             total_registros
         )
-        nome_arquivo = f"relatorio_realizados_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        prefixo_arquivo = 'relatorio_em_espera' if situacao == 'EM_ESPERA' else 'relatorio_realizados'
+        nome_arquivo = f"{prefixo_arquivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
         return Response(
             pdf_content,
             mimetype='application/pdf',
@@ -1002,6 +1017,7 @@ def relatorios():
         'relatorios.html',
         tipo=tipo,
         especialidade=especialidade,
+        situacao=situacao,
         data_inicio=data_inicio_raw,
         data_fim=data_fim_raw,
         filtros_aplicados=filtros_aplicados,
