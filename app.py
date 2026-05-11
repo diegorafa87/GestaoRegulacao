@@ -88,6 +88,31 @@ def normalizar_documento(valor):
     valor = '' if valor is None else str(valor)
     return re.sub(r'\D', '', valor)
 
+def buscar_paciente_existente_por_documentos(cpf=None, sus=None):
+    documentos = []
+    for documento in (cpf, sus):
+        doc_normalizado = normalizar_documento(documento)
+        if doc_normalizado and doc_normalizado not in documentos:
+            documentos.append(doc_normalizado)
+
+    if not documentos:
+        return None
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        '''
+        SELECT id, nome
+        FROM paciente
+        WHERE regexp_replace(COALESCE(id, ''), '\\D', '', 'g') = ANY(%s)
+        LIMIT 1
+        ''',
+        (documentos,)
+    )
+    paciente = c.fetchone()
+    conn.close()
+    return paciente
+
 def formatar_endereco_lista(endereco):
     import re
     endereco = '' if endereco is None else str(endereco).strip()
@@ -659,20 +684,18 @@ def novo_paciente():
             flash('Informe CPF ou Cartão SUS para cadastrar o paciente.', 'warning')
             return render_template('novo_paciente.html', form_data=form_data)
 
-        # Prioridade: se CPF preenchido, usar como id; senão, usar SUS
-        id = cpf if cpf else sus
-        conn = conectar()
-        c = conn.cursor()
-
-        c.execute('SELECT id, nome FROM paciente WHERE id = %s', (id,))
-        paciente_existente = c.fetchone()
+        paciente_existente = buscar_paciente_existente_por_documentos(cpf=cpf, sus=sus)
         if paciente_existente:
-            conn.close()
             flash(
                 f'Paciente já existe no sistema (ID: {paciente_existente[0]} - {paciente_existente[1]}).',
                 'danger'
             )
             return render_template('novo_paciente.html', form_data=form_data)
+
+        # Prioridade: se CPF preenchido, usar como id; senão, usar SUS
+        id = cpf if cpf else sus
+        conn = conectar()
+        c = conn.cursor()
 
         try:
             c.execute("INSERT INTO paciente (id, nome, nascimento, telefone, endereco) VALUES (%s, %s, %s, %s, %s)",
@@ -983,15 +1006,7 @@ def api_verificar_paciente_existente():
     cpf = normalizar_documento(request.args.get('cpf', '').strip())
     sus = normalizar_documento(request.args.get('sus', '').strip())
 
-    documento = cpf if cpf else sus
-    if not documento:
-        return jsonify({'existe': False})
-
-    conn = conectar()
-    c = conn.cursor()
-    c.execute('SELECT id, nome FROM paciente WHERE id = %s', (documento,))
-    paciente = c.fetchone()
-    conn.close()
+    paciente = buscar_paciente_existente_por_documentos(cpf=cpf, sus=sus)
 
     if not paciente:
         return jsonify({'existe': False})
