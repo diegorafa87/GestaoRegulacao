@@ -657,7 +657,8 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
     if filtros_id:
         query += ' AND (' + ' OR '.join(filtros_id) + ')'
     if especialidade:
-        query += ' AND EXISTS (SELECT 1 FROM solicitacao sx WHERE sx.paciente_id = p.id AND sx.especialidade LIKE %s)'
+        query += ' AND (p.nome ILIKE %s OR EXISTS (SELECT 1 FROM solicitacao sx WHERE sx.paciente_id = p.id AND sx.especialidade LIKE %s))'
+        params.append(f"%{especialidade}%")
         params.append(f"%{especialidade}%")
     if prioridade:
         query += ' AND EXISTS (SELECT 1 FROM solicitacao sx WHERE sx.paciente_id = p.id AND sx.prioridade LIKE %s)'

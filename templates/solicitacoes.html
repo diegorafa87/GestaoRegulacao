@@ -15,24 +15,15 @@
 
 {% if mostrar_filtros %}
 <form class="row g-2 mb-3" method="get">
-        <div class="col-md-2">
+        <div class="col-md-3">
                 <input type="text" id="filtroCpf" name="cpf" class="form-control form-control-sm" placeholder="CPF" maxlength="14" value="{{ cpf|formatar_documento }}">
         </div>
-        <div class="col-md-2">
-                <input type="text" name="sus" class="form-control form-control-sm" placeholder="Cartão SUS" value="{{ sus }}">
+        <div class="col-md-5">
+                <input type="text" name="especialidade" class="form-control form-control-sm" placeholder="Nome ou Especialidade" value="{{ especialidade }}">
         </div>
-        <div class="col-md-2">
-                <input type="text" name="especialidade" class="form-control form-control-sm" placeholder="Especialidade" value="{{ especialidade }}">
-        </div>
-        <div class="col-md-2">
-                <input type="text" name="prioridade" class="form-control form-control-sm" placeholder="Prioridade" value="{{ prioridade }}">
-        </div>
-        <div class="col-md-2">
-                <input type="text" name="status" class="form-control form-control-sm" placeholder="Status" value="{{ status }}">
-        </div>
-        <div class="col-md-2 d-flex gap-2">
-                <button type="submit" class="btn btn-success btn-sm w-100">Buscar</button>
-                <a href="/pesquisar" class="btn btn-outline-secondary btn-sm w-100">Limpar</a>
+        <div class="col-md-4 d-flex gap-2">
+                <button type="submit" class="btn btn-success btn-sm flex-grow-1">Buscar</button>
+                <a href="/pesquisar" class="btn btn-outline-secondary btn-sm flex-grow-1">Limpar</a>
         </div>
 </form>
 {% endif %}
