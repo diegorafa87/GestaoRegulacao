@@ -695,14 +695,14 @@ def novo_paciente():
         sus_input = request.form.get('sus', '').strip()
         cpf = normalizar_documento(cpf_input)
         sus = normalizar_documento(sus_input)
-        nome = request.form['nome'].strip()
+        nome = request.form['nome'].strip().upper()
         nascimento_raw = request.form['nascimento']
         nascimento = normalizar_data_para_iso(nascimento_raw)
         telefone = request.form.get('telefone', '').strip()
 
-        rua = request.form.get('rua', '').strip()
+        rua = request.form.get('rua', '').strip().upper()
         numero = request.form.get('numero', '').strip()
-        bairro = request.form.get('bairro', '').strip()
+        bairro = request.form.get('bairro', '').strip().upper()
 
         if rua or numero or bairro:
             partes_endereco = []
@@ -780,9 +780,9 @@ def editar_paciente(paciente_id):
     c = conn.cursor()
 
     if request.method == 'POST':
-        nome = request.form.get('nome', '').strip()
+        nome = request.form.get('nome', '').strip().upper()
         telefone = request.form.get('telefone', '').strip()
-        endereco = request.form.get('endereco', '').strip()
+        endereco = request.form.get('endereco', '').strip().upper()
 
         if not nome:
             conn.close()
@@ -836,7 +836,7 @@ def editar_solicitacao(solicitacao_id):
     if request.method == 'POST':
         paciente_id = request.form.get('paciente_id', '').strip()
         data_realizacao = normalizar_data_para_iso(request.form.get('data_realizacao'))
-        unidade_realizadora = request.form.get('unidade_realizadora', '').strip()
+        unidade_realizadora = request.form.get('unidade_realizadora', '').strip().upper()
 
         c.execute(
             'UPDATE solicitacao SET data_realizacao = %s, unidade_realizadora = %s WHERE id = %s',
@@ -1018,16 +1018,16 @@ def nova_solicitacao():
         data_entrada = normalizar_data_para_iso(request.form['data_entrada'])
         data_insercao = datetime.now().strftime('%Y-%m-%d')
         tipo = request.form['tipo']
-        especialidade = request.form['especialidade']
+        especialidade = request.form['especialidade'].upper()
         prioridade = request.form['prioridade']
-        encaminhamento = request.form.get('encaminhamento')
+        encaminhamento = request.form.get('encaminhamento', '').upper() if request.form.get('encaminhamento') else None
         status = request.form['status']
-        sistema_insercao = request.form.get('sistema_insercao', '').strip() or None
+        sistema_insercao = request.form.get('sistema_insercao', '').strip().upper() or None
         data_insercao_form = request.form.get('data_insercao', '').strip()
         if data_insercao_form:
             data_insercao = normalizar_data_para_iso(data_insercao_form) or datetime.now().strftime('%Y-%m-%d')
         data_realizacao = normalizar_data_para_iso(request.form.get('data_realizacao'))
-        unidade_realizadora = request.form.get('unidade_realizadora')
+        unidade_realizadora = request.form.get('unidade_realizadora', '').upper() if request.form.get('unidade_realizadora') else None
 
         if not paciente_id_resolvido:
             flash('Paciente não encontrado. Selecione um paciente válido pelo CPF, SUS ou nome.', 'warning')
