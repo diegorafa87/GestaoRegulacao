@@ -956,7 +956,7 @@ def relatorios():
             query_resumo += ' AND s.data_realizacao <= %s'
         params_resumo.append(data_fim)
 
-    query_resumo += ' GROUP BY s.especialidade ORDER BY total_realizados DESC, s.especialidade'
+    query_resumo += ' GROUP BY s.especialidade ORDER BY total_registros DESC, s.especialidade'
 
     conn = conectar()
     c = conn.cursor()
