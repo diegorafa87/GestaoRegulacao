@@ -6,12 +6,11 @@
     <h2 class="mb-1 fw-bold text-primary">{{ 'Pesquisar Solicitações' if mostrar_filtros else 'Solicitações' }}</h2>
     <div class="text-muted small">{{ 'Busca de solicitações por filtros' if mostrar_filtros else 'Gerenciamento de solicitações dos pacientes' }}</div>
 </div>
-{% if not mostrar_filtros %}
+
 <div class="mb-3 d-flex gap-2">
     <a href="/nova_solicitacao" class="btn btn-primary">Nova Solicitação</a>
-    <a href="/pesquisar" class="btn btn-outline-success">Pesquisar</a>
+    {% if not mostrar_filtros %}<a href="/pesquisar" class="btn btn-outline-success">Pesquisar</a>{% endif %}
 </div>
-{% endif %}
 
 {% if mostrar_filtros %}
 <form class="row g-2 mb-3" method="get">
