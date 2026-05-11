@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response, session, flash
 import os
 import psycopg
+import re
 from datetime import datetime
 import csv
 import io
@@ -82,6 +83,10 @@ def formatar_data_br(data_str):
     except ValueError:
         pass
     return data_str
+
+def normalizar_documento(valor):
+    valor = '' if valor is None else str(valor)
+    return re.sub(r'\D', '', valor)
 
 def formatar_endereco_lista(endereco):
     import re
@@ -614,10 +619,13 @@ def pacientes():
 @app.route('/novo_paciente', methods=['GET', 'POST'])
 def novo_paciente():
     if request.method == 'POST':
-        cpf = request.form.get('cpf', '').strip()
-        sus = request.form.get('sus', '').strip()
-        nome = request.form['nome']
-        nascimento = normalizar_data_para_iso(request.form['nascimento'])
+        cpf_input = request.form.get('cpf', '').strip()
+        sus_input = request.form.get('sus', '').strip()
+        cpf = normalizar_documento(cpf_input)
+        sus = normalizar_documento(sus_input)
+        nome = request.form['nome'].strip()
+        nascimento_raw = request.form['nascimento']
+        nascimento = normalizar_data_para_iso(nascimento_raw)
         telefone = request.form.get('telefone', '').strip()
 
         rua = request.form.get('rua', '').strip()
@@ -636,10 +644,36 @@ def novo_paciente():
         else:
             endereco = request.form.get('endereco', '').strip()
 
+        form_data = {
+            'cpf': cpf_input,
+            'sus': sus_input,
+            'nome': nome,
+            'nascimento': nascimento_raw,
+            'telefone': telefone,
+            'rua': rua,
+            'numero': numero,
+            'bairro': bairro,
+        }
+
+        if not cpf and not sus:
+            flash('Informe CPF ou Cartão SUS para cadastrar o paciente.', 'warning')
+            return render_template('novo_paciente.html', form_data=form_data)
+
         # Prioridade: se CPF preenchido, usar como id; senão, usar SUS
         id = cpf if cpf else sus
         conn = conectar()
         c = conn.cursor()
+
+        c.execute('SELECT id, nome FROM paciente WHERE id = %s', (id,))
+        paciente_existente = c.fetchone()
+        if paciente_existente:
+            conn.close()
+            flash(
+                f'Paciente já existe no sistema (ID: {paciente_existente[0]} - {paciente_existente[1]}).',
+                'danger'
+            )
+            return render_template('novo_paciente.html', form_data=form_data)
+
         try:
             c.execute("INSERT INTO paciente (id, nome, nascimento, telefone, endereco) VALUES (%s, %s, %s, %s, %s)",
                       (id, nome, nascimento, telefone, endereco))
@@ -657,7 +691,11 @@ def novo_paciente():
             conn.commit()
         except Exception:
             conn.rollback()
+            conn.close()
+            flash('Não foi possível cadastrar o paciente. Verifique os dados e tente novamente.', 'danger')
+            return render_template('novo_paciente.html', form_data=form_data)
         conn.close()
+        flash('Paciente cadastrado com sucesso!', 'success')
         return redirect(url_for('pacientes'))
     return render_template('novo_paciente.html')
 
@@ -939,6 +977,30 @@ def api_buscar_paciente():
 
     resultado = [{'id': p[0], 'nome': p[1]} for p in pacientes]
     return jsonify(resultado)
+
+@app.route('/api/verificar_paciente_existente')
+def api_verificar_paciente_existente():
+    cpf = normalizar_documento(request.args.get('cpf', '').strip())
+    sus = normalizar_documento(request.args.get('sus', '').strip())
+
+    documento = cpf if cpf else sus
+    if not documento:
+        return jsonify({'existe': False})
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute('SELECT id, nome FROM paciente WHERE id = %s', (documento,))
+    paciente = c.fetchone()
+    conn.close()
+
+    if not paciente:
+        return jsonify({'existe': False})
+
+    return jsonify({
+        'existe': True,
+        'id': paciente[0],
+        'nome': paciente[1],
+    })
 
 @app.route('/api/sugestoes_endereco')
 def api_sugestoes_endereco():
