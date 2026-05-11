@@ -7,8 +7,9 @@
     <div class="text-muted small">{{ 'Busca de solicitações por filtros' if mostrar_filtros else 'Gerenciamento de solicitações dos pacientes' }}</div>
 </div>
 {% if not mostrar_filtros %}
-<div class="mb-3">
+<div class="mb-3 d-flex gap-2">
     <a href="/nova_solicitacao" class="btn btn-primary">Nova Solicitação</a>
+    <a href="/pesquisar" class="btn btn-outline-success">Pesquisar</a>
 </div>
 {% endif %}
 
