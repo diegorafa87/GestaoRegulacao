@@ -88,6 +88,49 @@ def normalizar_documento(valor):
     valor = '' if valor is None else str(valor)
     return re.sub(r'\D', '', valor)
 
+def eh_cpf(valor):
+    return len(normalizar_documento(valor)) == 11
+
+def formatar_cpf(valor):
+    cpf = normalizar_documento(valor)
+    if len(cpf) != 11:
+        return '' if valor is None else str(valor).strip()
+    return f'{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}'
+
+def formatar_identificador_paciente(valor):
+    valor = '' if valor is None else str(valor).strip()
+    if eh_cpf(valor):
+        return formatar_cpf(valor)
+    return valor
+
+def resolver_id_paciente(identificador):
+    identificador = '' if identificador is None else str(identificador).strip()
+    if not identificador:
+        return None
+
+    documento = normalizar_documento(identificador)
+    conn = conectar()
+    c = conn.cursor()
+
+    if documento:
+        c.execute(
+            '''
+            SELECT id
+            FROM paciente
+            WHERE id = %s
+               OR regexp_replace(COALESCE(id, ''), '\\D', '', 'g') = %s
+            ORDER BY CASE WHEN id = %s THEN 0 ELSE 1 END, nome ASC
+            LIMIT 1
+            ''',
+            (identificador, documento, identificador)
+        )
+    else:
+        c.execute('SELECT id FROM paciente WHERE id = %s LIMIT 1', (identificador,))
+
+    paciente = c.fetchone()
+    conn.close()
+    return paciente[0] if paciente else None
+
 def buscar_paciente_existente_por_documentos(cpf=None, sus=None):
     documentos = []
     for documento in (cpf, sus):
@@ -485,6 +528,7 @@ def gerar_pdf_relatorio_resumo(resumo, tipo, especialidade, data_inicio, data_fi
 
 app.jinja_env.filters['formatar_data'] = formatar_data_br
 app.jinja_env.filters['formatar_endereco_lista'] = formatar_endereco_lista
+app.jinja_env.filters['formatar_documento'] = formatar_identificador_paciente
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -567,6 +611,8 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
     usar_data_urgencia = bool(especialidade and status)
     ultima_data_expr = 'MAX(s.data_entrada) AS ultima_data_entrada'
     params = []
+    cpf_normalizado = normalizar_documento(cpf)
+    sus_normalizado = normalizar_documento(sus)
 
     if usar_data_urgencia:
         ultima_data_expr = '''
@@ -602,12 +648,12 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
     '''
 
     filtros_id = []
-    if cpf:
-        filtros_id.append('p.id LIKE %s')
-        params.append(f"%{cpf}%")
-    if sus:
-        filtros_id.append('p.id LIKE %s')
-        params.append(f"%{sus}%")
+    if cpf_normalizado:
+        filtros_id.append("regexp_replace(COALESCE(p.id, ''), '\\D', '', 'g') LIKE %s")
+        params.append(f"%{cpf_normalizado}%")
+    if sus_normalizado:
+        filtros_id.append("regexp_replace(COALESCE(p.id, ''), '\\D', '', 'g') LIKE %s")
+        params.append(f"%{sus_normalizado}%")
     if filtros_id:
         query += ' AND (' + ' OR '.join(filtros_id) + ')'
     if especialidade:
@@ -687,13 +733,13 @@ def novo_paciente():
         paciente_existente = buscar_paciente_existente_por_documentos(cpf=cpf, sus=sus)
         if paciente_existente:
             flash(
-                f'Paciente já existe no sistema (ID: {paciente_existente[0]} - {paciente_existente[1]}).',
+                f'Paciente já existe no sistema (ID: {formatar_identificador_paciente(paciente_existente[0])} - {paciente_existente[1]}).',
                 'danger'
             )
             return render_template('novo_paciente.html', form_data=form_data)
 
         # Prioridade: se CPF preenchido, usar como id; senão, usar SUS
-        id = cpf if cpf else sus
+        id = formatar_identificador_paciente(cpf) if cpf else sus
         conn = conectar()
         c = conn.cursor()
 
@@ -724,6 +770,11 @@ def novo_paciente():
 
 @app.route('/paciente/<paciente_id>/editar', methods=['GET', 'POST'])
 def editar_paciente(paciente_id):
+    paciente_id_resolvido = resolver_id_paciente(paciente_id)
+    if not paciente_id_resolvido:
+        flash('Paciente não encontrado.', 'warning')
+        return redirect(url_for('pacientes'))
+
     conn = conectar()
     c = conn.cursor()
 
@@ -735,11 +786,11 @@ def editar_paciente(paciente_id):
         if not nome:
             conn.close()
             flash('O nome do paciente é obrigatório.', 'warning')
-            return redirect(url_for('editar_paciente', paciente_id=paciente_id))
+            return redirect(url_for('editar_paciente', paciente_id=paciente_id_resolvido))
 
         c.execute(
             'UPDATE paciente SET nome = %s, telefone = %s, endereco = %s WHERE id = %s',
-            (nome, telefone, endereco, paciente_id)
+            (nome, telefone, endereco, paciente_id_resolvido)
         )
         conn.commit()
         conn.close()
@@ -749,7 +800,7 @@ def editar_paciente(paciente_id):
 
     c.execute(
         'SELECT id, nome, nascimento, telefone, endereco FROM paciente WHERE id = %s',
-        (paciente_id,)
+        (paciente_id_resolvido,)
     )
     paciente = c.fetchone()
     conn.close()
@@ -762,14 +813,19 @@ def editar_paciente(paciente_id):
 
 @app.route('/paciente/<paciente_id>')
 def historico_paciente(paciente_id):
+    paciente_id_resolvido = resolver_id_paciente(paciente_id)
+    if not paciente_id_resolvido:
+        flash('Paciente não encontrado.', 'warning')
+        return redirect(url_for('pacientes'))
+
     conn = conectar()
     c = conn.cursor()
-    c.execute('SELECT nome FROM paciente WHERE id = %s', (paciente_id,))
+    c.execute('SELECT id, nome FROM paciente WHERE id = %s', (paciente_id_resolvido,))
     paciente = c.fetchone()
-    c.execute('SELECT * FROM solicitacao WHERE paciente_id = %s ORDER BY data_entrada DESC, status ASC', (paciente_id,))
+    c.execute('SELECT * FROM solicitacao WHERE paciente_id = %s ORDER BY data_entrada DESC, status ASC', (paciente_id_resolvido,))
     historico = c.fetchall()
     conn.close()
-    return render_template('historico_paciente.html', paciente_id=paciente_id, paciente=paciente, historico=historico)
+    return render_template('historico_paciente.html', paciente_id=paciente_id_resolvido, paciente=paciente, historico=historico)
 
 @app.route('/solicitacao/<int:solicitacao_id>/editar', methods=['GET', 'POST'])
 def editar_solicitacao(solicitacao_id):
@@ -796,6 +852,8 @@ def editar_solicitacao(solicitacao_id):
             linha = c.fetchone()
             paciente_id = linha[0] if linha else ''
 
+        paciente_id = resolver_id_paciente(paciente_id) or paciente_id
+
         conn.close()
         if paciente_id:
             return redirect(url_for('historico_paciente', paciente_id=paciente_id))
@@ -815,7 +873,7 @@ def editar_solicitacao(solicitacao_id):
     if not solicitacao:
         return redirect(url_for('solicitacoes'))
 
-    paciente_id = request.args.get('paciente_id', solicitacao[1])
+    paciente_id = resolver_id_paciente(request.args.get('paciente_id', solicitacao[1])) or solicitacao[1]
     return render_template('editar_solicitacao.html', solicitacao=solicitacao, paciente_id=paciente_id)
 
 @app.route('/solicitacoes')
@@ -953,7 +1011,8 @@ def relatorios():
 @app.route('/nova_solicitacao', methods=['GET', 'POST'])
 def nova_solicitacao():
     if request.method == 'POST':
-        paciente_id = request.form['paciente_id']
+        paciente_id = request.form['paciente_id'].strip()
+        paciente_id_resolvido = resolver_id_paciente(paciente_id)
         data_solicitacao = normalizar_data_para_iso(request.form['data_solicitacao'])
         data_entrada = normalizar_data_para_iso(request.form['data_entrada'])
         data_insercao = datetime.now().strftime('%Y-%m-%d')
@@ -968,10 +1027,15 @@ def nova_solicitacao():
             data_insercao = normalizar_data_para_iso(data_insercao_form) or datetime.now().strftime('%Y-%m-%d')
         data_realizacao = normalizar_data_para_iso(request.form.get('data_realizacao'))
         unidade_realizadora = request.form.get('unidade_realizadora')
+
+        if not paciente_id_resolvido:
+            flash('Paciente não encontrado. Selecione um paciente válido pelo CPF, SUS ou nome.', 'warning')
+            return render_template('nova_solicitacao.html')
+
         conn = conectar()
         c = conn.cursor()
         c.execute("INSERT INTO solicitacao (paciente_id, data_solicitacao, data_entrada, data_insercao, data_realizacao, unidade_realizadora, tipo, especialidade, descricao, prioridade, encaminhamento, status, sistema_insercao) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                  (paciente_id, data_solicitacao, data_entrada, data_insercao, data_realizacao, unidade_realizadora, tipo, especialidade, especialidade, prioridade, encaminhamento, status, sistema_insercao))
+                  (paciente_id_resolvido, data_solicitacao, data_entrada, data_insercao, data_realizacao, unidade_realizadora, tipo, especialidade, especialidade, prioridade, encaminhamento, status, sistema_insercao))
         conn.commit()
         conn.close()
         return redirect(url_for('solicitacoes'))
@@ -983,22 +1047,38 @@ def api_buscar_paciente():
     if len(termo) < 3:
         return jsonify([])
 
+    termo_normalizado = normalizar_documento(termo)
+
     conn = conectar()
     c = conn.cursor()
-    c.execute(
-        """
-        SELECT id, nome
-        FROM paciente
-        WHERE id LIKE %s OR nome LIKE %s
-        ORDER BY nome
-        LIMIT 10
-        """,
-        (f"%{termo}%", f"%{termo}%")
-    )
+    if termo_normalizado:
+        c.execute(
+            """
+            SELECT id, nome
+            FROM paciente
+            WHERE regexp_replace(COALESCE(id, ''), '\\D', '', 'g') LIKE %s
+               OR id ILIKE %s
+               OR nome ILIKE %s
+            ORDER BY nome
+            LIMIT 10
+            """,
+            (f"%{termo_normalizado}%", f"%{termo}%", f"%{termo}%")
+        )
+    else:
+        c.execute(
+            """
+            SELECT id, nome
+            FROM paciente
+            WHERE id ILIKE %s OR nome ILIKE %s
+            ORDER BY nome
+            LIMIT 10
+            """,
+            (f"%{termo}%", f"%{termo}%")
+        )
     pacientes = c.fetchall()
     conn.close()
 
-    resultado = [{'id': p[0], 'nome': p[1]} for p in pacientes]
+    resultado = [{'id': formatar_identificador_paciente(p[0]), 'nome': p[1]} for p in pacientes]
     return jsonify(resultado)
 
 @app.route('/api/verificar_paciente_existente')
@@ -1013,7 +1093,7 @@ def api_verificar_paciente_existente():
 
     return jsonify({
         'existe': True,
-        'id': paciente[0],
+        'id': formatar_identificador_paciente(paciente[0]),
         'nome': paciente[1],
     })
 

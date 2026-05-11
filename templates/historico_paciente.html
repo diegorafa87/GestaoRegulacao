@@ -4,7 +4,7 @@
 <div class="text-center mb-4 pb-3 border-bottom border-2">
     <div class="text-primary fw-bold text-uppercase small mb-1">Secretaria Municipal de Saúde de Fernando Pedroza</div>
     <h2 class="mb-1 fw-bold text-primary">Histórico do Paciente</h2>
-    <div class="text-muted small">{{ paciente[0] if paciente else '' }} — ID: {{ paciente_id }}</div>
+    <div class="text-muted small">{{ paciente[1] if paciente else '' }} — ID: {{ paciente_id|formatar_documento }}</div>
 </div>
 <table class="table table-striped table-bordered">
     <thead class="table-dark">

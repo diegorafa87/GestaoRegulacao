@@ -4,7 +4,7 @@
 <div class="text-center mb-4 pb-3 border-bottom border-2">
     <div class="text-primary fw-bold text-uppercase small mb-1">Secretaria Municipal de Saúde de Fernando Pedroza</div>
     <h2 class="mb-1 fw-bold text-primary">Editar Solicitação</h2>
-    <div class="text-muted small">Paciente: {{ paciente_id }} &mdash; Solicitação #{{ solicitacao[0] }} &mdash; Status: {{ solicitacao[7] if solicitacao[7] else '-' }}</div>
+    <div class="text-muted small">Paciente: {{ paciente_id|formatar_documento }} &mdash; Solicitação #{{ solicitacao[0] }} &mdash; Status: {{ solicitacao[7] if solicitacao[7] else '-' }}</div>
 </div>
 
 <form method="post" class="row g-3">

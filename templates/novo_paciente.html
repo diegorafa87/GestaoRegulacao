@@ -68,6 +68,19 @@
         return (valor || '').replace(/\D/g, '');
     }
 
+    function aplicarMascaraCpf(valor) {
+        const digitos = somenteDigitos(valor).slice(0, 11);
+        let formatado = '';
+
+        for (let i = 0; i < digitos.length; i++) {
+            if (i === 3 || i === 6) formatado += '.';
+            if (i === 9) formatado += '-';
+            formatado += digitos[i];
+        }
+
+        return formatado;
+    }
+
     function limparAvisoDuplicidade() {
         if (!avisoDuplicidade) return;
         avisoDuplicidade.className = 'col-12 d-none';
@@ -136,6 +149,12 @@
     }
 
     configurarVerificacaoDuplicidadeEmTempoReal();
+
+    if (campoCpf) {
+        campoCpf.addEventListener('input', (e) => {
+            e.target.value = aplicarMascaraCpf(e.target.value);
+        });
+    }
 
     // --- Autocomplete via API (igual ao campo Especialidade) ---
     function configurarAutocompleteEndereco(campo, lista, tipoCampo) {

@@ -39,7 +39,7 @@
     <tbody>
     {% for p in pacientes %}
         <tr>
-            <td>{{ p[0] }}</td>
+            <td>{{ p[0]|formatar_documento }}</td>
             <td>{{ p[1] }}</td>
             <td>{{ p[2]|formatar_data }}</td>
             <td>{{ p[3] }}</td>

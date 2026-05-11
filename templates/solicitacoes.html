@@ -15,7 +15,7 @@
 {% if mostrar_filtros %}
 <form class="row g-2 mb-3" method="get">
         <div class="col-md-2">
-                <input type="text" name="cpf" class="form-control form-control-sm" placeholder="CPF" value="{{ cpf }}">
+                <input type="text" id="filtroCpf" name="cpf" class="form-control form-control-sm" placeholder="CPF" maxlength="14" value="{{ cpf|formatar_documento }}">
         </div>
         <div class="col-md-2">
                 <input type="text" name="sus" class="form-control form-control-sm" placeholder="Cartão SUS" value="{{ sus }}">
@@ -52,27 +52,47 @@
         {% for s in solicitacoes %}
                 {% if modo_urgencia_em_espera %}
                 <tr>
-                        <td>{{ s[0] }}</td>
+                        <td>{{ s[0]|formatar_documento }}</td>
                         <td>{{ s[1] }}</td>
                         <td>{{ s[2] if s[2] else '-' }}</td>
                         <td>{{ s[3] if s[3] else '-' }}</td>
                         <td>{{ s[4] if s[4] else '-' }}</td>
                         <td>{{ s[5]|formatar_data }}</td>
                         <td>{{ s[6]|formatar_data }}</td>
-                        <td><a href="/paciente/{{ s[0] }}" class="btn btn-sm btn-info">Ver Histórico</a></td>
+                        <td><a href="{{ url_for('historico_paciente', paciente_id=s[0]) }}" class="btn btn-sm btn-info">Ver Histórico</a></td>
                 </tr>
                 {% else %}
                 <tr>
-                        <td>{{ s[0] }}</td>
+                        <td>{{ s[0]|formatar_documento }}</td>
                         <td>{{ s[1] }}</td>
                         <td>{{ s[2] }}</td>
                         <td>{{ s[3]|formatar_data }}</td>
                         <td>{{ s[4] if s[4] else '-' }}</td>
-                        <td><a href="/paciente/{{ s[0] }}" class="btn btn-sm btn-info">Ver Histórico</a></td>
+                        <td><a href="{{ url_for('historico_paciente', paciente_id=s[0]) }}" class="btn btn-sm btn-info">Ver Histórico</a></td>
                 </tr>
                 {% endif %}
         {% endfor %}
         </tbody>
 </table>
 <a href="/" class="btn btn-secondary">Voltar</a>
+
+<script>
+(() => {
+        const campoCpf = document.getElementById('filtroCpf');
+        if (!campoCpf) return;
+
+        campoCpf.addEventListener('input', (e) => {
+                const digitos = (e.target.value || '').replace(/\D/g, '').slice(0, 11);
+                let formatado = '';
+
+                for (let i = 0; i < digitos.length; i++) {
+                        if (i === 3 || i === 6) formatado += '.';
+                        if (i === 9) formatado += '-';
+                        formatado += digitos[i];
+                }
+
+                e.target.value = formatado;
+        });
+})();
+</script>
 {% endblock %}

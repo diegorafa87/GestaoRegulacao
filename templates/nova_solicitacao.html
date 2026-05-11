@@ -89,6 +89,10 @@
     const listaUnidades = document.getElementById('unidades-sugestoes');
     let debounceTimer;
 
+    function somenteDigitos(valor) {
+        return (valor || '').replace(/\D/g, '');
+    }
+
     campoPaciente.addEventListener('input', () => {
         const termo = campoPaciente.value.trim();
 
@@ -122,7 +126,8 @@
                     listaSugestoes.appendChild(option);
                 });
 
-                const matchExato = pacientes.find((p) => p.id === termo);
+                const termoNormalizado = somenteDigitos(termo);
+                const matchExato = pacientes.find((p) => p.id === termo || (termoNormalizado && somenteDigitos(p.id) === termoNormalizado));
                 if (matchExato) {
                     infoPaciente.textContent = `Paciente: ${matchExato.nome}`;
                 } else {
