@@ -14,11 +14,11 @@
         <small id="paciente-info" class="text-muted"></small>
     </div>
     <div class="col-md-4">
-        <label class="form-label">Data Solicitação (DD/MM/AAAA):</label>
+        <label class="form-label">Data Solicitação:</label>
         <input id="data_solicitacao" name="data_solicitacao" class="form-control" required placeholder="DD/MM/AAAA" maxlength="10">
     </div>
     <div class="col-md-4">
-        <label class="form-label">Data Entrada (DD/MM/AAAA):</label>
+        <label class="form-label">Data Entrada:</label>
         <input id="data_entrada" name="data_entrada" class="form-control" required placeholder="DD/MM/AAAA" maxlength="10">
     </div>
     <div class="col-md-4">
@@ -32,26 +32,12 @@
     </div>
     <div class="col-md-4">
         <label class="form-label">Especialidade/Descrição:</label>
-        <select id="especialidade_select" class="form-control mb-2">
+        <select id="especialidade_select" name="especialidade" class="form-control" required>
             <option value="">▼ Selecione uma especialidade já cadastrada</option>
             {% for item in especialidades %}
             <option value="{{ item }}">{{ item }}</option>
             {% endfor %}
         </select>
-        <input
-            id="especialidade"
-            name="especialidade"
-            class="form-control"
-            required
-            autocomplete="off"
-            placeholder="{% if session.get('usuario_perfil') == 'ADMIN' %}Ou digite uma nova especialidade{% else %}Selecione uma opção no campo acima{% endif %}"
-            {% if session.get('usuario_perfil') != 'ADMIN' %}readonly{% endif %}
-        >
-        {% if session.get('usuario_perfil') == 'ADMIN' %}
-        <small class="text-muted">Use a seta para escolher uma opção existente ou digite uma nova.</small>
-        {% else %}
-        <small class="text-muted">Somente administrador pode criar nova especialidade.</small>
-        {% endif %}
     </div>
     <div class="col-md-4">
         <label class="form-label">Prioridade:</label>
@@ -83,7 +69,7 @@
         </select>
     </div>
     <div class="col-md-3">
-        <label class="form-label">Data de Inserção (DD/MM/AAAA):</label>
+        <label class="form-label">Data de Inserção:</label>
         <input id="data_insercao" name="data_insercao" class="form-control" placeholder="DD/MM/AAAA" maxlength="10">
     </div>
     <div class="col-12">
@@ -116,7 +102,6 @@
     const listaSugestoes = document.getElementById('pacientes-sugestoes');
     const infoPaciente = document.getElementById('paciente-info');
     const seletorEspecialidade = document.getElementById('especialidade_select');
-    const campoEspecialidade = document.getElementById('especialidade');
     const campoEspecialidadeNovaAdmin = document.getElementById('especialidade_nova_admin');
     const btnCopiarEspecialidadeAtual = document.getElementById('btnCopiarEspecialidadeAtual');
     let debounceTimer;
@@ -209,17 +194,9 @@
     if (camposRealizacao) aplicarMascaraData(camposRealizacao);
     if (camposInsercao) aplicarMascaraData(camposInsercao);
 
-    if (seletorEspecialidade && campoEspecialidade) {
-        seletorEspecialidade.addEventListener('change', () => {
-            if (!seletorEspecialidade.value) return;
-            campoEspecialidade.value = seletorEspecialidade.value;
-            campoEspecialidade.dispatchEvent(new Event('input', { bubbles: true }));
-        });
-    }
-
-    if (btnCopiarEspecialidadeAtual && campoEspecialidadeNovaAdmin && campoEspecialidade) {
+    if (btnCopiarEspecialidadeAtual && campoEspecialidadeNovaAdmin && seletorEspecialidade) {
         btnCopiarEspecialidadeAtual.addEventListener('click', () => {
-            const valorAtual = campoEspecialidade.value.trim();
+            const valorAtual = seletorEspecialidade.value.trim();
             if (!valorAtual) return;
             campoEspecialidadeNovaAdmin.value = valorAtual;
             campoEspecialidadeNovaAdmin.dispatchEvent(new Event('input', { bubbles: true }));
