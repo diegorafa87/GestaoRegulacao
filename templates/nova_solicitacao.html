@@ -36,11 +36,6 @@
         <datalist id="especialidades-sugestoes"></datalist>
     </div>
     <div class="col-md-4">
-        <label class="form-label">Unidade Realizadora:</label>
-        <input id="unidade_realizadora" name="unidade_realizadora" class="form-control" list="unidades-sugestoes" autocomplete="off" placeholder="Digite para sugerir prestador">
-        <datalist id="unidades-sugestoes"></datalist>
-    </div>
-    <div class="col-md-4">
         <label class="form-label">Prioridade:</label>
         <select name="prioridade" class="form-control" required>
             <option value="">Selecione uma opção</option>
@@ -86,8 +81,6 @@
     const infoPaciente = document.getElementById('paciente-info');
     const campoEspecialidade = document.getElementById('especialidade');
     const listaEspecialidades = document.getElementById('especialidades-sugestoes');
-    const campoUnidade = document.getElementById('unidade_realizadora');
-    const listaUnidades = document.getElementById('unidades-sugestoes');
     let debounceTimer;
 
     function somenteDigitos(valor) {
@@ -213,7 +206,6 @@
     }
 
     configurarAutocomplete(campoEspecialidade, listaEspecialidades, 'especialidade');
-    configurarAutocomplete(campoUnidade, listaUnidades, 'unidade_realizadora');
 
     // Preenchimento automático de datas
     function obterDataAtual() {
