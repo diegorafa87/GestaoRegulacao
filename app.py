@@ -691,6 +691,34 @@ def listar_especialidades():
     conn.close()
     return [r[0] for r in resultados if r and r[0]]
 
+SISTEMAS_INSERCAO_PADRAO = [
+    'COPIRN',
+    'REGULA RN',
+    'REGULA CIRURGIA',
+    'SISREG',
+    'SOLICITA LMEEC',
+    'SMS FERNANDO PEDROZA',
+    'CONVÊNIO',
+]
+
+def listar_sistemas_insercao():
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        '''
+        SELECT DISTINCT TRIM(valor) AS valor
+        FROM sugestao_solicitacao
+        WHERE tipo = 'sistema_insercao'
+          AND TRIM(valor) <> ''
+        ORDER BY valor
+        '''
+    )
+    resultados = c.fetchall()
+    conn.close()
+
+    catalogo = [r[0] for r in resultados if r and r[0]]
+    return sorted(set(SISTEMAS_INSERCAO_PADRAO + catalogo))
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -1063,18 +1091,48 @@ def nova_solicitacao():
 
         if not paciente_id_resolvido:
             flash('Paciente não encontrado. Selecione um paciente válido pelo CPF, SUS ou nome.', 'warning')
-            return render_template('nova_solicitacao.html', especialidades=listar_especialidades())
+            return render_template(
+                'nova_solicitacao.html',
+                especialidades=listar_especialidades(),
+                sistemas_insercao=listar_sistemas_insercao(),
+            )
 
         if not especialidade:
             flash('Informe a especialidade/descrição da solicitação.', 'warning')
-            return render_template('nova_solicitacao.html', especialidades=listar_especialidades())
+            return render_template(
+                'nova_solicitacao.html',
+                especialidades=listar_especialidades(),
+                sistemas_insercao=listar_sistemas_insercao(),
+            )
+
+        if not sistema_insercao:
+            flash('Informe o sistema de inserção.', 'warning')
+            return render_template(
+                'nova_solicitacao.html',
+                especialidades=listar_especialidades(),
+                sistemas_insercao=listar_sistemas_insercao(),
+            )
 
         especialidades_catalogo = listar_especialidades()
         especialidade_existe_catalogo = especialidade in especialidades_catalogo
+        sistemas_catalogo = listar_sistemas_insercao()
+        sistema_existe_catalogo = sistema_insercao in sistemas_catalogo
 
         if not especialidade_existe_catalogo and not apenas_admin():
             flash('A criação de nova especialidade é permitida apenas para administradores. Selecione uma opção existente.', 'warning')
-            return render_template('nova_solicitacao.html', especialidades=especialidades_catalogo)
+            return render_template(
+                'nova_solicitacao.html',
+                especialidades=especialidades_catalogo,
+                sistemas_insercao=sistemas_catalogo,
+            )
+
+        if not sistema_existe_catalogo and not apenas_admin():
+            flash('A criação de novo sistema de inserção é permitida apenas para administradores. Selecione uma opção existente.', 'warning')
+            return render_template(
+                'nova_solicitacao.html',
+                especialidades=especialidades_catalogo,
+                sistemas_insercao=sistemas_catalogo,
+            )
 
         conn = conectar()
         c = conn.cursor()
@@ -1089,10 +1147,23 @@ def nova_solicitacao():
                 ''',
                 ('especialidade', especialidade)
             )
+        if apenas_admin() and not sistema_existe_catalogo:
+            c.execute(
+                '''
+                INSERT INTO sugestao_solicitacao (tipo, valor)
+                VALUES (%s, %s)
+                ON CONFLICT DO NOTHING
+                ''',
+                ('sistema_insercao', sistema_insercao)
+            )
         conn.commit()
         conn.close()
         return redirect(url_for('solicitacoes'))
-    return render_template('nova_solicitacao.html', especialidades=listar_especialidades())
+    return render_template(
+        'nova_solicitacao.html',
+        especialidades=listar_especialidades(),
+        sistemas_insercao=listar_sistemas_insercao(),
+    )
 
 @app.route('/admin/especialidades', methods=['POST'])
 @login_required_admin
@@ -1120,6 +1191,35 @@ def adicionar_especialidade_admin():
         flash('Especialidade adicionada com sucesso ao catálogo.', 'success')
     else:
         flash('Essa especialidade já existe no catálogo.', 'info')
+
+    return redirect(url_for('nova_solicitacao'))
+
+@app.route('/admin/sistemas-insercao', methods=['POST'])
+@login_required_admin
+def adicionar_sistema_insercao_admin():
+    sistema_insercao = request.form.get('sistema_insercao_novo', '').strip().upper()
+    if not sistema_insercao:
+        flash('Informe o sistema de inserção para adicionar ao catálogo.', 'warning')
+        return redirect(url_for('nova_solicitacao'))
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        '''
+        INSERT INTO sugestao_solicitacao (tipo, valor)
+        VALUES (%s, %s)
+        ON CONFLICT DO NOTHING
+        ''',
+        ('sistema_insercao', sistema_insercao)
+    )
+    inseriu = c.rowcount > 0
+    conn.commit()
+    conn.close()
+
+    if inseriu:
+        flash('Sistema de inserção adicionado com sucesso ao catálogo.', 'success')
+    else:
+        flash('Esse sistema de inserção já existe no catálogo.', 'info')
 
     return redirect(url_for('nova_solicitacao'))
 

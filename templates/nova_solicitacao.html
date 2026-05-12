@@ -57,15 +57,11 @@
     </div>
     <div class="col-md-3">
         <label class="form-label">Sistema de Inserção:</label>
-        <select name="sistema_insercao" class="form-control" required>
-            <option value="">Selecione uma opção</option>
-            <option value="COPIRN">Copirn</option>
-            <option value="REGULA RN">Regula RN</option>
-            <option value="REGULA CIRURGIA">Regula Cirurgia</option>
-            <option value="SISREG">Sisreg</option>
-            <option value="SOLICITA LMEEC">Solicita LMEEC</option>
-            <option value="SMS FERNANDO PEDROZA">SMS Fernando Pedroza</option>
-            <option value="CONVÊNIO">Convênio</option>
+        <select id="sistema_insercao_select" name="sistema_insercao" class="form-control" required>
+            <option value="">▼ Selecione um sistema já cadastrado</option>
+            {% for item in sistemas_insercao %}
+            <option value="{{ item }}">{{ item }}</option>
+            {% endfor %}
         </select>
     </div>
     <div class="col-md-3">
@@ -92,6 +88,20 @@
                 <button type="submit" class="btn btn-primary w-50">Adicionar</button>
             </div>
         </form>
+
+        <hr class="my-4">
+
+        <h6 class="fw-semibold mb-3">Catálogo de Sistemas de Inserção (Admin)</h6>
+        <form method="post" action="{{ url_for('adicionar_sistema_insercao_admin') }}" class="row g-2 align-items-end">
+            <div class="col-md-8">
+                <label class="form-label">Adicionar novo sistema sem criar solicitação</label>
+                <input id="sistema_insercao_novo_admin" name="sistema_insercao_novo" class="form-control" placeholder="Ex: NOVO SISTEMA" required>
+            </div>
+            <div class="col-md-4 d-flex gap-2">
+                <button type="button" id="btnCopiarSistemaAtual" class="btn btn-outline-secondary w-50">Usar campo acima</button>
+                <button type="submit" class="btn btn-primary w-50">Adicionar</button>
+            </div>
+        </form>
     </div>
 </div>
 {% endif %}
@@ -102,8 +112,11 @@
     const listaSugestoes = document.getElementById('pacientes-sugestoes');
     const infoPaciente = document.getElementById('paciente-info');
     const seletorEspecialidade = document.getElementById('especialidade_select');
+    const seletorSistemaInsercao = document.getElementById('sistema_insercao_select');
     const campoEspecialidadeNovaAdmin = document.getElementById('especialidade_nova_admin');
+    const campoSistemaInsercaoNovoAdmin = document.getElementById('sistema_insercao_novo_admin');
     const btnCopiarEspecialidadeAtual = document.getElementById('btnCopiarEspecialidadeAtual');
+    const btnCopiarSistemaAtual = document.getElementById('btnCopiarSistemaAtual');
     let debounceTimer;
 
     function somenteDigitos(valor) {
@@ -201,6 +214,16 @@
             campoEspecialidadeNovaAdmin.value = valorAtual;
             campoEspecialidadeNovaAdmin.dispatchEvent(new Event('input', { bubbles: true }));
             campoEspecialidadeNovaAdmin.focus();
+        });
+    }
+
+    if (btnCopiarSistemaAtual && campoSistemaInsercaoNovoAdmin && seletorSistemaInsercao) {
+        btnCopiarSistemaAtual.addEventListener('click', () => {
+            const valorAtual = seletorSistemaInsercao.value.trim();
+            if (!valorAtual) return;
+            campoSistemaInsercaoNovoAdmin.value = valorAtual;
+            campoSistemaInsercaoNovoAdmin.dispatchEvent(new Event('input', { bubbles: true }));
+            campoSistemaInsercaoNovoAdmin.focus();
         });
     }
 
