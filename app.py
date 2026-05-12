@@ -719,6 +719,26 @@ def listar_sistemas_insercao():
     catalogo = [r[0] for r in resultados if r and r[0]]
     return sorted(set(SISTEMAS_INSERCAO_PADRAO + catalogo))
 
+def listar_sugestoes_endereco(tipo):
+    if tipo not in ('rua', 'bairro'):
+        return []
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        '''
+        SELECT DISTINCT TRIM(valor) AS valor
+        FROM sugestao_endereco
+        WHERE tipo = %s
+          AND TRIM(valor) <> ''
+        ORDER BY valor
+        ''',
+        (tipo,)
+    )
+    resultados = c.fetchall()
+    conn.close()
+    return [r[0] for r in resultados if r and r[0]]
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -771,9 +791,20 @@ def novo_paciente():
             'bairro': bairro,
         }
 
+        ruas_catalogo = listar_sugestoes_endereco('rua')
+        bairros_catalogo = listar_sugestoes_endereco('bairro')
+
         if not cpf and not sus:
             flash('Informe CPF ou Cartão SUS para cadastrar o paciente.', 'warning')
-            return render_template('novo_paciente.html', form_data=form_data)
+            return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo)
+
+        if rua and rua not in ruas_catalogo and not apenas_admin():
+            flash('A criação de nova rua é permitida apenas para administradores. Selecione uma opção existente.', 'warning')
+            return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo)
+
+        if bairro and bairro not in bairros_catalogo and not apenas_admin():
+            flash('A criação de novo bairro é permitida apenas para administradores. Selecione uma opção existente.', 'warning')
+            return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo)
 
         paciente_existente = buscar_paciente_existente_por_documentos(cpf=cpf, sus=sus)
         if paciente_existente:
@@ -781,7 +812,7 @@ def novo_paciente():
                 f'Paciente já existe no sistema (ID: {formatar_identificador_paciente(paciente_existente[0])} - {paciente_existente[1]}).',
                 'danger'
             )
-            return render_template('novo_paciente.html', form_data=form_data)
+            return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo)
 
         # Prioridade: se CPF preenchido, usar como id; senão, usar SUS
         id = formatar_identificador_paciente(cpf) if cpf else sus
@@ -791,13 +822,13 @@ def novo_paciente():
         try:
             c.execute("INSERT INTO paciente (id, nome, nascimento, telefone, endereco) VALUES (%s, %s, %s, %s, %s)",
                       (id, nome, nascimento, telefone, endereco))
-            # Salva rua e bairro como sugestoes para futuros cadastros
-            if rua:
+            # Salva rua e bairro como sugestões para futuros cadastros (somente admin)
+            if apenas_admin() and rua and rua not in ruas_catalogo:
                 c.execute(
                     'INSERT INTO sugestao_endereco (tipo, valor) VALUES (%s, %s) ON CONFLICT DO NOTHING',
                     ('rua', rua)
                 )
-            if bairro:
+            if apenas_admin() and bairro and bairro not in bairros_catalogo:
                 c.execute(
                     'INSERT INTO sugestao_endereco (tipo, valor) VALUES (%s, %s) ON CONFLICT DO NOTHING',
                     ('bairro', bairro)
@@ -807,11 +838,47 @@ def novo_paciente():
             conn.rollback()
             conn.close()
             flash('Não foi possível cadastrar o paciente. Verifique os dados e tente novamente.', 'danger')
-            return render_template('novo_paciente.html', form_data=form_data)
+            return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo)
         conn.close()
         flash('Paciente cadastrado com sucesso!', 'success')
         return redirect(url_for('pacientes'))
-    return render_template('novo_paciente.html')
+    return render_template(
+        'novo_paciente.html',
+        ruas=listar_sugestoes_endereco('rua'),
+        bairros=listar_sugestoes_endereco('bairro'),
+    )
+
+@app.route('/admin/endereco-sugestao', methods=['POST'])
+@login_required_admin
+def adicionar_sugestao_endereco_admin():
+    tipo = request.form.get('tipo', '').strip().lower()
+    valor = request.form.get('valor', '').strip().upper()
+
+    if tipo not in ('rua', 'bairro'):
+        flash('Tipo de sugestão inválido.', 'warning')
+        return redirect(url_for('novo_paciente'))
+
+    if not valor:
+        flash('Informe o valor para adicionar ao catálogo.', 'warning')
+        return redirect(url_for('novo_paciente'))
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        'INSERT INTO sugestao_endereco (tipo, valor) VALUES (%s, %s) ON CONFLICT DO NOTHING',
+        (tipo, valor)
+    )
+    inseriu = c.rowcount > 0
+    conn.commit()
+    conn.close()
+
+    if inseriu:
+        mensagem_tipo = 'Bairro adicionado' if tipo == 'bairro' else 'Rua adicionada'
+        flash(f'{mensagem_tipo} com sucesso ao catálogo.', 'success')
+    else:
+        flash(f'Esse {tipo} já existe no catálogo.', 'info')
+
+    return redirect(url_for('novo_paciente'))
 
 @app.route('/paciente/<paciente_id>/editar', methods=['GET', 'POST'])
 def editar_paciente(paciente_id):

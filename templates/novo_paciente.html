@@ -21,7 +21,7 @@
         <input name="nome" class="form-control" required value="{{ form_data.nome if form_data else '' }}">
     </div>
     <div class="col-md-4">
-        <label class="form-label">Nascimento (DD/MM/AAAA):</label>
+        <label class="form-label">Nascimento:</label>
         <input id="nascimento" name="nascimento" class="form-control" required placeholder="DD/MM/AAAA" maxlength="10" value="{{ form_data.nascimento if form_data else '' }}">
     </div>
     <div class="col-md-4">
@@ -30,8 +30,12 @@
     </div>
     <div class="col-md-6">
         <label class="form-label">Rua:</label>
-        <input id="rua" name="rua" class="form-control" autocomplete="off" list="sugestoes-rua" placeholder="Ex: Rua das Flores" value="{{ form_data.rua if form_data else '' }}">
-        <datalist id="sugestoes-rua"></datalist>
+        <select id="rua" name="rua" class="form-control" autocomplete="off">
+            <option value="">▼ Selecione uma rua já cadastrada</option>
+            {% for item in ruas %}
+            <option value="{{ item }}" {% if form_data and form_data.rua == item %}selected{% endif %}>{{ item }}</option>
+            {% endfor %}
+        </select>
     </div>
     <div class="col-md-2">
         <label class="form-label">Número:</label>
@@ -39,14 +43,51 @@
     </div>
     <div class="col-md-4">
         <label class="form-label">Bairro:</label>
-        <input id="bairro" name="bairro" class="form-control" autocomplete="off" list="sugestoes-bairro" placeholder="Ex: Centro" value="{{ form_data.bairro if form_data else '' }}">
-        <datalist id="sugestoes-bairro"></datalist>
+        <select id="bairro" name="bairro" class="form-control" autocomplete="off">
+            <option value="">▼ Selecione um bairro já cadastrado</option>
+            {% for item in bairros %}
+            <option value="{{ item }}" {% if form_data and form_data.bairro == item %}selected{% endif %}>{{ item }}</option>
+            {% endfor %}
+        </select>
     </div>
     <div class="col-12">
         <button type="submit" class="btn btn-success" id="btnSalvarPaciente">Salvar</button>
         <a href="/pacientes" class="btn btn-secondary">Voltar</a>
     </div>
 </form>
+
+{% if session.get('usuario_perfil') == 'ADMIN' %}
+<div class="card border-0 shadow-sm mt-4">
+    <div class="card-body">
+        <h6 class="fw-semibold mb-3">Catálogo de Endereço (Admin)</h6>
+        <form method="post" action="{{ url_for('adicionar_sugestao_endereco_admin') }}" class="row g-2 align-items-end">
+            <input type="hidden" name="tipo" value="rua">
+            <div class="col-md-8">
+                <label class="form-label">Adicionar nova rua</label>
+                <input id="rua_nova_admin" name="valor" class="form-control" placeholder="Ex: RUA DAS FLORES" required>
+            </div>
+            <div class="col-md-4 d-flex gap-2">
+                <button type="button" id="btnCopiarRuaAtual" class="btn btn-outline-secondary w-50">Usar campo acima</button>
+                <button type="submit" class="btn btn-primary w-50">Adicionar</button>
+            </div>
+        </form>
+
+        <hr class="my-4">
+
+        <form method="post" action="{{ url_for('adicionar_sugestao_endereco_admin') }}" class="row g-2 align-items-end">
+            <input type="hidden" name="tipo" value="bairro">
+            <div class="col-md-8">
+                <label class="form-label">Adicionar novo bairro</label>
+                <input id="bairro_novo_admin" name="valor" class="form-control" placeholder="Ex: CENTRO" required>
+            </div>
+            <div class="col-md-4 d-flex gap-2">
+                <button type="button" id="btnCopiarBairroAtual" class="btn btn-outline-secondary w-50">Usar campo acima</button>
+                <button type="submit" class="btn btn-primary w-50">Adicionar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
 
 <script>
 (() => {
@@ -56,8 +97,10 @@
     const campoSus = document.getElementById('sus');
     const campoRua = document.getElementById('rua');
     const campoBairro = document.getElementById('bairro');
-    const listaRuas = document.getElementById('sugestoes-rua');
-    const listaBairros = document.getElementById('sugestoes-bairro');
+    const campoRuaNovaAdmin = document.getElementById('rua_nova_admin');
+    const campoBairroNovoAdmin = document.getElementById('bairro_novo_admin');
+    const btnCopiarRuaAtual = document.getElementById('btnCopiarRuaAtual');
+    const btnCopiarBairroAtual = document.getElementById('btnCopiarBairroAtual');
     const avisoDuplicidade = document.getElementById('avisoDuplicidadePaciente');
     const formNovoPaciente = document.getElementById('formNovoPaciente');
     const btnSalvar = document.getElementById('btnSalvarPaciente');
@@ -156,37 +199,25 @@
         });
     }
 
-    // --- Autocomplete via API (igual ao campo Especialidade) ---
-    function configurarAutocompleteEndereco(campo, lista, tipoCampo) {
-        if (!campo || !lista) return;
-        let timer;
-        campo.addEventListener('input', () => {
-            const termo = campo.value.trim();
-            clearTimeout(timer);
-            timer = setTimeout(async () => {
-                if (termo.length < 1) {
-                    lista.innerHTML = '';
-                    return;
-                }
-                try {
-                    const resp = await fetch(`/api/sugestoes_endereco?campo=${encodeURIComponent(tipoCampo)}&termo=${encodeURIComponent(termo)}`);
-                    if (!resp.ok) return;
-                    const itens = await resp.json();
-                    lista.innerHTML = '';
-                    itens.forEach((item) => {
-                        const option = document.createElement('option');
-                        option.value = item;
-                        lista.appendChild(option);
-                    });
-                } catch (_) {
-                    // falha silenciosa para não atrapalhar digitação
-                }
-            }, 220);
+    if (btnCopiarRuaAtual && campoRuaNovaAdmin && campoRua) {
+        btnCopiarRuaAtual.addEventListener('click', () => {
+            const valorAtual = campoRua.value.trim();
+            if (!valorAtual) return;
+            campoRuaNovaAdmin.value = valorAtual;
+            campoRuaNovaAdmin.dispatchEvent(new Event('input', { bubbles: true }));
+            campoRuaNovaAdmin.focus();
         });
     }
 
-    configurarAutocompleteEndereco(campoRua, listaRuas, 'rua');
-    configurarAutocompleteEndereco(campoBairro, listaBairros, 'bairro');
+    if (btnCopiarBairroAtual && campoBairroNovoAdmin && campoBairro) {
+        btnCopiarBairroAtual.addEventListener('click', () => {
+            const valorAtual = campoBairro.value.trim();
+            if (!valorAtual) return;
+            campoBairroNovoAdmin.value = valorAtual;
+            campoBairroNovoAdmin.dispatchEvent(new Event('input', { bubbles: true }));
+            campoBairroNovoAdmin.focus();
+        });
+    }
 
     // --- Máscara de nascimento ---
     if (campoBirthdate) {
