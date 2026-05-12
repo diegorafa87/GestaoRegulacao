@@ -32,8 +32,14 @@
     </div>
     <div class="col-md-4">
         <label class="form-label">Especialidade/Descrição:</label>
-        <input id="especialidade" name="especialidade" class="form-control" required list="especialidades-sugestoes" autocomplete="off" placeholder="Digite para sugerir">
-        <datalist id="especialidades-sugestoes"></datalist>
+        <select id="especialidade_select" class="form-control mb-2">
+            <option value="">▼ Selecione uma especialidade já cadastrada</option>
+            {% for item in especialidades %}
+            <option value="{{ item }}">{{ item }}</option>
+            {% endfor %}
+        </select>
+        <input id="especialidade" name="especialidade" class="form-control" required autocomplete="off" placeholder="Ou digite uma nova especialidade">
+        <small class="text-muted">Use a seta para escolher uma opção existente ou digite uma nova.</small>
     </div>
     <div class="col-md-4">
         <label class="form-label">Prioridade:</label>
@@ -74,13 +80,33 @@
     </div>
 </form>
 
+{% if session.get('usuario_perfil') == 'ADMIN' %}
+<div class="card border-0 shadow-sm mt-4">
+    <div class="card-body">
+        <h6 class="fw-semibold mb-3">Catálogo de Especialidades (Admin)</h6>
+        <form method="post" action="{{ url_for('adicionar_especialidade_admin') }}" class="row g-2 align-items-end">
+            <div class="col-md-8">
+                <label class="form-label">Adicionar nova especialidade sem criar solicitação</label>
+                <input id="especialidade_nova_admin" name="especialidade_nova" class="form-control" placeholder="Ex: CARDIOLOGIA" required>
+            </div>
+            <div class="col-md-4 d-flex gap-2">
+                <button type="button" id="btnCopiarEspecialidadeAtual" class="btn btn-outline-secondary w-50">Usar campo acima</button>
+                <button type="submit" class="btn btn-primary w-50">Adicionar</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
 <script>
 (() => {
     const campoPaciente = document.getElementById('paciente_id');
     const listaSugestoes = document.getElementById('pacientes-sugestoes');
     const infoPaciente = document.getElementById('paciente-info');
+    const seletorEspecialidade = document.getElementById('especialidade_select');
     const campoEspecialidade = document.getElementById('especialidade');
-    const listaEspecialidades = document.getElementById('especialidades-sugestoes');
+    const campoEspecialidadeNovaAdmin = document.getElementById('especialidade_nova_admin');
+    const btnCopiarEspecialidadeAtual = document.getElementById('btnCopiarEspecialidadeAtual');
     let debounceTimer;
 
     function somenteDigitos(valor) {
@@ -171,41 +197,23 @@
     if (camposRealizacao) aplicarMascaraData(camposRealizacao);
     if (camposInsercao) aplicarMascaraData(camposInsercao);
 
-    function configurarAutocomplete(campo, lista, tipoCampo) {
-        if (!campo || !lista) return;
-
-        let timer;
-        campo.addEventListener('input', () => {
-            const termo = campo.value.trim();
-            clearTimeout(timer);
-
-            timer = setTimeout(async () => {
-                if (termo.length < 2) {
-                    lista.innerHTML = '';
-                    return;
-                }
-
-                try {
-                    const resposta = await fetch(`/api/sugestoes_solicitacao?campo=${encodeURIComponent(tipoCampo)}&termo=${encodeURIComponent(termo)}`);
-                    if (!resposta.ok) {
-                        return;
-                    }
-
-                    const itens = await resposta.json();
-                    lista.innerHTML = '';
-                    itens.forEach((item) => {
-                        const option = document.createElement('option');
-                        option.value = item;
-                        lista.appendChild(option);
-                    });
-                } catch (e) {
-                    // Falha silenciosa para não atrapalhar digitação
-                }
-            }, 220);
+    if (seletorEspecialidade && campoEspecialidade) {
+        seletorEspecialidade.addEventListener('change', () => {
+            if (!seletorEspecialidade.value) return;
+            campoEspecialidade.value = seletorEspecialidade.value;
+            campoEspecialidade.dispatchEvent(new Event('input', { bubbles: true }));
         });
     }
 
-    configurarAutocomplete(campoEspecialidade, listaEspecialidades, 'especialidade');
+    if (btnCopiarEspecialidadeAtual && campoEspecialidadeNovaAdmin && campoEspecialidade) {
+        btnCopiarEspecialidadeAtual.addEventListener('click', () => {
+            const valorAtual = campoEspecialidade.value.trim();
+            if (!valorAtual) return;
+            campoEspecialidadeNovaAdmin.value = valorAtual;
+            campoEspecialidadeNovaAdmin.dispatchEvent(new Event('input', { bubbles: true }));
+            campoEspecialidadeNovaAdmin.focus();
+        });
+    }
 
     // Preenchimento automático de datas
     function obterDataAtual() {

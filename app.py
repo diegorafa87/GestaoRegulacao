@@ -675,6 +675,32 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
     conn.close()
     return solicitacoes, False
 
+def listar_especialidades():
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        '''
+        SELECT valor
+        FROM (
+            SELECT DISTINCT TRIM(valor) AS valor
+            FROM sugestao_solicitacao
+            WHERE tipo = 'especialidade'
+              AND TRIM(valor) <> ''
+
+            UNION
+
+            SELECT DISTINCT TRIM(especialidade) AS valor
+            FROM solicitacao
+            WHERE especialidade IS NOT NULL
+              AND TRIM(especialidade) <> ''
+        ) base
+        ORDER BY valor
+        '''
+    )
+    resultados = c.fetchall()
+    conn.close()
+    return [r[0] for r in resultados if r and r[0]]
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -1034,7 +1060,7 @@ def nova_solicitacao():
         data_entrada = normalizar_data_para_iso(request.form['data_entrada'])
         data_insercao = datetime.now().strftime('%Y-%m-%d')
         tipo = request.form['tipo']
-        especialidade = request.form['especialidade'].upper()
+        especialidade = request.form.get('especialidade', '').strip().upper()
         prioridade = request.form['prioridade']
         encaminhamento = request.form.get('encaminhamento', '').upper() if request.form.get('encaminhamento') else None
         status = request.form['status']
@@ -1047,16 +1073,57 @@ def nova_solicitacao():
 
         if not paciente_id_resolvido:
             flash('Paciente não encontrado. Selecione um paciente válido pelo CPF, SUS ou nome.', 'warning')
-            return render_template('nova_solicitacao.html')
+            return render_template('nova_solicitacao.html', especialidades=listar_especialidades())
+
+        if not especialidade:
+            flash('Informe a especialidade/descrição da solicitação.', 'warning')
+            return render_template('nova_solicitacao.html', especialidades=listar_especialidades())
 
         conn = conectar()
         c = conn.cursor()
         c.execute("INSERT INTO solicitacao (paciente_id, data_solicitacao, data_entrada, data_insercao, data_realizacao, unidade_realizadora, tipo, especialidade, descricao, prioridade, encaminhamento, status, sistema_insercao) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                   (paciente_id_resolvido, data_solicitacao, data_entrada, data_insercao, data_realizacao, unidade_realizadora, tipo, especialidade, especialidade, prioridade, encaminhamento, status, sistema_insercao))
+        c.execute(
+            '''
+            INSERT INTO sugestao_solicitacao (tipo, valor)
+            VALUES (%s, %s)
+            ON CONFLICT DO NOTHING
+            ''',
+            ('especialidade', especialidade)
+        )
         conn.commit()
         conn.close()
         return redirect(url_for('solicitacoes'))
-    return render_template('nova_solicitacao.html')
+    return render_template('nova_solicitacao.html', especialidades=listar_especialidades())
+
+@app.route('/admin/especialidades', methods=['POST'])
+@login_required_admin
+def adicionar_especialidade_admin():
+    especialidade = request.form.get('especialidade_nova', '').strip().upper()
+    if not especialidade:
+        flash('Informe a especialidade para adicionar ao catálogo.', 'warning')
+        return redirect(url_for('nova_solicitacao'))
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        '''
+        INSERT INTO sugestao_solicitacao (tipo, valor)
+        VALUES (%s, %s)
+        ON CONFLICT DO NOTHING
+        ''',
+        ('especialidade', especialidade)
+    )
+    inseriu = c.rowcount > 0
+    conn.commit()
+    conn.close()
+
+    if inseriu:
+        flash('Especialidade adicionada com sucesso ao catálogo.', 'success')
+    else:
+        flash('Essa especialidade já existe no catálogo.', 'info')
+
+    return redirect(url_for('nova_solicitacao'))
 
 @app.route('/api/buscar_paciente')
 def api_buscar_paciente():
@@ -1148,32 +1215,55 @@ def api_sugestoes_solicitacao():
     campo = request.args.get('campo', '').strip()
     termo = request.args.get('termo', '').strip()
 
-    colunas_permitidas = {
-        'especialidade': 'especialidade',
-        'unidade_realizadora': 'unidade_realizadora',
-    }
-
-    coluna = colunas_permitidas.get(campo)
-    if not coluna:
-        return jsonify([])
-
-    if len(termo) < 1:
+    if campo not in ('especialidade', 'unidade_realizadora'):
         return jsonify([])
 
     conn = conectar()
     c = conn.cursor()
-    c.execute(
-        f'''
-        SELECT DISTINCT TRIM({coluna}) AS valor
-        FROM solicitacao
-        WHERE {coluna} IS NOT NULL
-          AND TRIM({coluna}) <> ''
-          AND {coluna} ILIKE %s
-        ORDER BY valor
-        LIMIT 10
-        ''',
-        (f"%{termo}%",)
-    )
+
+    if campo == 'especialidade':
+        filtro = f'%{termo}%'
+        c.execute(
+            '''
+            SELECT valor
+            FROM (
+                SELECT DISTINCT TRIM(valor) AS valor
+                FROM sugestao_solicitacao
+                WHERE tipo = 'especialidade'
+                  AND TRIM(valor) <> ''
+                  AND (%s = '' OR valor ILIKE %s)
+
+                UNION
+
+                SELECT DISTINCT TRIM(especialidade) AS valor
+                FROM solicitacao
+                WHERE especialidade IS NOT NULL
+                  AND TRIM(especialidade) <> ''
+                  AND (%s = '' OR especialidade ILIKE %s)
+            ) base
+            ORDER BY valor
+            LIMIT 30
+            ''',
+            (termo, filtro, termo, filtro)
+        )
+    else:
+        if len(termo) < 1:
+            conn.close()
+            return jsonify([])
+
+        c.execute(
+            '''
+            SELECT DISTINCT TRIM(unidade_realizadora) AS valor
+            FROM solicitacao
+            WHERE unidade_realizadora IS NOT NULL
+              AND TRIM(unidade_realizadora) <> ''
+              AND unidade_realizadora ILIKE %s
+            ORDER BY valor
+            LIMIT 10
+            ''',
+            (f"%{termo}%",)
+        )
+
     resultados = c.fetchall()
     conn.close()
 

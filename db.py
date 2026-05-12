@@ -116,6 +116,11 @@ def criar_tabelas():
         valor TEXT NOT NULL,
         UNIQUE(tipo, valor)
     )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS sugestao_solicitacao (
+        tipo TEXT NOT NULL,
+        valor TEXT NOT NULL,
+        UNIQUE(tipo, valor)
+    )''')
     conn.commit()
     conn.close()
 
