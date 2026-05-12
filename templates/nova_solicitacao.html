@@ -38,8 +38,20 @@
             <option value="{{ item }}">{{ item }}</option>
             {% endfor %}
         </select>
-        <input id="especialidade" name="especialidade" class="form-control" required autocomplete="off" placeholder="Ou digite uma nova especialidade">
+        <input
+            id="especialidade"
+            name="especialidade"
+            class="form-control"
+            required
+            autocomplete="off"
+            placeholder="{% if session.get('usuario_perfil') == 'ADMIN' %}Ou digite uma nova especialidade{% else %}Selecione uma opção no campo acima{% endif %}"
+            {% if session.get('usuario_perfil') != 'ADMIN' %}readonly{% endif %}
+        >
+        {% if session.get('usuario_perfil') == 'ADMIN' %}
         <small class="text-muted">Use a seta para escolher uma opção existente ou digite uma nova.</small>
+        {% else %}
+        <small class="text-muted">Somente administrador pode criar nova especialidade.</small>
+        {% endif %}
     </div>
     <div class="col-md-4">
         <label class="form-label">Prioridade:</label>

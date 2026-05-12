@@ -681,19 +681,9 @@ def listar_especialidades():
     c.execute(
         '''
         SELECT valor
-        FROM (
-            SELECT DISTINCT TRIM(valor) AS valor
-            FROM sugestao_solicitacao
-            WHERE tipo = 'especialidade'
-              AND TRIM(valor) <> ''
-
-            UNION
-
-            SELECT DISTINCT TRIM(especialidade) AS valor
-            FROM solicitacao
-            WHERE especialidade IS NOT NULL
-              AND TRIM(especialidade) <> ''
-        ) base
+                FROM sugestao_solicitacao
+                WHERE tipo = 'especialidade'
+                    AND TRIM(valor) <> ''
         ORDER BY valor
         '''
     )
@@ -1079,18 +1069,26 @@ def nova_solicitacao():
             flash('Informe a especialidade/descrição da solicitação.', 'warning')
             return render_template('nova_solicitacao.html', especialidades=listar_especialidades())
 
+        especialidades_catalogo = listar_especialidades()
+        especialidade_existe_catalogo = especialidade in especialidades_catalogo
+
+        if not especialidade_existe_catalogo and not apenas_admin():
+            flash('A criação de nova especialidade é permitida apenas para administradores. Selecione uma opção existente.', 'warning')
+            return render_template('nova_solicitacao.html', especialidades=especialidades_catalogo)
+
         conn = conectar()
         c = conn.cursor()
         c.execute("INSERT INTO solicitacao (paciente_id, data_solicitacao, data_entrada, data_insercao, data_realizacao, unidade_realizadora, tipo, especialidade, descricao, prioridade, encaminhamento, status, sistema_insercao) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                   (paciente_id_resolvido, data_solicitacao, data_entrada, data_insercao, data_realizacao, unidade_realizadora, tipo, especialidade, especialidade, prioridade, encaminhamento, status, sistema_insercao))
-        c.execute(
-            '''
-            INSERT INTO sugestao_solicitacao (tipo, valor)
-            VALUES (%s, %s)
-            ON CONFLICT DO NOTHING
-            ''',
-            ('especialidade', especialidade)
-        )
+        if apenas_admin() and not especialidade_existe_catalogo:
+            c.execute(
+                '''
+                INSERT INTO sugestao_solicitacao (tipo, valor)
+                VALUES (%s, %s)
+                ON CONFLICT DO NOTHING
+                ''',
+                ('especialidade', especialidade)
+            )
         conn.commit()
         conn.close()
         return redirect(url_for('solicitacoes'))
@@ -1222,29 +1220,22 @@ def api_sugestoes_solicitacao():
     c = conn.cursor()
 
     if campo == 'especialidade':
+        if len(termo) < 1:
+            conn.close()
+            return jsonify([])
+
         filtro = f'%{termo}%'
         c.execute(
             '''
-            SELECT valor
-            FROM (
-                SELECT DISTINCT TRIM(valor) AS valor
-                FROM sugestao_solicitacao
-                WHERE tipo = 'especialidade'
-                  AND TRIM(valor) <> ''
-                  AND (%s = '' OR valor ILIKE %s)
-
-                UNION
-
-                SELECT DISTINCT TRIM(especialidade) AS valor
-                FROM solicitacao
-                WHERE especialidade IS NOT NULL
-                  AND TRIM(especialidade) <> ''
-                  AND (%s = '' OR especialidade ILIKE %s)
-            ) base
+            SELECT DISTINCT TRIM(valor) AS valor
+            FROM sugestao_solicitacao
+            WHERE tipo = 'especialidade'
+              AND TRIM(valor) <> ''
+              AND valor ILIKE %s
             ORDER BY valor
             LIMIT 30
             ''',
-            (termo, filtro, termo, filtro)
+            (filtro,)
         )
     else:
         if len(termo) < 1:
