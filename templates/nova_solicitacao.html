@@ -68,6 +68,21 @@
         <label class="form-label">Data de Inserção:</label>
         <input id="data_insercao" name="data_insercao" class="form-control" placeholder="DD/MM/AAAA" maxlength="10">
     </div>
+    <div class="col-md-3">
+        <label class="form-label">Quantidade de Solicitações:</label>
+        <input
+            id="quantidade_solicitacoes"
+            name="quantidade_solicitacoes"
+            type="number"
+            class="form-control"
+            min="1"
+            max="100"
+            value="1"
+        >
+        <small id="ajuda_quantidade_solicitacoes" class="text-muted">
+            Use quantidade maior que 1 para EXAME anatomopatológico/laboratorial.
+        </small>
+    </div>
     <div class="col-12">
         <button type="submit" class="btn btn-success">Salvar</button>
         <a href="/solicitacoes" class="btn btn-secondary">Voltar</a>
@@ -112,6 +127,9 @@
     const listaSugestoes = document.getElementById('pacientes-sugestoes');
     const infoPaciente = document.getElementById('paciente-info');
     const campoEspecialidade = document.getElementById('especialidade_input');
+    const seletorTipo = document.querySelector('select[name="tipo"]');
+    const campoQuantidadeSolicitacoes = document.getElementById('quantidade_solicitacoes');
+    const ajudaQuantidadeSolicitacoes = document.getElementById('ajuda_quantidade_solicitacoes');
     const listaEspecialidades = document.getElementById('especialidades-sugestoes');
     const seletorSistemaInsercao = document.getElementById('sistema_insercao_select');
     const campoEspecialidadeNovaAdmin = document.getElementById('especialidade_nova_admin');
@@ -122,6 +140,45 @@
 
     function somenteDigitos(valor) {
         return (valor || '').replace(/\D/g, '');
+    }
+
+    function normalizarTexto(valor) {
+        return (valor || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toUpperCase();
+    }
+
+    function atualizaCampoQuantidadeSolicitacoes() {
+        if (!campoQuantidadeSolicitacoes || !campoEspecialidade || !seletorTipo) return;
+
+        const tipo = (seletorTipo.value || '').trim().toUpperCase();
+        const especialidade = normalizarTexto(campoEspecialidade.value);
+        const ehExame = tipo === 'EXAME';
+        const permiteReplicacao =
+            especialidade.includes('ANATOMOPATOLOGICO') ||
+            especialidade.includes('EXAMES LABORATORIAIS') ||
+            especialidade.includes('EXAME LABORATORIAL') ||
+            especialidade.includes('LABORATORIAL');
+
+        const habilitado = ehExame && permiteReplicacao;
+        campoQuantidadeSolicitacoes.readOnly = !habilitado;
+
+        if (!habilitado) {
+            campoQuantidadeSolicitacoes.value = '1';
+            if (ajudaQuantidadeSolicitacoes) {
+                ajudaQuantidadeSolicitacoes.textContent = 'Replicação disponível apenas para EXAME anatomopatológico/laboratorial.';
+            }
+            return;
+        }
+
+        if (!campoQuantidadeSolicitacoes.value || Number(campoQuantidadeSolicitacoes.value) < 1) {
+            campoQuantidadeSolicitacoes.value = '1';
+        }
+
+        if (ajudaQuantidadeSolicitacoes) {
+            ajudaQuantidadeSolicitacoes.textContent = 'Informe quantas solicitações iguais serão criadas para este paciente.';
+        }
     }
 
     campoPaciente.addEventListener('input', () => {
@@ -221,6 +278,7 @@
     if (campoEspecialidade && listaEspecialidades) {
         let timer;
         campoEspecialidade.addEventListener('input', () => {
+            atualizaCampoQuantidadeSolicitacoes();
             const termo = campoEspecialidade.value.trim();
             clearTimeout(timer);
 
@@ -244,6 +302,19 @@
                     // Falha silenciosa para não atrapalhar digitação
                 }
             }, 220);
+        });
+    }
+
+    if (seletorTipo) {
+        seletorTipo.addEventListener('change', atualizaCampoQuantidadeSolicitacoes);
+    }
+
+    if (campoQuantidadeSolicitacoes) {
+        campoQuantidadeSolicitacoes.addEventListener('input', () => {
+            let valor = parseInt(campoQuantidadeSolicitacoes.value || '1', 10);
+            if (Number.isNaN(valor) || valor < 1) valor = 1;
+            if (valor > 100) valor = 100;
+            campoQuantidadeSolicitacoes.value = String(valor);
         });
     }
 
@@ -274,6 +345,7 @@
         if (camposEntrada && !camposEntrada.value) {
             camposEntrada.value = dataAtual;
         }
+        atualizaCampoQuantidadeSolicitacoes();
     });
 })();
 </script>

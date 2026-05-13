@@ -797,6 +797,20 @@ def paginar_registros(registros, pagina_atual, itens_por_pagina=30):
         'paginas_visiveis': montar_paginas_visiveis(pagina_atual, total_paginas),
     }
 
+def permite_replicar_solicitacao(tipo, especialidade):
+    if (tipo or '').strip().upper() != 'EXAME':
+        return False
+
+    especialidade_normalizada = normalizar_texto_busca(especialidade)
+    termos_permitidos = (
+        'ANATOMOPATOLOGICO',
+        'ANATOMOPATOLÓGICO',
+        'EXAMES LABORATORIAIS',
+        'EXAME LABORATORIAL',
+        'LABORATORIAL',
+    )
+    return any(termo in especialidade_normalizada for termo in termos_permitidos)
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -1304,6 +1318,11 @@ def nova_solicitacao():
         encaminhamento = request.form.get('encaminhamento', '').upper() if request.form.get('encaminhamento') else None
         status = request.form['status']
         sistema_insercao = request.form.get('sistema_insercao', '').strip().upper() or None
+        quantidade_raw = request.form.get('quantidade_solicitacoes', '1').strip()
+        try:
+            quantidade_solicitacoes = int(quantidade_raw)
+        except (TypeError, ValueError):
+            quantidade_solicitacoes = 1
         data_insercao_form = request.form.get('data_insercao', '').strip()
         if data_insercao_form:
             data_insercao = normalizar_data_para_iso(data_insercao_form) or datetime.now().strftime('%Y-%m-%d')
@@ -1312,6 +1331,33 @@ def nova_solicitacao():
 
         if not paciente_id_resolvido:
             flash('Paciente não encontrado. Selecione um paciente válido pelo CPF, SUS ou nome.', 'warning')
+            return render_template(
+                'nova_solicitacao.html',
+                especialidades=listar_especialidades(),
+                sistemas_insercao=listar_sistemas_insercao(),
+            )
+
+        if quantidade_solicitacoes < 1:
+            flash('A quantidade de solicitações deve ser maior ou igual a 1.', 'warning')
+            return render_template(
+                'nova_solicitacao.html',
+                especialidades=listar_especialidades(),
+                sistemas_insercao=listar_sistemas_insercao(),
+            )
+
+        if quantidade_solicitacoes > 100:
+            flash('Quantidade máxima permitida por envio: 100 solicitações.', 'warning')
+            return render_template(
+                'nova_solicitacao.html',
+                especialidades=listar_especialidades(),
+                sistemas_insercao=listar_sistemas_insercao(),
+            )
+
+        if quantidade_solicitacoes > 1 and not permite_replicar_solicitacao(tipo, especialidade):
+            flash(
+                'A replicação em quantidade é permitida apenas para exames anatomopatológicos e laboratoriais.',
+                'warning'
+            )
             return render_template(
                 'nova_solicitacao.html',
                 especialidades=listar_especialidades(),
@@ -1357,8 +1403,25 @@ def nova_solicitacao():
 
         conn = conectar()
         c = conn.cursor()
-        c.execute("INSERT INTO solicitacao (paciente_id, data_solicitacao, data_entrada, data_insercao, data_realizacao, unidade_realizadora, tipo, especialidade, descricao, prioridade, encaminhamento, status, sistema_insercao) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                  (paciente_id_resolvido, data_solicitacao, data_entrada, data_insercao, data_realizacao, unidade_realizadora, tipo, especialidade, especialidade, prioridade, encaminhamento, status, sistema_insercao))
+        for _ in range(quantidade_solicitacoes):
+            c.execute(
+                "INSERT INTO solicitacao (paciente_id, data_solicitacao, data_entrada, data_insercao, data_realizacao, unidade_realizadora, tipo, especialidade, descricao, prioridade, encaminhamento, status, sistema_insercao) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (
+                    paciente_id_resolvido,
+                    data_solicitacao,
+                    data_entrada,
+                    data_insercao,
+                    data_realizacao,
+                    unidade_realizadora,
+                    tipo,
+                    especialidade,
+                    especialidade,
+                    prioridade,
+                    encaminhamento,
+                    status,
+                    sistema_insercao,
+                )
+            )
         if apenas_admin() and not especialidade_existe_catalogo:
             c.execute(
                 '''
@@ -1379,6 +1442,10 @@ def nova_solicitacao():
             )
         conn.commit()
         conn.close()
+        if quantidade_solicitacoes > 1:
+            flash(f'{quantidade_solicitacoes} solicitações criadas com sucesso para o paciente.', 'success')
+        else:
+            flash('Solicitação criada com sucesso.', 'success')
         return redirect(url_for('solicitacoes'))
     return render_template(
         'nova_solicitacao.html',
