@@ -33,7 +33,11 @@
     <div class="col-md-4">
         <label class="form-label">Especialidade/Descrição:</label>
         <input id="especialidade_input" name="especialidade" class="form-control" required list="especialidades-sugestoes" autocomplete="off" placeholder="Digite para sugerir especialidade">
-        <datalist id="especialidades-sugestoes"></datalist>
+        <datalist id="especialidades-sugestoes">
+            {% for item in especialidades %}
+            <option value="{{ item }}"></option>
+            {% endfor %}
+        </datalist>
     </div>
     <div class="col-md-4">
         <label class="form-label">Prioridade:</label>

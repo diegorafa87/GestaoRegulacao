@@ -30,12 +30,12 @@
     </div>
     <div class="col-md-6">
         <label class="form-label">Rua:</label>
-        <select id="rua" name="rua" class="form-control" autocomplete="off">
-            <option value="">▼ Selecione uma rua já cadastrada</option>
+        <input id="rua" name="rua" class="form-control" autocomplete="off" list="ruas-sugestoes" placeholder="Digite as primeiras letras da rua" value="{{ form_data.rua if form_data else '' }}">
+        <datalist id="ruas-sugestoes">
             {% for item in ruas %}
-            <option value="{{ item }}" {% if form_data and form_data.rua == item %}selected{% endif %}>{{ item }}</option>
+            <option value="{{ item }}"></option>
             {% endfor %}
-        </select>
+        </datalist>
     </div>
     <div class="col-md-2">
         <label class="form-label">Número:</label>
