@@ -32,8 +32,14 @@
 </div>
 
 <form method="get" class="row g-2 align-items-end mb-4">
-    <input type="hidden" name="situacao" value="{{ situacao if situacao else 'REALIZADOS' }}">
-    <div class="col-md-3">
+    <div class="col-md-2">
+        <label class="form-label">Situação</label>
+        <select name="situacao" class="form-control">
+            <option value="REALIZADOS" {% if situacao == 'REALIZADOS' %}selected{% endif %}>Realizados</option>
+            <option value="EM_ESPERA" {% if situacao == 'EM_ESPERA' %}selected{% endif %}>Em Espera</option>
+        </select>
+    </div>
+    <div class="col-md-2">
         <label class="form-label">Tipo</label>
         <select name="tipo" class="form-control">
             <option value="" {% if not tipo %}selected{% endif %}>Todos</option>
@@ -53,15 +59,14 @@
         <label class="form-label">Data Final</label>
         <input id="data_fim" type="text" name="data_fim" class="form-control" value="{{ data_fim }}" placeholder="DD/MM/AAAA" maxlength="10">
     </div>
-    <div class="col-md-2 d-grid gap-2">
-        <button type="submit" class="btn btn-success">Gerar Relatório</button>
-        <button type="submit" name="formato" value="csv" class="btn btn-outline-primary">Exportar CSV</button>
-        <button type="submit" name="formato" value="pdf" class="btn btn-outline-danger">Exportar PDF</button>
+    <div class="col-md-1 d-grid gap-2">
+        <button type="submit" class="btn btn-success btn-sm">Gerar</button>
     </div>
 </form>
 
-<div class="text-muted small mb-3">
-    As exportações em CSV e PDF respeitam os filtros e a situação selecionada.
+<div class="d-flex gap-2 mb-3">
+    <button type="button" class="btn btn-outline-primary btn-sm" onclick="exportarCSV()">Exportar CSV</button>
+    <button type="button" class="btn btn-outline-danger btn-sm" onclick="exportarPDF()">Exportar PDF</button>
 </div>
 
 {% if filtros_aplicados %}
@@ -112,7 +117,69 @@
     </div>
 </div>
 
+{% if especialidade and pacientes_especialidade %}
+<div class="card mb-4">
+    <div class="card-header bg-success text-white">
+        Pacientes da Especialidade: <strong>{{ especialidade }}</strong>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th class="text-center">ID (CPF/SUS)</th>
+                    <th>Paciente</th>
+                    <th class="text-center">Total de Solicitações</th>
+                    <th class="text-center">Ação</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for p in pacientes_especialidade %}
+                <tr>
+                    <td class="text-center">{{ p[0]|formatar_documento }}</td>
+                    <td>{{ p[1] }}</td>
+                    <td class="text-center">{{ p[2] }}</td>
+                    <td class="text-center">
+                        <a href="{{ url_for('historico_paciente', paciente_id=p[0]) }}" class="btn btn-sm btn-info">Ver Histórico</a>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% elif especialidade and not pacientes_especialidade %}
+<div class="alert alert-info">
+    Nenhum paciente encontrado para a especialidade <strong>{{ especialidade }}</strong> com os filtros aplicados.
+</div>
+{% endif %}
+
 <script>
+function exportarCSV() {
+    const form = document.querySelector('form');
+    const url = new URL(form.action || window.location.href, window.location.href);
+    const formData = new FormData(form);
+    
+    for (let [key, value] of formData.entries()) {
+        url.searchParams.set(key, value);
+    }
+    
+    url.searchParams.set('formato', 'csv');
+    window.location.href = url.toString();
+}
+
+function exportarPDF() {
+    const form = document.querySelector('form');
+    const url = new URL(form.action || window.location.href, window.location.href);
+    const formData = new FormData(form);
+    
+    for (let [key, value] of formData.entries()) {
+        url.searchParams.set(key, value);
+    }
+    
+    url.searchParams.set('formato', 'pdf');
+    window.location.href = url.toString();
+}
+
 (() => {
     function aplicarMascaraData(campo) {
         if (!campo) return;
