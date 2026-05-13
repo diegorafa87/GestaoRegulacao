@@ -1141,6 +1141,53 @@ def relatorios():
 
     total_registros = sum(item[1] for item in resumo) if resumo else 0
 
+    pacientes_especialidade = []
+    if especialidade:
+        query_pacientes = '''
+            SELECT DISTINCT
+                p.id,
+                p.nome,
+                COUNT(s.id) AS total_solicitacoes
+            FROM paciente p
+            INNER JOIN solicitacao s ON s.paciente_id = p.id
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
+              AND translate(UPPER(COALESCE(s.especialidade, '')), 
+                    'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', 
+                    'AAAAAEEEEIIIIOOOOOUUUUC') LIKE %s
+        '''
+        params_pacientes = [f"%{normalizar_texto_busca(especialidade)}%"]
+
+        if situacao == 'EM_ESPERA':
+            query_pacientes += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
+        else:
+            query_pacientes += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
+
+        if tipo in ('CONSULTA', 'EXAME'):
+            query_pacientes += ' AND UPPER(s.tipo) = %s'
+            params_pacientes.append(tipo)
+
+        if data_inicio:
+            if situacao == 'EM_ESPERA':
+                query_pacientes += ' AND s.data_entrada >= %s'
+            else:
+                query_pacientes += ' AND s.data_realizacao >= %s'
+            params_pacientes.append(data_inicio)
+
+        if data_fim:
+            if situacao == 'EM_ESPERA':
+                query_pacientes += ' AND s.data_entrada <= %s'
+            else:
+                query_pacientes += ' AND s.data_realizacao <= %s'
+            params_pacientes.append(data_fim)
+
+        query_pacientes += ' GROUP BY p.id, p.nome ORDER BY p.nome ASC'
+
+        conn = conectar()
+        c = conn.cursor()
+        c.execute(query_pacientes, params_pacientes)
+        pacientes_especialidade = c.fetchall()
+        conn.close()
+
     return render_template(
         'relatorios.html',
         tipo=tipo,
@@ -1150,7 +1197,8 @@ def relatorios():
         data_fim=data_fim_raw,
         filtros_aplicados=filtros_aplicados,
         resumo=resumo,
-        total_registros=total_registros
+        total_registros=total_registros,
+        pacientes_especialidade=pacientes_especialidade
     )
 
 @app.route('/nova_solicitacao', methods=['GET', 'POST'])
