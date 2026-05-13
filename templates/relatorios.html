@@ -82,9 +82,9 @@
         <table class="table table-striped table-bordered mb-0">
             <thead class="table-dark">
                 <tr>
-                    <th>Especialidade</th>
-                    <th>{% if situacao == 'EM_ESPERA' %}Quantidade em Espera{% else %}Quantidade Realizada{% endif %}</th>
-                    <th>Resumo</th>
+                    <th class="text-center">Especialidade</th>
+                    <th class="text-center">{% if situacao == 'EM_ESPERA' %}Quantidade em Espera{% else %}Quantidade Realizada{% endif %}</th>
+                    <th class="text-center">Resumo</th>
                 </tr>
             </thead>
             <tbody>
@@ -92,7 +92,7 @@
                 {% for r in resumo %}
                 <tr>
                     <td>{{ r[0] if r[0] else '-' }}</td>
-                    <td>{{ r[1] }}</td>
+                    <td class="text-center">{{ r[1] }}</td>
                     <td>
                         {% if situacao == 'EM_ESPERA' %}
                             {{ r[1] }} {{ r[0] if r[0] else 'solicitações sem especialidade informada' }} em espera

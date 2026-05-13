@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify, R
 import os
 import psycopg
 import re
+import unicodedata
 from datetime import datetime
 import csv
 import io
@@ -87,6 +88,13 @@ def formatar_data_br(data_str):
 def normalizar_documento(valor):
     valor = '' if valor is None else str(valor)
     return re.sub(r'\D', '', valor)
+
+def normalizar_texto_busca(valor):
+    valor = '' if valor is None else str(valor)
+    valor = unicodedata.normalize('NFD', valor)
+    valor = ''.join(ch for ch in valor if unicodedata.category(ch) != 'Mn')
+    valor = re.sub(r'\s+', ' ', valor).strip()
+    return valor.upper()
 
 def eh_cpf(valor):
     return len(normalizar_documento(valor)) == 11
@@ -1054,9 +1062,13 @@ def relatorios():
         params_resumo.append(tipo)
 
     if especialidade:
-        query_resumo += ' AND s.especialidade LIKE %s'
-        valor = f"%{especialidade}%"
-        params_resumo.append(valor)
+        query_resumo += (
+            " AND translate(UPPER(COALESCE(s.especialidade, '')), "
+            "'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', "
+            "'AAAAAEEEEIIIIOOOOOUUUUC') LIKE %s"
+        )
+        valor_busca = normalizar_texto_busca(especialidade)
+        params_resumo.append(f"%{valor_busca}%")
 
     if data_inicio:
         if situacao == 'EM_ESPERA':
