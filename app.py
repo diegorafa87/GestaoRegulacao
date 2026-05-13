@@ -948,12 +948,17 @@ def editar_solicitacao(solicitacao_id):
         paciente_id = request.form.get('paciente_id', '').strip()
         data_realizacao = normalizar_data_para_iso(request.form.get('data_realizacao'))
         unidade_realizadora = request.form.get('unidade_realizadora', '').strip().upper()
+        conclusao = request.form.get('conclusao', '').strip().upper()
+
+        opcoes_conclusao = {'PRESENTE', 'AUSENTE', 'CANCELADO'}
+        conclusao = conclusao if conclusao in opcoes_conclusao else None
 
         c.execute(
-            'UPDATE solicitacao SET data_realizacao = %s, unidade_realizadora = %s WHERE id = %s',
+            'UPDATE solicitacao SET data_realizacao = %s, unidade_realizadora = %s, conclusao = %s WHERE id = %s',
             (
                 data_realizacao if data_realizacao else None,
                 unidade_realizadora if unidade_realizadora else None,
+                conclusao,
                 solicitacao_id
             )
         )
@@ -973,7 +978,7 @@ def editar_solicitacao(solicitacao_id):
 
     c.execute(
         '''
-        SELECT id, paciente_id, data_solicitacao, data_entrada, tipo, especialidade, prioridade, status, data_realizacao, unidade_realizadora
+        SELECT id, paciente_id, data_solicitacao, data_entrada, tipo, especialidade, prioridade, status, data_realizacao, unidade_realizadora, conclusao
         FROM solicitacao
         WHERE id = %s
         ''',

@@ -111,6 +111,7 @@ def criar_tabelas():
         sistema_insercao TEXT,
         FOREIGN KEY(paciente_id) REFERENCES paciente(id)
     )''')
+    c.execute('ALTER TABLE solicitacao ADD COLUMN IF NOT EXISTS conclusao TEXT')
     c.execute('''CREATE TABLE IF NOT EXISTS sugestao_endereco (
         tipo TEXT NOT NULL,
         valor TEXT NOT NULL,
