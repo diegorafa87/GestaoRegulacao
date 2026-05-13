@@ -755,7 +755,7 @@ def index():
 def pacientes():
     conn = conectar()
     c = conn.cursor()
-    c.execute('SELECT * FROM paciente')
+    c.execute('SELECT * FROM paciente ORDER BY nome ASC')
     pacientes = c.fetchall()
     conn.close()
     return render_template('pacientes.html', pacientes=pacientes)
