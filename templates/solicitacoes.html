@@ -35,7 +35,7 @@
                 </tr>
                 {% else %}
                 <tr>
-                        <th>ID (CPF/SUS)</th><th>Paciente</th><th>Total Solicitações</th><th>Última Entrada</th><th>Status Atual</th><th>Ação</th>
+                        <th>ID (CPF/SUS)</th><th>Paciente</th><th>Total Solicitações</th><th>Última Entrada</th><th>Status Atual</th>{% if mostrar_tipos_radiografia %}<th>Tipo de Radiografia</th>{% endif %}<th>Ação</th>
                 </tr>
                 {% endif %}
         </thead>
@@ -59,12 +59,23 @@
                         <td>{{ s[2] }}</td>
                         <td>{{ s[3]|formatar_data }}</td>
                         <td>{{ s[4] if s[4] else '-' }}</td>
+                        {% if mostrar_tipos_radiografia %}
+                        <td>
+                                {% if s[5] %}
+                                        {% for tipo_radiografia in s[5].split('||') %}
+                                                <div>{{ tipo_radiografia }}</div>
+                                        {% endfor %}
+                                {% else %}
+                                        -
+                                {% endif %}
+                        </td>
+                        {% endif %}
                         <td><a href="{{ url_for('historico_paciente', paciente_id=s[0]) }}" class="btn btn-sm btn-info">Ver Histórico</a></td>
                 </tr>
                 {% endif %}
         {% else %}
                 <tr>
-                        <td colspan="{{ 8 if modo_urgencia_em_espera else 6 }}" class="text-center text-muted py-4">Nenhuma solicitação encontrada.</td>
+                        <td colspan="{{ 8 if modo_urgencia_em_espera else (7 if mostrar_tipos_radiografia else 6) }}" class="text-center text-muted py-4">Nenhuma solicitação encontrada.</td>
                 </tr>
         {% endfor %}
         </tbody>

@@ -584,6 +584,8 @@ def logout():
     return redirect(url_for('login'))
 
 def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
+    especialidade_normalizada = normalizar_texto_busca(especialidade)
+    mostrar_tipos_radiografia = 'RADIOGRAFIA' in especialidade_normalizada
     status_upper = status.upper()
     modo_urgencia_em_espera = (
         status_upper == 'URGENTE' and
@@ -614,13 +616,26 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
         c.execute(query)
         solicitacoes = c.fetchall()
         conn.close()
-        return solicitacoes, True
+        return solicitacoes, True, False
 
     usar_data_urgencia = bool(especialidade and status)
     ultima_data_expr = 'MAX(s.data_entrada) AS ultima_data_entrada'
+    tipos_radiografia_expr = "NULL AS tipos_radiografia"
     params = []
     cpf_normalizado = normalizar_documento(cpf)
     sus_normalizado = normalizar_documento(sus)
+
+    if mostrar_tipos_radiografia:
+        tipos_radiografia_expr = '''
+            (
+                SELECT STRING_AGG(sr.especialidade, '||' ORDER BY sr.data_entrada DESC, sr.id DESC)
+                FROM solicitacao sr
+                WHERE sr.paciente_id = p.id
+                  AND translate(UPPER(COALESCE(sr.especialidade, '')),
+                        'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
+                        'AAAAAEEEEIIIIOOOOOUUUUC') LIKE '%RADIOGRAFIA%'
+            ) AS tipos_radiografia
+        '''
 
     if usar_data_urgencia:
         ultima_data_expr = '''
@@ -649,7 +664,8 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                 WHERE s2.paciente_id = p.id
                 ORDER BY s2.data_entrada DESC, s2.status ASC
                 LIMIT 1
-            ) AS status_atual
+            ) AS status_atual,
+            {tipos_radiografia_expr}
         FROM paciente p
         LEFT JOIN solicitacao s ON s.paciente_id = p.id
         WHERE 1=1
@@ -681,7 +697,7 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
     c.execute(query, params)
     solicitacoes = c.fetchall()
     conn.close()
-    return solicitacoes, False
+    return solicitacoes, False, mostrar_tipos_radiografia
 
 def listar_especialidades():
     conn = conectar()
@@ -1098,12 +1114,13 @@ def solicitacoes():
     especialidade = request.args.get('especialidade', '').strip()
     prioridade = request.args.get('prioridade', '').strip()
     status = request.args.get('status', '').strip()
-    lista_solicitacoes, modo_urgencia_em_espera = consultar_solicitacoes(cpf, sus, especialidade, prioridade, status)
+    lista_solicitacoes, modo_urgencia_em_espera, mostrar_tipos_radiografia = consultar_solicitacoes(cpf, sus, especialidade, prioridade, status)
     paginacao = paginar_registros(lista_solicitacoes, pagina)
 
     return render_template('solicitacoes.html', solicitacoes=paginacao['registros'],
         cpf=cpf, sus=sus, especialidade=especialidade, prioridade=prioridade, status=status,
         modo_urgencia_em_espera=modo_urgencia_em_espera, mostrar_filtros=False,
+        mostrar_tipos_radiografia=mostrar_tipos_radiografia,
         pagina_atual=paginacao['pagina_atual'], total_paginas=paginacao['total_paginas'],
         total_registros=paginacao['total_registros'], itens_por_pagina=paginacao['itens_por_pagina'],
         inicio_exibicao=paginacao['inicio_exibicao'], fim_exibicao=paginacao['fim_exibicao'],
@@ -1118,12 +1135,13 @@ def pesquisar():
     prioridade = request.args.get('prioridade', '').strip()
     status = request.args.get('status', '').strip()
 
-    lista_solicitacoes, modo_urgencia_em_espera = consultar_solicitacoes(cpf, sus, especialidade, prioridade, status)
+    lista_solicitacoes, modo_urgencia_em_espera, mostrar_tipos_radiografia = consultar_solicitacoes(cpf, sus, especialidade, prioridade, status)
     paginacao = paginar_registros(lista_solicitacoes, pagina)
 
     return render_template('solicitacoes.html', solicitacoes=paginacao['registros'],
         cpf=cpf, sus=sus, especialidade=especialidade, prioridade=prioridade, status=status,
         modo_urgencia_em_espera=modo_urgencia_em_espera, mostrar_filtros=True,
+        mostrar_tipos_radiografia=mostrar_tipos_radiografia,
         pagina_atual=paginacao['pagina_atual'], total_paginas=paginacao['total_paginas'],
         total_registros=paginacao['total_registros'], itens_por_pagina=paginacao['itens_por_pagina'],
         inicio_exibicao=paginacao['inicio_exibicao'], fim_exibicao=paginacao['fim_exibicao'],
@@ -1245,19 +1263,27 @@ def relatorios():
     total_registros = sum(item[1] for item in resumo) if resumo else 0
 
     pacientes_especialidade = []
+    mostrar_tipos_radiografia_relatorio = 'RADIOGRAFIA' in normalizar_texto_busca(especialidade)
     if especialidade:
+        tipos_radiografia_expr = 'NULL AS tipos_radiografia'
+        if mostrar_tipos_radiografia_relatorio:
+            tipos_radiografia_expr = '''
+                STRING_AGG(s.especialidade, '||' ORDER BY s.data_entrada DESC, s.id DESC) AS tipos_radiografia
+            '''
+
         query_pacientes = '''
-            SELECT DISTINCT
+            SELECT
                 p.id,
                 p.nome,
-                COUNT(s.id) AS total_solicitacoes
+                COUNT(s.id) AS total_solicitacoes,
+                {tipos_radiografia_expr}
             FROM paciente p
             INNER JOIN solicitacao s ON s.paciente_id = p.id
             WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
-              AND translate(UPPER(COALESCE(s.especialidade, '')), 
-                    'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', 
+              AND translate(UPPER(COALESCE(s.especialidade, '')),
+                    'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
                     'AAAAAEEEEIIIIOOOOOUUUUC') LIKE %s
-        '''
+        '''.format(tipos_radiografia_expr=tipos_radiografia_expr)
         params_pacientes = [f"%{normalizar_texto_busca(especialidade)}%"]
 
         if situacao == 'EM_ESPERA':
@@ -1301,7 +1327,8 @@ def relatorios():
         filtros_aplicados=filtros_aplicados,
         resumo=resumo,
         total_registros=total_registros,
-        pacientes_especialidade=pacientes_especialidade
+        pacientes_especialidade=pacientes_especialidade,
+        mostrar_tipos_radiografia_relatorio=mostrar_tipos_radiografia_relatorio
     )
 
 @app.route('/nova_solicitacao', methods=['GET', 'POST'])

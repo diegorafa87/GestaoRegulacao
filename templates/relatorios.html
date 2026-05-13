@@ -31,42 +31,52 @@
     </div>
 </div>
 
-<form method="get" class="row g-2 align-items-end mb-4">
-    <div class="col-md-2">
-        <label class="form-label">Situação</label>
-        <select name="situacao" class="form-control">
-            <option value="REALIZADOS" {% if situacao == 'REALIZADOS' %}selected{% endif %}>Realizados</option>
-            <option value="EM_ESPERA" {% if situacao == 'EM_ESPERA' %}selected{% endif %}>Em Espera</option>
-        </select>
+<form method="get" class="mb-4">
+    <div class="row g-3 align-items-end mb-3">
+        <div class="col-md-2">
+            <label class="form-label">Tipo</label>
+            <select name="tipo" class="form-control">
+                <option value="" {% if not tipo %}selected{% endif %}>Todos</option>
+                <option value="CONSULTA" {% if tipo == 'CONSULTA' %}selected{% endif %}>Consulta</option>
+                <option value="EXAME" {% if tipo == 'EXAME' %}selected{% endif %}>Exame</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Situação</label>
+            <select name="situacao" class="form-control">
+                <option value="REALIZADOS" {% if situacao != 'EM_ESPERA' %}selected{% endif %}>Realizados</option>
+                <option value="EM_ESPERA" {% if situacao == 'EM_ESPERA' %}selected{% endif %}>Em Espera</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Especialidade</label>
+            <input type="text" name="especialidade" class="form-control" value="{{ especialidade }}" placeholder="Ex.: Cardiologia">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Data Inicial</label>
+            <input id="data_inicio" type="text" name="data_inicio" class="form-control" value="{{ data_inicio }}" placeholder="DD/MM/AAAA" maxlength="10">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Data Final</label>
+            <input id="data_fim" type="text" name="data_fim" class="form-control" value="{{ data_fim }}" placeholder="DD/MM/AAAA" maxlength="10">
+        </div>
     </div>
-    <div class="col-md-2">
-        <label class="form-label">Tipo</label>
-        <select name="tipo" class="form-control">
-            <option value="" {% if not tipo %}selected{% endif %}>Todos</option>
-            <option value="CONSULTA" {% if tipo == 'CONSULTA' %}selected{% endif %}>Consulta</option>
-            <option value="EXAME" {% if tipo == 'EXAME' %}selected{% endif %}>Exame</option>
-        </select>
-    </div>
-    <div class="col-md-3">
-        <label class="form-label">Especialidade</label>
-        <input type="text" name="especialidade" class="form-control" value="{{ especialidade }}" placeholder="Ex.: Cardiologia">
-    </div>
-    <div class="col-md-2">
-        <label class="form-label">Data Inicial</label>
-        <input id="data_inicio" type="text" name="data_inicio" class="form-control" value="{{ data_inicio }}" placeholder="DD/MM/AAAA" maxlength="10">
-    </div>
-    <div class="col-md-2">
-        <label class="form-label">Data Final</label>
-        <input id="data_fim" type="text" name="data_fim" class="form-control" value="{{ data_fim }}" placeholder="DD/MM/AAAA" maxlength="10">
-    </div>
-    <div class="col-md-1 d-grid gap-2">
-        <button type="submit" class="btn btn-success btn-sm">Gerar</button>
+
+    <div class="row g-2">
+        <div class="col-md-4 d-grid">
+            <button type="submit" class="btn btn-success">Gerar Relatório</button>
+        </div>
+        <div class="col-md-4 d-grid">
+            <button type="submit" name="formato" value="csv" class="btn btn-outline-primary">Exportar CSV</button>
+        </div>
+        <div class="col-md-4 d-grid">
+            <button type="submit" name="formato" value="pdf" class="btn btn-outline-danger">Exportar PDF</button>
+        </div>
     </div>
 </form>
 
-<div class="d-flex gap-2 mb-3">
-    <button type="button" class="btn btn-outline-primary btn-sm" onclick="exportarCSV()">Exportar CSV</button>
-    <button type="button" class="btn btn-outline-danger btn-sm" onclick="exportarPDF()">Exportar PDF</button>
+<div class="text-muted small mb-3">
+    As exportações em CSV e PDF respeitam os filtros e a situação selecionada.
 </div>
 
 {% if filtros_aplicados %}
@@ -129,6 +139,9 @@
                     <th class="text-center">ID (CPF/SUS)</th>
                     <th>Paciente</th>
                     <th class="text-center">Total de Solicitações</th>
+                    {% if mostrar_tipos_radiografia_relatorio %}
+                    <th>Tipo de Radiografia</th>
+                    {% endif %}
                     <th class="text-center">Ação</th>
                 </tr>
             </thead>
@@ -138,6 +151,17 @@
                     <td class="text-center">{{ p[0]|formatar_documento }}</td>
                     <td>{{ p[1] }}</td>
                     <td class="text-center">{{ p[2] }}</td>
+                    {% if mostrar_tipos_radiografia_relatorio %}
+                    <td>
+                        {% if p[3] %}
+                            {% for tipo_radiografia in p[3].split('||') %}
+                                <div>{{ tipo_radiografia }}</div>
+                            {% endfor %}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                    {% endif %}
                     <td class="text-center">
                         <a href="{{ url_for('historico_paciente', paciente_id=p[0]) }}" class="btn btn-sm btn-info">Ver Histórico</a>
                     </td>
@@ -153,33 +177,23 @@
 </div>
 {% endif %}
 
+<div class="alert alert-secondary border mt-4 mb-0">
+    <div class="fw-semibold mb-1">Fechamento do relatório</div>
+    <div>
+        {% if situacao == 'EM_ESPERA' %}
+            Quantidade total em espera: <strong>{{ total_registros }}</strong>
+        {% else %}
+            Quantidade total realizada: <strong>{{ total_registros }}</strong>
+        {% endif %}
+    </div>
+    {% if especialidade %}
+    <div>
+        Quantidade de pacientes listados abaixo: <strong>{{ pacientes_especialidade|length }}</strong>
+    </div>
+    {% endif %}
+</div>
+
 <script>
-function exportarCSV() {
-    const form = document.querySelector('form');
-    const url = new URL(form.action || window.location.href, window.location.href);
-    const formData = new FormData(form);
-    
-    for (let [key, value] of formData.entries()) {
-        url.searchParams.set(key, value);
-    }
-    
-    url.searchParams.set('formato', 'csv');
-    window.location.href = url.toString();
-}
-
-function exportarPDF() {
-    const form = document.querySelector('form');
-    const url = new URL(form.action || window.location.href, window.location.href);
-    const formData = new FormData(form);
-    
-    for (let [key, value] of formData.entries()) {
-        url.searchParams.set(key, value);
-    }
-    
-    url.searchParams.set('formato', 'pdf');
-    window.location.href = url.toString();
-}
-
 (() => {
     function aplicarMascaraData(campo) {
         if (!campo) return;
