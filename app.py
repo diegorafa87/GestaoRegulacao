@@ -747,18 +747,66 @@ def listar_sugestoes_endereco(tipo):
     conn.close()
     return [r[0] for r in resultados if r and r[0]]
 
+def montar_paginas_visiveis(pagina_atual, total_paginas, alcance=2):
+    if total_paginas <= 1:
+        return [1]
+
+    paginas = {1, total_paginas}
+    inicio = max(1, pagina_atual - alcance)
+    fim = min(total_paginas, pagina_atual + alcance)
+
+    for numero in range(inicio, fim + 1):
+        paginas.add(numero)
+
+    paginas_ordenadas = sorted(paginas)
+    paginas_visiveis = []
+    anterior = None
+
+    for numero in paginas_ordenadas:
+        if anterior is not None and numero - anterior > 1:
+            paginas_visiveis.append(None)
+        paginas_visiveis.append(numero)
+        anterior = numero
+
+    return paginas_visiveis
+
 @app.route('/')
 def index():
     return render_template('index.html')
 
 @app.route('/pacientes')
 def pacientes():
+    pacientes_por_pagina = 30
+    pagina = request.args.get('pagina', 1, type=int) or 1
+    if pagina < 1:
+        pagina = 1
+
     conn = conectar()
     c = conn.cursor()
-    c.execute('SELECT * FROM paciente ORDER BY nome ASC')
+
+    c.execute('SELECT COUNT(*) FROM paciente')
+    total_pacientes = c.fetchone()[0]
+    total_paginas = max(1, (total_pacientes + pacientes_por_pagina - 1) // pacientes_por_pagina)
+
+    if pagina > total_paginas:
+        pagina = total_paginas
+
+    offset = (pagina - 1) * pacientes_por_pagina
+    c.execute(
+        'SELECT * FROM paciente ORDER BY nome ASC LIMIT %s OFFSET %s',
+        (pacientes_por_pagina, offset)
+    )
     pacientes = c.fetchall()
     conn.close()
-    return render_template('pacientes.html', pacientes=pacientes)
+
+    return render_template(
+        'pacientes.html',
+        pacientes=pacientes,
+        pagina_atual=pagina,
+        total_paginas=total_paginas,
+        total_pacientes=total_pacientes,
+        paginas_visiveis=montar_paginas_visiveis(pagina, total_paginas),
+    )
 
 @app.route('/novo_paciente', methods=['GET', 'POST'])
 def novo_paciente():
