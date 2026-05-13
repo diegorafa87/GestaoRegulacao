@@ -31,11 +31,11 @@
         <thead class="table-dark">
                 {% if modo_urgencia_em_espera %}
                 <tr>
-                        <th>ID (CPF/SUS)</th><th>Paciente</th><th>Especialidade</th><th>Prioridade</th><th>Status</th><th>Data Solicitação</th><th>Data Entrada</th><th>Ação</th>
+                        <th class="text-center">ID (CPF/SUS)</th><th>Paciente</th><th class="text-center">Especialidade</th><th class="text-center">Prioridade</th><th class="text-center">Status</th><th class="text-center">Data Solicitação</th><th class="text-center">Data Entrada</th><th class="text-center">Ação</th>
                 </tr>
                 {% else %}
                 <tr>
-                        <th>ID (CPF/SUS)</th><th>Paciente</th><th>Total Solicitações</th><th>Última Entrada</th><th>Status Atual</th><th>Ação</th>
+                        <th class="text-center">ID (CPF/SUS)</th><th>Paciente</th><th class="text-center">Total Solicitações</th><th class="text-center">Última Entrada</th><th class="text-center">Status Atual</th><th class="text-center">Ação</th>
                 </tr>
                 {% endif %}
         </thead>
@@ -43,23 +43,23 @@
         {% for s in solicitacoes %}
                 {% if modo_urgencia_em_espera %}
                 <tr>
-                        <td>{{ s[0]|formatar_documento }}</td>
+                        <td class="text-center">{{ s[0]|formatar_documento }}</td>
                         <td>{{ s[1] }}</td>
-                        <td>{{ s[2] if s[2] else '-' }}</td>
-                        <td>{{ s[3] if s[3] else '-' }}</td>
-                        <td>{{ s[4] if s[4] else '-' }}</td>
-                        <td>{{ s[5]|formatar_data }}</td>
-                        <td>{{ s[6]|formatar_data }}</td>
-                        <td><a href="{{ url_for('historico_paciente', paciente_id=s[0]) }}" class="btn btn-sm btn-info">Ver Histórico</a></td>
+                        <td class="text-center">{{ s[2] if s[2] else '-' }}</td>
+                        <td class="text-center">{{ s[3] if s[3] else '-' }}</td>
+                        <td class="text-center">{{ s[4] if s[4] else '-' }}</td>
+                        <td class="text-center">{{ s[5]|formatar_data }}</td>
+                        <td class="text-center">{{ s[6]|formatar_data }}</td>
+                        <td class="text-center"><a href="{{ url_for('historico_paciente', paciente_id=s[0]) }}" class="btn btn-sm btn-info">Ver Histórico</a></td>
                 </tr>
                 {% else %}
                 <tr>
-                        <td>{{ s[0]|formatar_documento }}</td>
+                        <td class="text-center">{{ s[0]|formatar_documento }}</td>
                         <td>{{ s[1] }}</td>
-                        <td>{{ s[2] }}</td>
-                        <td>{{ s[3]|formatar_data }}</td>
-                        <td>{{ s[4] if s[4] else '-' }}</td>
-                        <td><a href="{{ url_for('historico_paciente', paciente_id=s[0]) }}" class="btn btn-sm btn-info">Ver Histórico</a></td>
+                        <td class="text-center">{{ s[2] }}</td>
+                        <td class="text-center">{{ s[3]|formatar_data }}</td>
+                        <td class="text-center">{{ s[4] if s[4] else '-' }}</td>
+                        <td class="text-center"><a href="{{ url_for('historico_paciente', paciente_id=s[0]) }}" class="btn btn-sm btn-info">Ver Histórico</a></td>
                 </tr>
                 {% endif %}
         {% endfor %}
