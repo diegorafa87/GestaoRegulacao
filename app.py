@@ -770,6 +770,33 @@ def montar_paginas_visiveis(pagina_atual, total_paginas, alcance=2):
 
     return paginas_visiveis
 
+def paginar_registros(registros, pagina_atual, itens_por_pagina=30):
+    total_registros = len(registros)
+    total_paginas = max(1, (total_registros + itens_por_pagina - 1) // itens_por_pagina)
+
+    if pagina_atual < 1:
+        pagina_atual = 1
+    if pagina_atual > total_paginas:
+        pagina_atual = total_paginas
+
+    inicio = (pagina_atual - 1) * itens_por_pagina
+    fim = inicio + itens_por_pagina
+    registros_paginados = registros[inicio:fim]
+
+    inicio_exibicao = inicio + 1 if total_registros else 0
+    fim_exibicao = min(fim, total_registros) if total_registros else 0
+
+    return {
+        'registros': registros_paginados,
+        'pagina_atual': pagina_atual,
+        'total_paginas': total_paginas,
+        'total_registros': total_registros,
+        'itens_por_pagina': itens_por_pagina,
+        'inicio_exibicao': inicio_exibicao,
+        'fim_exibicao': fim_exibicao,
+        'paginas_visiveis': montar_paginas_visiveis(pagina_atual, total_paginas),
+    }
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -1051,28 +1078,42 @@ def editar_solicitacao(solicitacao_id):
 
 @app.route('/solicitacoes')
 def solicitacoes():
+    pagina = request.args.get('pagina', 1, type=int) or 1
     cpf = request.args.get('cpf', '').strip()
     sus = request.args.get('sus', '').strip()
     especialidade = request.args.get('especialidade', '').strip()
     prioridade = request.args.get('prioridade', '').strip()
     status = request.args.get('status', '').strip()
-    solicitacoes, modo_urgencia_em_espera = consultar_solicitacoes(cpf, sus, especialidade, prioridade, status)
-    return render_template('solicitacoes.html', solicitacoes=solicitacoes,
+    lista_solicitacoes, modo_urgencia_em_espera = consultar_solicitacoes(cpf, sus, especialidade, prioridade, status)
+    paginacao = paginar_registros(lista_solicitacoes, pagina)
+
+    return render_template('solicitacoes.html', solicitacoes=paginacao['registros'],
         cpf=cpf, sus=sus, especialidade=especialidade, prioridade=prioridade, status=status,
-        modo_urgencia_em_espera=modo_urgencia_em_espera, mostrar_filtros=False)
+        modo_urgencia_em_espera=modo_urgencia_em_espera, mostrar_filtros=False,
+        pagina_atual=paginacao['pagina_atual'], total_paginas=paginacao['total_paginas'],
+        total_registros=paginacao['total_registros'], itens_por_pagina=paginacao['itens_por_pagina'],
+        inicio_exibicao=paginacao['inicio_exibicao'], fim_exibicao=paginacao['fim_exibicao'],
+        paginas_visiveis=paginacao['paginas_visiveis'], rota_paginacao='solicitacoes')
 
 @app.route('/pesquisar')
 def pesquisar():
+    pagina = request.args.get('pagina', 1, type=int) or 1
     cpf = request.args.get('cpf', '').strip()
     sus = request.args.get('sus', '').strip()
     especialidade = request.args.get('especialidade', '').strip()
     prioridade = request.args.get('prioridade', '').strip()
     status = request.args.get('status', '').strip()
 
-    solicitacoes, modo_urgencia_em_espera = consultar_solicitacoes(cpf, sus, especialidade, prioridade, status)
-    return render_template('solicitacoes.html', solicitacoes=solicitacoes,
+    lista_solicitacoes, modo_urgencia_em_espera = consultar_solicitacoes(cpf, sus, especialidade, prioridade, status)
+    paginacao = paginar_registros(lista_solicitacoes, pagina)
+
+    return render_template('solicitacoes.html', solicitacoes=paginacao['registros'],
         cpf=cpf, sus=sus, especialidade=especialidade, prioridade=prioridade, status=status,
-        modo_urgencia_em_espera=modo_urgencia_em_espera, mostrar_filtros=True)
+        modo_urgencia_em_espera=modo_urgencia_em_espera, mostrar_filtros=True,
+        pagina_atual=paginacao['pagina_atual'], total_paginas=paginacao['total_paginas'],
+        total_registros=paginacao['total_registros'], itens_por_pagina=paginacao['itens_por_pagina'],
+        inicio_exibicao=paginacao['inicio_exibicao'], fim_exibicao=paginacao['fim_exibicao'],
+        paginas_visiveis=paginacao['paginas_visiveis'], rota_paginacao='pesquisar')
 
 @app.route('/relatorios')
 def relatorios():
