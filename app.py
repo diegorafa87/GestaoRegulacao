@@ -1066,21 +1066,58 @@ def editar_solicitacao(solicitacao_id):
         opcoes_conclusao = {'PRESENTE', 'AUSENTE', 'CANCELADO'}
         conclusao = conclusao if conclusao in opcoes_conclusao else None
 
+        # Buscar dados da solicitação original
         c.execute(
-            'UPDATE solicitacao SET data_realizacao = %s, unidade_realizadora = %s, conclusao = %s WHERE id = %s',
-            (
-                data_realizacao if data_realizacao else None,
-                unidade_realizadora if unidade_realizadora else None,
-                conclusao,
-                solicitacao_id
-            )
+            '''
+            SELECT paciente_id, data_solicitacao, tipo, especialidade
+            FROM solicitacao
+            WHERE id = %s
+            ''',
+            (solicitacao_id,)
         )
+        solicitacao_info = c.fetchone()
+        
+        if solicitacao_info:
+            orig_paciente_id, data_solicitacao, tipo, especialidade = solicitacao_info
+            
+            # Se for exame laboratorial, aplicar a mesma ação para todas as solicitações 
+            # do mesmo paciente com a mesma data de solicitação
+            if tipo and 'LABORATORIAL' in tipo.upper():
+                c.execute(
+                    '''
+                    UPDATE solicitacao 
+                    SET data_realizacao = %s, unidade_realizadora = %s, conclusao = %s 
+                    WHERE paciente_id = %s AND data_solicitacao = %s
+                    ''',
+                    (
+                        data_realizacao if data_realizacao else None,
+                        unidade_realizadora if unidade_realizadora else None,
+                        conclusao,
+                        orig_paciente_id,
+                        data_solicitacao
+                    )
+                )
+            else:
+                # Caso contrário, atualizar apenas a solicitação específica
+                c.execute(
+                    'UPDATE solicitacao SET data_realizacao = %s, unidade_realizadora = %s, conclusao = %s WHERE id = %s',
+                    (
+                        data_realizacao if data_realizacao else None,
+                        unidade_realizadora if unidade_realizadora else None,
+                        conclusao,
+                        solicitacao_id
+                    )
+                )
+        
         conn.commit()
 
         if not paciente_id:
-            c.execute('SELECT paciente_id FROM solicitacao WHERE id = %s', (solicitacao_id,))
-            linha = c.fetchone()
-            paciente_id = linha[0] if linha else ''
+            if solicitacao_info:
+                paciente_id = solicitacao_info[0]
+            else:
+                c.execute('SELECT paciente_id FROM solicitacao WHERE id = %s', (solicitacao_id,))
+                linha = c.fetchone()
+                paciente_id = linha[0] if linha else ''
 
         paciente_id = resolver_id_paciente(paciente_id) or paciente_id
 
