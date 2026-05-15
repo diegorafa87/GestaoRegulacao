@@ -1063,7 +1063,7 @@ def editar_solicitacao(solicitacao_id):
         unidade_realizadora = request.form.get('unidade_realizadora', '').strip().upper()
         conclusao = request.form.get('conclusao', '').strip().upper()
 
-        opcoes_conclusao = {'PRESENTE', 'AUSENTE', 'CANCELADO'}
+        opcoes_conclusao = {'PRESENTE', 'AUSENTE', 'CANCELADO', 'RETIRADO'}
         conclusao = conclusao if conclusao in opcoes_conclusao else None
 
         # Buscar dados da solicitação original
