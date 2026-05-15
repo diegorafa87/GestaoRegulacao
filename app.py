@@ -1080,34 +1080,23 @@ def editar_solicitacao(solicitacao_id):
         if solicitacao_info:
             orig_paciente_id, data_solicitacao, tipo, especialidade = solicitacao_info
             
-            # Se for exame laboratorial, aplicar a mesma ação para todas as solicitações 
-            # do mesmo paciente com a mesma data de solicitação
-            if tipo and 'LABORATORIAL' in tipo.upper():
-                c.execute(
-                    '''
-                    UPDATE solicitacao 
-                    SET data_realizacao = %s, unidade_realizadora = %s, conclusao = %s 
-                    WHERE paciente_id = %s AND data_solicitacao = %s
-                    ''',
-                    (
-                        data_realizacao if data_realizacao else None,
-                        unidade_realizadora if unidade_realizadora else None,
-                        conclusao,
-                        orig_paciente_id,
-                        data_solicitacao
-                    )
+            # Aplicar a mesma ação para todas as solicitações do mesmo paciente 
+            # com a mesma especialidade e mesma data de solicitação
+            c.execute(
+                '''
+                UPDATE solicitacao 
+                SET data_realizacao = %s, unidade_realizadora = %s, conclusao = %s 
+                WHERE paciente_id = %s AND data_solicitacao = %s AND especialidade = %s
+                ''',
+                (
+                    data_realizacao if data_realizacao else None,
+                    unidade_realizadora if unidade_realizadora else None,
+                    conclusao,
+                    orig_paciente_id,
+                    data_solicitacao,
+                    especialidade
                 )
-            else:
-                # Caso contrário, atualizar apenas a solicitação específica
-                c.execute(
-                    'UPDATE solicitacao SET data_realizacao = %s, unidade_realizadora = %s, conclusao = %s WHERE id = %s',
-                    (
-                        data_realizacao if data_realizacao else None,
-                        unidade_realizadora if unidade_realizadora else None,
-                        conclusao,
-                        solicitacao_id
-                    )
-                )
+            )
         
         conn.commit()
 
