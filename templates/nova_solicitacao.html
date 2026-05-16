@@ -32,12 +32,21 @@
     </div>
     <div class="col-md-4">
         <label class="form-label">Especialidade/Descrição:</label>
+        {% if session.get('usuario_perfil') == 'ADMIN' %}
         <input id="especialidade_input" name="especialidade" class="form-control" required list="especialidades-sugestoes" autocomplete="off" placeholder="Digite para sugerir especialidade">
         <datalist id="especialidades-sugestoes">
             {% for item in especialidades %}
             <option value="{{ item }}"></option>
             {% endfor %}
         </datalist>
+        {% else %}
+        <select id="especialidade_input" name="especialidade" class="form-control" required>
+            <option value="">Selecione uma especialidade</option>
+            {% for item in especialidades %}
+            <option value="{{ item }}">{{ item }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
     </div>
     <div class="col-md-4">
         <label class="form-label">Prioridade:</label>
@@ -130,7 +139,7 @@
     const seletorTipo = document.querySelector('select[name="tipo"]');
     const campoQuantidadeSolicitacoes = document.getElementById('quantidade_solicitacoes');
     const ajudaQuantidadeSolicitacoes = document.getElementById('ajuda_quantidade_solicitacoes');
-    const listaEspecialidades = document.getElementById('especialidades-sugestoes');
+    const listaEspecialidades = document.getElementById('especialidades-sugestoes'); // null para não-admins (select)
     const seletorSistemaInsercao = document.getElementById('sistema_insercao_select');
     const campoEspecialidadeNovaAdmin = document.getElementById('especialidade_nova_admin');
     const campoSistemaInsercaoNovoAdmin = document.getElementById('sistema_insercao_novo_admin');
