@@ -30,7 +30,7 @@
     </div>
     <div class="col-md-6">
         <label class="form-label">Rua:</label>
-        <input id="rua" name="rua" class="form-control" autocomplete="off" list="ruas-sugestoes" placeholder="Digite as primeiras letras da rua" value="{{ form_data.rua if form_data else '' }}">
+        <input id="rua" name="rua" class="form-control" autocomplete="off" list="ruas-sugestoes" placeholder="Digite as primeiras letras da rua" value="{{ form_data.rua if form_data else '' }}"{% if session.get('usuario_perfil') != 'ADMIN' %} data-restrict-to-list="true"{% endif %}>
         <datalist id="ruas-sugestoes">
             {% for item in ruas %}
             <option value="{{ item }}"></option>
@@ -97,6 +97,10 @@
     const campoSus = document.getElementById('sus');
     const campoRua = document.getElementById('rua');
     const campoBairro = document.getElementById('bairro');
+
+    if (campoRua && campoRua.dataset.restrictToList) {
+        campoRua.addEventListener('input', () => campoRua.setCustomValidity(''));
+    }
     const campoRuaNovaAdmin = document.getElementById('rua_nova_admin');
     const campoBairroNovoAdmin = document.getElementById('bairro_novo_admin');
     const btnCopiarRuaAtual = document.getElementById('btnCopiarRuaAtual');
@@ -183,6 +187,21 @@
 
         if (formNovoPaciente) {
             formNovoPaciente.addEventListener('submit', async (event) => {
+                // Valida rua restrita ao catálogo para não-admins
+                if (campoRua && campoRua.dataset.restrictToList) {
+                    const valorRua = campoRua.value.trim().toUpperCase();
+                    if (valorRua) {
+                        const opcoes = Array.from(document.querySelectorAll('#ruas-sugestoes option')).map(o => o.value.trim().toUpperCase());
+                        if (!opcoes.includes(valorRua)) {
+                            event.preventDefault();
+                            campoRua.setCustomValidity('Selecione uma rua existente na lista. Novas ruas só podem ser adicionadas pelo administrador.');
+                            campoRua.reportValidity();
+                            return;
+                        }
+                    }
+                    campoRua.setCustomValidity('');
+                }
+
                 await verificarDuplicidadePaciente();
                 if (btnSalvar && btnSalvar.disabled) {
                     event.preventDefault();
