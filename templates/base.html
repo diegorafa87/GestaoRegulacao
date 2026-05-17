@@ -37,7 +37,7 @@
     </div>
   </div>
 </nav>
-<div class="container">
+<div class="container" id="mainContainer">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
@@ -51,6 +51,138 @@
     {% block content %}{% endblock %}
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+{% if session.get('usuario_id') %}
+<!-- Widget: Alertas de solicitações antigas -->
+<div id="alertasTicker" style="
+    position: fixed;
+    left: 10px;
+    top: 80px;
+    width: 200px;
+    max-height: calc(100vh - 100px);
+    overflow: hidden;
+    z-index: 900;
+    display: none;
+">
+    <div style="
+        background: rgba(13,110,253,0.08);
+        border: 1px solid rgba(13,110,253,0.25);
+        border-radius: 10px;
+        padding: 8px 0 4px;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+    ">
+        <div style="
+            font-size: 0.65rem;
+            font-weight: 700;
+            color: #0d6efd;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            text-align: center;
+            padding: 0 8px 6px;
+            border-bottom: 1px solid rgba(13,110,253,0.15);
+            margin-bottom: 4px;
+            flex-shrink: 0;
+        ">⏰ Mais antigos</div>
+        <div id="alertasViewport" style="
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+            min-height: 400px;
+        ">
+            <div id="alertasTrack" style="
+                position: absolute;
+                width: 100%;
+                will-change: transform;
+            "></div>
+        </div>
+    </div>
+</div>
+
+<style>
+#alertasTrack .alerta-item {
+    padding: 6px 10px;
+    border-bottom: 1px solid rgba(13,110,253,0.08);
+    font-size: 0.72rem;
+    line-height: 1.35;
+    color: #1a1a2e;
+    cursor: default;
+}
+#alertasTrack .alerta-item:last-child { border-bottom: none; }
+#alertasTrack .alerta-item .alerta-data {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #dc3545;
+    margin-bottom: 1px;
+}
+#alertasTrack .alerta-item .alerta-texto {
+    display: block;
+    white-space: normal;
+    word-break: break-word;
+}
+</style>
+
+<script>
+(() => {
+    const ticker = document.getElementById('alertasTicker');
+    const track = document.getElementById('alertasTrack');
+    const viewport = document.getElementById('alertasViewport');
+    const mainContainer = document.getElementById('mainContainer');
+
+    let itens = [];
+    let posY = 0;
+    let animFrame = null;
+    let pausado = false;
+    const VELOCIDADE = 0.4; // px por frame
+
+    function renderizarItens(dados) {
+        // Duplica para loop contínuo
+        const html = [...dados, ...dados].map(d => `
+            <div class="alerta-item">
+                <span class="alerta-data">${d.data}</span>
+                <span class="alerta-texto">${d.texto}</span>
+            </div>
+        `).join('');
+        track.innerHTML = html;
+    }
+
+    function animar() {
+        if (!pausado) {
+            posY -= VELOCIDADE;
+            const metade = track.scrollHeight / 2;
+            if (Math.abs(posY) >= metade) posY = 0;
+            track.style.transform = `translateY(${posY}px)`;
+        }
+        animFrame = requestAnimationFrame(animar);
+    }
+
+    viewport.addEventListener('mouseenter', () => { pausado = true; });
+    viewport.addEventListener('mouseleave', () => { pausado = false; });
+
+    async function carregarAlertas() {
+        try {
+            const resp = await fetch('/api/alertas_antigos');
+            if (!resp.ok) return;
+            const dados = await resp.json();
+            if (!dados || dados.length === 0) return;
+            itens = dados;
+            renderizarItens(itens);
+            ticker.style.display = 'block';
+            if (mainContainer) mainContainer.style.marginLeft = '220px';
+            posY = 0;
+            if (animFrame) cancelAnimationFrame(animFrame);
+            animar();
+        } catch (_) {}
+    }
+
+    carregarAlertas();
+    // Recarrega a cada 3 minutos
+    setInterval(carregarAlertas, 3 * 60 * 1000);
+})();
+</script>
+{% endif %}
 <script>
 (() => {
     document.addEventListener('DOMContentLoaded', () => {

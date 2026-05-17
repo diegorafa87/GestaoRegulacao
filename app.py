@@ -1701,6 +1701,43 @@ def api_sugestoes_solicitacao():
 
     return jsonify([r[0] for r in resultados if r and r[0]])
 
+@app.route('/api/alertas_antigos')
+def api_alertas_antigos():
+    if not usuario_logado():
+        return jsonify([])
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        '''
+        SELECT s.tipo, s.especialidade, s.data_solicitacao, p.nome
+        FROM solicitacao s
+        INNER JOIN paciente p ON p.id = s.paciente_id
+        WHERE (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')
+          AND s.especialidade IS NOT NULL
+          AND TRIM(s.especialidade) <> ''
+        ORDER BY s.data_solicitacao ASC NULLS LAST, s.data_entrada ASC NULLS LAST
+        LIMIT 30
+        '''
+    )
+    rows = c.fetchall()
+    conn.close()
+    resultado = []
+    for row in rows:
+        tipo, especialidade, data_sol, nome_paciente = row
+        data_fmt = ''
+        if data_sol:
+            try:
+                data_fmt = datetime.strptime(str(data_sol).strip(), '%Y-%m-%d').strftime('%d/%m/%Y')
+            except Exception:
+                data_fmt = str(data_sol)
+        rotulo = tipo.capitalize() if tipo else 'Solicitação'
+        resultado.append({
+            'texto': f'{rotulo} em {especialidade} — {data_fmt}',
+            'paciente': nome_paciente or '',
+            'data': data_fmt,
+        })
+    return jsonify(resultado)
+
 @app.route('/usuarios', methods=['GET', 'POST'])
 @login_required_admin
 def usuarios():
