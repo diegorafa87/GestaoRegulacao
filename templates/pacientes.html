@@ -122,14 +122,14 @@
                 mensagem.textContent = `${pacientes.length} paciente(s) encontrado(s).`;
                 pacientes.forEach(p => {
                     const item = document.createElement('a');
-                    item.href = `/paciente/${encodeURIComponent(p.id)}`;
+                    item.href = `/paciente/${encodeURIComponent(p.id)}/editar`;
                     item.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
                     item.innerHTML = `
                         <div>
                             <div class="fw-semibold">${p.nome}</div>
                             <small class="text-muted">ID: ${p.id}</small>
                         </div>
-                        <span class="badge bg-primary rounded-pill">Ver histórico</span>
+                        <span class="badge bg-primary rounded-pill">Ver dados</span>
                     `;
                     resultados.appendChild(item);
                 });
