@@ -534,6 +534,134 @@ def gerar_pdf_relatorio_resumo(resumo, tipo, especialidade, data_inicio, data_fi
 
     return pdf.getvalue()
 
+def gerar_pdf_termo_retirada_solicitacao(paciente_nome, paciente_id, especialidade, data_entrada, data_retirada, solicitacao_id=None):
+    largura_pagina = 595
+    altura_pagina = 842
+    margem_x = 42
+    largura_util = largura_pagina - (margem_x * 2)
+    centro_x = margem_x + (largura_util / 2)
+    data_geracao = datetime.now().strftime('%d/%m/%Y %H:%M')
+
+    cor_primaria = (0.121, 0.466, 0.705)
+    cor_primaria_escura = (0.082, 0.247, 0.396)
+    cor_texto = (0.149, 0.164, 0.196)
+    cor_muted = (0.420, 0.451, 0.482)
+    cor_borda = (0.820, 0.843, 0.878)
+    cor_fundo_box = (0.953, 0.965, 0.980)
+    cor_branca = (1, 1, 1)
+
+    comandos = []
+
+    def adicionar(comando):
+        comandos.append(comando)
+
+    def texto(x, y, conteudo, fonte='F1', tamanho=11, cor=cor_texto):
+        adicionar(comando_texto_pdf(x, y, conteudo, fonte=fonte, tamanho=tamanho, cor=cor))
+
+    def linha(x1, y1, x2, y2, cor=cor_borda, espessura=1):
+        adicionar(comando_linha_pdf(x1, y1, x2, y2, cor=cor, espessura=espessura))
+
+    def caixa(x, y, largura, altura, cor_fundo=None, cor_borda=cor_borda, espessura=1):
+        adicionar(comando_retangulo_pdf(x, y, largura, altura, cor_borda=cor_borda, cor_fundo=cor_fundo, espessura=espessura))
+
+    especialidade = '' if especialidade is None else str(especialidade).strip()
+    paciente_nome = '' if paciente_nome is None else str(paciente_nome).strip()
+    paciente_id = formatar_identificador_paciente(paciente_id)
+    data_entrada = formatar_data_br(data_entrada)
+    data_retirada = formatar_data_br(data_retirada)
+    numero_solicitacao = f'#{solicitacao_id}' if solicitacao_id is not None else ''
+
+    # ── Cabeçalho ──────────────────────────────────────────────────────────
+    caixa(margem_x, 734, largura_util, 68, cor_fundo=cor_primaria, cor_borda=cor_primaria)
+    adicionar(comando_texto_centralizado_pdf(centro_x, 782, 'Secretaria Municipal de Saude de Fernando Pedroza', largura_util - 40, fonte='F2', tamanho=13, cor=(0.910, 0.949, 0.984)))
+    adicionar(comando_texto_centralizado_pdf(centro_x, 757, 'Termo de Retirada de Requisicao', largura_util - 40, fonte='F2', tamanho=21, cor=cor_branca))
+    if numero_solicitacao:
+        adicionar(comando_texto_centralizado_pdf(centro_x, 741, f'Solicitacao {numero_solicitacao}', largura_util - 40, tamanho=10, cor=(0.910, 0.949, 0.984)))
+
+    # ── Bloco Paciente (nome + ID) ─────────────────────────────────────────
+    caixa(margem_x, 646, largura_util, 72, cor_fundo=cor_fundo_box, cor_borda=cor_borda)
+    texto(margem_x + 14, 702, 'Paciente', fonte='F2', tamanho=11, cor=cor_muted)
+    texto(margem_x + 14, 682, paciente_nome or '-', fonte='F2', tamanho=16, cor=cor_primaria_escura)
+    texto(margem_x + 14, 661, f'ID do paciente: {paciente_id or "-"}', tamanho=10, cor=cor_muted)
+
+    # ── Bloco Especialidade ────────────────────────────────────────────────
+    caixa(margem_x, 574, largura_util, 56, cor_fundo=cor_branca, cor_borda=cor_borda)
+    texto(margem_x + 14, 616, 'Especialidade', fonte='F2', tamanho=11, cor=cor_muted)
+    texto(margem_x + 14, 595, especialidade or '-', fonte='F2', tamanho=14, cor=cor_primaria_escura)
+
+    # ── Bloco Datas ────────────────────────────────────────────────────────
+    caixa(margem_x, 482, largura_util, 76, cor_fundo=cor_fundo_box, cor_borda=cor_borda)
+    texto(margem_x + 14, 542, 'Data de entrada da requisicao', fonte='F2', tamanho=11, cor=cor_muted)
+    texto(margem_x + 14, 520, data_entrada or '-', fonte='F2', tamanho=15, cor=cor_primaria_escura)
+    texto(margem_x + 300, 542, 'Data de retirada', fonte='F2', tamanho=11, cor=cor_muted)
+    texto(margem_x + 300, 520, data_retirada or '-', fonte='F2', tamanho=15, cor=cor_primaria_escura)
+
+    # ── Bloco Declaração + Assinaturas ─────────────────────────────────────
+    caixa(margem_x, 248, largura_util, 218, cor_fundo=cor_fundo_box, cor_borda=cor_borda)
+    declaracao = 'Declaro que recebi a devolucao da requisicao acima identificada e que estou ciente de que a retirada encerra a movimentacao desta solicitacao na Regulacao do Municipio de Fernando Pedroza.'
+    linhas_decl = quebrar_linha_pdf(declaracao, limite=80)
+    for i, linha_texto in enumerate(linhas_decl[:3]):
+        texto(margem_x + 14, 450 - (i * 16), linha_texto, fonte='F2', tamanho=10.5, cor=cor_texto)
+    texto(margem_x + 14, 406, 'Assinaturas', fonte='F2', tamanho=12, cor=cor_primaria_escura)
+    texto(margem_x + 14, 382, 'Tecnico da Secretaria', tamanho=10, cor=cor_muted)
+    texto(margem_x + 320, 382, 'Paciente', tamanho=10, cor=cor_muted)
+    linha(margem_x + 14, 358, margem_x + 258, 358, cor=cor_primaria_escura, espessura=1)
+    linha(margem_x + 300, 358, margem_x + largura_util - 14, 358, cor=cor_primaria_escura, espessura=1)
+    texto(margem_x + 14, 342, 'Nome por extenso', tamanho=9, cor=cor_muted)
+    texto(margem_x + 300, 342, 'Nome por extenso', tamanho=9, cor=cor_muted)
+    linha(margem_x + 14, 322, margem_x + 258, 322, cor=cor_borda, espessura=1)
+    linha(margem_x + 300, 322, margem_x + largura_util - 14, 322, cor=cor_borda, espessura=1)
+
+    # ── Rodapé ─────────────────────────────────────────────────────────────
+    texto(margem_x + 14, 228, f'Documento emitido em {data_geracao}', tamanho=9, cor=cor_muted)
+    texto(margem_x + 14, 212, 'Preencher as assinaturas e arquivar junto ao processo administrativo da requisicao.', tamanho=9, cor=cor_muted)
+
+    objetos = {
+        1: '<< /Type /Catalog /Pages 2 0 R >>',
+        3: '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+        4: '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
+        5: '<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>'
+    }
+
+    conteudo = '\n'.join(comandos)
+    conteudo_bytes = conteudo.encode('latin-1', errors='replace')
+    objetos[6] = f'<< /Length {len(conteudo_bytes)} >>\nstream\n{conteudo}\nendstream'
+    objetos[7] = (
+        '<< /Type /Page /Parent 2 0 R '
+        f'/MediaBox [0 0 {largura_pagina} {altura_pagina}] '
+        '/Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> '
+        '/Contents 6 0 R >>'
+    )
+    objetos[2] = '<< /Type /Pages /Kids [7 0 R] /Count 1 >>'
+
+    pdf = io.BytesIO()
+    pdf.write(b'%PDF-1.4\n%\xe2\xe3\xcf\xd3\n')
+
+    offsets = {}
+    for numero in sorted(objetos):
+        offsets[numero] = pdf.tell()
+        pdf.write(f'{numero} 0 obj\n'.encode('latin-1'))
+        pdf.write(objetos[numero].encode('latin-1'))
+        pdf.write(b'\nendobj\n')
+
+    xref_inicio = pdf.tell()
+    total_objetos = max(objetos)
+    pdf.write(f'xref\n0 {total_objetos + 1}\n'.encode('latin-1'))
+    pdf.write(b'0000000000 65535 f \n')
+
+    for numero in range(1, total_objetos + 1):
+        offset = offsets.get(numero, 0)
+        pdf.write(f'{offset:010} 00000 n \n'.encode('latin-1'))
+
+    pdf.write(
+        (
+            f'trailer\n<< /Size {total_objetos + 1} /Root 1 0 R >>\n'
+            f'startxref\n{xref_inicio}\n%%EOF'
+        ).encode('latin-1')
+    )
+
+    return pdf.getvalue()
+
 app.jinja_env.filters['formatar_data'] = formatar_data_br
 app.jinja_env.filters['formatar_endereco_lista'] = formatar_endereco_lista
 app.jinja_env.filters['formatar_documento'] = formatar_identificador_paciente
@@ -1051,6 +1179,52 @@ def historico_paciente(paciente_id):
     historico = c.fetchall()
     conn.close()
     return render_template('historico_paciente.html', paciente_id=paciente_id_resolvido, paciente=paciente, historico=historico)
+
+@app.route('/solicitacao/<int:solicitacao_id>/termo-retirada')
+def termo_retirada_solicitacao(solicitacao_id):
+    data_retirada_raw = request.args.get('data_retirada', '').strip()
+    data_retirada = normalizar_data_para_iso(data_retirada_raw) if data_retirada_raw else datetime.now().strftime('%Y-%m-%d')
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        '''
+        SELECT
+            s.id,
+            s.paciente_id,
+            p.nome,
+            s.especialidade,
+            s.data_entrada
+        FROM solicitacao s
+        INNER JOIN paciente p ON p.id = s.paciente_id
+        WHERE s.id = %s
+        ''',
+        (solicitacao_id,)
+    )
+    solicitacao = c.fetchone()
+    conn.close()
+
+    if not solicitacao:
+        flash('Solicitação não encontrada para gerar o termo de retirada.', 'warning')
+        return redirect(url_for('solicitacoes'))
+
+    pdf_content = gerar_pdf_termo_retirada_solicitacao(
+        paciente_nome=solicitacao[2],
+        paciente_id=solicitacao[1],
+        especialidade=solicitacao[3],
+        data_entrada=solicitacao[4],
+        data_retirada=data_retirada,
+        solicitacao_id=solicitacao[0],
+    )
+
+    nome_arquivo = f"termo_retirada_{solicitacao[0]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    return Response(
+        pdf_content,
+        mimetype='application/pdf',
+        headers={
+            'Content-Disposition': f'attachment; filename={nome_arquivo}'
+        }
+    )
 
 @app.route('/solicitacao/<int:solicitacao_id>/editar', methods=['GET', 'POST'])
 def editar_solicitacao(solicitacao_id):
