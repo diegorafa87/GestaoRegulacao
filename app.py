@@ -1883,7 +1883,7 @@ def api_alertas_antigos():
     c = conn.cursor()
     c.execute(
         '''
-        SELECT s.tipo, s.especialidade, s.data_solicitacao, p.nome
+        SELECT s.tipo, s.especialidade, s.data_solicitacao, p.nome, p.id
         FROM solicitacao s
         INNER JOIN paciente p ON p.id = s.paciente_id
         WHERE (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')
@@ -1897,7 +1897,7 @@ def api_alertas_antigos():
     conn.close()
     resultado = []
     for row in rows:
-        tipo, especialidade, data_sol, nome_paciente = row
+        tipo, especialidade, data_sol, nome_paciente, paciente_id = row
         data_fmt = ''
         if data_sol:
             try:
@@ -1909,6 +1909,7 @@ def api_alertas_antigos():
             'texto': f'{rotulo} em {especialidade} — {data_fmt}',
             'paciente': nome_paciente or '',
             'data': data_fmt,
+            'paciente_id': paciente_id or '',
         })
     return jsonify(resultado)
 

@@ -102,12 +102,18 @@
 
 <style>
 #alertasTrack .alerta-item {
+    display: block;
     padding: 6px 10px;
     border-bottom: 1px solid rgba(13,110,253,0.08);
     font-size: 0.72rem;
     line-height: 1.35;
     color: #1a1a2e;
-    cursor: default;
+    text-decoration: none;
+    cursor: pointer;
+}
+#alertasTrack .alerta-item:hover {
+    background: rgba(13,110,253,0.10);
+    color: #0a3878;
 }
 #alertasTrack .alerta-item:last-child { border-bottom: none; }
 #alertasTrack .alerta-item .alerta-data {
@@ -139,12 +145,14 @@
 
     function renderizarItens(dados) {
         // Duplica para loop contínuo
-        const html = [...dados, ...dados].map(d => `
-            <div class="alerta-item">
+        const html = [...dados, ...dados].map(d => {
+            const href = d.paciente_id ? `/paciente/${encodeURIComponent(d.paciente_id)}` : '#';
+            return `
+            <a class="alerta-item" href="${href}">
                 <span class="alerta-data">${d.data}</span>
                 <span class="alerta-texto">${d.texto}</span>
-            </div>
-        `).join('');
+            </a>`;
+        }).join('');
         track.innerHTML = html;
     }
 
