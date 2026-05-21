@@ -38,7 +38,7 @@
     </thead>
     <tbody>
     {% for p in pacientes %}
-        <tr>
+        <tr{% if p[5] and p[5]|lower == 'sim' %} style="color:#b30000;font-weight:bold;"{% endif %}>
             <td>{{ p[0]|formatar_documento }}</td>
             <td>{{ p[1] }}</td>
             <td>{{ p[2]|formatar_data }}</td>
