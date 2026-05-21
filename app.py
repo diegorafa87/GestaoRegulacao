@@ -1,3 +1,27 @@
+def unificar_pacientes(id_principal, id_duplicado):
+    """
+    Atualiza todas as referências do paciente duplicado para o paciente principal e remove o duplicado.
+    """
+    if id_principal == id_duplicado:
+        return False, 'IDs iguais, nada a fazer.'
+
+    conn = conectar()
+    c = conn.cursor()
+
+    # Atualiza todas as solicitações para apontar para o paciente principal
+    c.execute(
+        'UPDATE solicitacao SET paciente_id = %s WHERE paciente_id = %s',
+        (id_principal, id_duplicado)
+    )
+
+    # (Se houver outras tabelas relacionadas, adicionar aqui)
+
+    # Remove o paciente duplicado
+    c.execute('DELETE FROM paciente WHERE id = %s', (id_duplicado,))
+
+    conn.commit()
+    conn.close()
+    return True, 'Unificação concluída com sucesso.'
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response, session, flash
 import os
 import psycopg
@@ -1952,6 +1976,31 @@ def usuarios():
     lista_usuarios = c.fetchall()
     conn.close()
     return render_template('usuarios.html', usuarios=lista_usuarios)
+
+@app.route('/admin/pacientes', methods=['GET', 'POST'])
+@login_required_admin
+def admin_pacientes():
+    conn = conectar()
+    c = conn.cursor()
+    mensagem = None
+    if request.method == 'POST':
+        paciente_id = request.form.get('paciente_id')
+        if paciente_id:
+            # Verifica se o paciente existe
+            c.execute('SELECT nome FROM paciente WHERE id = %s', (paciente_id,))
+            paciente = c.fetchone()
+            if paciente:
+                # Remove todas as solicitações do paciente (ou só o paciente, se preferir manter histórico)
+                c.execute('DELETE FROM solicitacao WHERE paciente_id = %s', (paciente_id,))
+                c.execute('DELETE FROM paciente WHERE id = %s', (paciente_id,))
+                conn.commit()
+                mensagem = f'Paciente {paciente[0]} excluído com sucesso.'
+            else:
+                mensagem = 'Paciente não encontrado.'
+    c.execute('SELECT id, nome, nascimento FROM paciente ORDER BY nome ASC')
+    pacientes = c.fetchall()
+    conn.close()
+    return render_template('admin_pacientes.html', pacientes=pacientes, mensagem=mensagem)
 
 with app.app_context():
     criar_tabelas()

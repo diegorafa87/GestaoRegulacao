@@ -13,7 +13,7 @@
     </div>
     <div class="col-md-3">
         <label class="form-label">Cartão SUS:</label>
-        <input id="sus" name="sus" class="form-control" maxlength="18" placeholder="000 0000 0000 0000" value="{{ form_data.sus if form_data else '' }}">
+        <input id="sus" name="sus" class="form-control" maxlength="15" pattern="\d{0,15}" inputmode="numeric" placeholder="Somente números (até 15)" value="{{ form_data.sus if form_data else '' }}" oninput="this.value=this.value.replace(/\D/g,'').slice(0,15)">
     </div>
     <div class="col-12 d-none" id="avisoDuplicidadePaciente"></div>
     <div class="col-md-6">
@@ -26,7 +26,11 @@
     </div>
     <div class="col-md-4">
         <label class="form-label">Telefone:</label>
-        <input id="telefone" name="telefone" class="form-control" placeholder="(00) 00000-00000" maxlength="15" value="{{ form_data.telefone if form_data else '' }}">
+        <input id="telefone" name="telefone" class="form-control" maxlength="15" placeholder="(00) 00000-0000" value="{{ form_data.telefone if form_data else '' }}">
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Telefone 2 (opcional):</label>
+        <input id="telefone2" name="telefone2" class="form-control" maxlength="15" placeholder="(00) 00000-0000" value="{{ form_data.telefone2 if form_data else '' }}">
     </div>
     <div class="col-md-6">
         <label class="form-label">Rua:</label>
@@ -48,6 +52,14 @@
             {% for item in bairros %}
             <option value="{{ item }}" {% if form_data and form_data.bairro == item %}selected{% endif %}>{{ item }}</option>
             {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Paciente oncológico?</label>
+        <select id="oncologico" name="oncologico" class="form-control">
+            <option value="" {% if not form_data or not form_data.oncologico %}selected{% endif %}>Selecione...</option>
+            <option value="Sim" {% if form_data and form_data.oncologico == 'Sim' %}selected{% endif %}>Sim</option>
+            <option value="Não" {% if form_data and form_data.oncologico == 'Não' %}selected{% endif %}>Não</option>
         </select>
     </div>
     <div class="col-12">

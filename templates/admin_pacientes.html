@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Administração de Pacientes</h2>
+{% if mensagem %}
+  <div class="alert alert-info">{{ mensagem }}</div>
+{% endif %}
+<table class="table table-bordered table-striped">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Nome</th>
+      <th>Nascimento</th>
+      <th>Ação</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for paciente in pacientes %}
+    <tr>
+      <td>{{ paciente[0] }}</td>
+      <td>{{ paciente[1] }}</td>
+      <td>{{ paciente[2] }}</td>
+      <td>
+        <form method="post" style="display:inline" onsubmit="return confirm('Tem certeza que deseja excluir este paciente?');">
+          <input type="hidden" name="paciente_id" value="{{ paciente[0] }}">
+          <button type="submit" class="btn btn-danger btn-sm">Excluir</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

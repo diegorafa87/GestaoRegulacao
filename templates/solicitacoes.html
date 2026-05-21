@@ -50,7 +50,14 @@
                         <td>{{ s[4] if s[4] else '-' }}</td>
                         <td>{{ s[5]|formatar_data }}</td>
                         <td>{{ s[6]|formatar_data }}</td>
-                        <td><a href="{{ url_for('historico_paciente', paciente_id=s[0]) }}" class="btn btn-sm btn-info">Ver Histórico</a></td>
+                                                <td>
+                                                        <a href="{{ url_for('historico_paciente', paciente_id=s[0]) }}" class="btn btn-sm btn-info">Ver Histórico</a>
+                                                        {% if s[4] == 'RETIRADO' or s[10] == 'RETIRADO' %}
+                                                                <a href="{{ url_for('termo_retirada_solicitacao', solicitacao_id=s[0]) }}" class="btn btn-sm btn-warning ms-1" title="Baixar termo de retirada" target="_blank">
+                                                                        Termo de Retirada
+                                                                </a>
+                                                        {% endif %}
+                                                </td>
                 </tr>
                 {% else %}
                 <tr>
@@ -70,7 +77,14 @@
                                 {% endif %}
                         </td>
                         {% endif %}
-                        <td><a href="{{ url_for('historico_paciente', paciente_id=s[0]) }}" class="btn btn-sm btn-info">Ver Histórico</a></td>
+                                                <td>
+                                                        <a href="{{ url_for('historico_paciente', paciente_id=s[0]) }}" class="btn btn-sm btn-info">Ver Histórico</a>
+                                                        {% if s[4] == 'RETIRADO' %}
+                                                                <a href="{{ url_for('termo_retirada_solicitacao', solicitacao_id=s[0]) }}" class="btn btn-sm btn-warning ms-1" title="Baixar termo de retirada" target="_blank">
+                                                                        Termo de Retirada
+                                                                </a>
+                                                        {% endif %}
+                                                </td>
                 </tr>
                 {% endif %}
         {% else %}
