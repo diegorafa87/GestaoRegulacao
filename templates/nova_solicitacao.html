@@ -261,7 +261,39 @@
         }, 250);
     });
 
-    // Máscara de data com barras fixas (DD/MM/AAAA)
+    // Obtém data máxima permitida (hoje)
+    function obterDataMaxima() {
+        const hoje = new Date();
+        const dia = String(hoje.getDate()).padStart(2, '0');
+        const mes = String(hoje.getMonth() + 1).padStart(2, '0');
+        const ano = hoje.getFullYear();
+        return `${dia}/${mes}/${ano}`;
+    }
+
+    // Converte data DD/MM/YYYY para Date
+    function converterParaDate(dataStr) {
+        if (!dataStr || dataStr.length !== 10) return null;
+        const partes = dataStr.split('/');
+        if (partes.length !== 3) return null;
+        const dia = parseInt(partes[0], 10);
+        const mes = parseInt(partes[1], 10);
+        const ano = parseInt(partes[2], 10);
+        return new Date(ano, mes - 1, dia);
+    }
+
+    // Valida se a data é futura
+    function ehDataFutura(dataStr) {
+        const data = converterParaDate(dataStr);
+        if (!data || isNaN(data.getTime())) return false;
+        
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+        data.setHours(0, 0, 0, 0);
+        
+        return data > hoje;
+    }
+
+    // Máscara de data com barras fixas (DD/MM/AAAA) e validação
     function aplicarMascaraData(campo) {
         campo.addEventListener('input', (e) => {
             let valor = e.target.value.replace(/\D/g, '');
@@ -279,11 +311,34 @@
             }
 
             e.target.value = formatado;
+
+            // Validação de data futura quando completa
+            if (formatado.length === 10) {
+                if (ehDataFutura(formatado)) {
+                    e.target.classList.add('is-invalid');
+                    e.target.title = 'Data não pode ser no futuro';
+                } else {
+                    e.target.classList.remove('is-invalid');
+                    e.target.title = '';
+                }
+            } else {
+                e.target.classList.remove('is-invalid');
+                e.target.title = '';
+            }
         });
 
         campo.addEventListener('keydown', (e) => {
             if (e.key === 'Backspace' && e.target.value.endsWith('/')) {
                 e.target.value = e.target.value.slice(0, -1);
+            }
+        });
+
+        campo.addEventListener('blur', (e) => {
+            if (e.target.value && e.target.value.length === 10) {
+                if (ehDataFutura(e.target.value)) {
+                    e.target.classList.add('is-invalid');
+                    e.target.title = 'Data não pode ser no futuro';
+                }
             }
         });
     }
@@ -395,6 +450,27 @@
 
             e.preventDefault();
 
+            // Validar datas futuras
+            const campoDataSolicitacao = document.getElementById('data_solicitacao');
+            const campoDataEntrada = document.getElementById('data_entrada');
+            const campoDataInsercao = document.getElementById('data_insercao');
+
+            const campos_data_critica = [
+                { campo: campoDataSolicitacao, nome: 'Data Solicitação' },
+                { campo: campoDataEntrada, nome: 'Data Entrada' },
+                { campo: campoDataInsercao, nome: 'Data de Inserção' }
+            ];
+
+            for (let {campo, nome} of campos_data_critica) {
+                if (campo && campo.value && campo.value.length === 10) {
+                    if (ehDataFutura(campo.value)) {
+                        campo.classList.add('is-invalid');
+                        flash(`${nome} não pode ser no futuro (máximo: ${obterDataMaxima()})`, 'warning');
+                        return;
+                    }
+                }
+            }
+
             const paciente_id = document.getElementById('paciente_id').value.trim();
             const tipo = document.querySelector('select[name="tipo"]').value;
             const especialidade = document.getElementById('especialidade_input').value.trim();
@@ -440,6 +516,24 @@
                 formulario.submit();
             }
         });
+    }
+
+    function flash(mensagem, tipo = 'info') {
+        // Cria um alerta temporário
+        const alerta = document.createElement('div');
+        alerta.className = `alert alert-${tipo} alert-dismissible fade show position-fixed top-0 end-0 m-3`;
+        alerta.style.zIndex = '9999';
+        alerta.innerHTML = `
+            ${mensagem}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(alerta);
+        
+        setTimeout(() => {
+            if (alerta.parentNode) {
+                alerta.remove();
+            }
+        }, 5000);
     }
 
     function mostrarModalDuplicatas(dados, formulario) {

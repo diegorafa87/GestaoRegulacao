@@ -1033,6 +1033,21 @@ def permite_replicar_solicitacao(tipo, especialidade):
     )
     return any(termo in especialidade_normalizada for termo in termos_permitidos)
 
+def eh_data_futura(data_str):
+    """
+    Verifica se uma data está no futuro.
+    data_str deve estar no formato ISO (YYYY-MM-DD)
+    """
+    if not data_str:
+        return False
+    
+    try:
+        data = datetime.strptime(data_str, '%Y-%m-%d').date()
+        hoje = datetime.now().date()
+        return data > hoje
+    except (ValueError, TypeError):
+        return False
+
 def verificar_solicitacao_duplicada(paciente_id, tipo, especialidade):
     """
     Verifica se existe solicitação duplicada para o mesmo paciente, tipo e especialidade.
@@ -1732,6 +1747,34 @@ def nova_solicitacao():
         data_realizacao = normalizar_data_para_iso(request.form.get('data_realizacao'))
         data_retorno = normalizar_data_para_iso(request.form.get('data_retorno'))
         unidade_realizadora = request.form.get('unidade_realizadora', '').upper() if request.form.get('unidade_realizadora') else None
+
+        # Validar datas futuras
+        if data_solicitacao and eh_data_futura(data_solicitacao):
+            flash('Data de Solicitação não pode ser no futuro.', 'warning')
+            return render_template(
+                'nova_solicitacao.html',
+                especialidades=listar_especialidades(),
+                sistemas_insercao=listar_sistemas_insercao(),
+                form_data=form_data,
+            )
+
+        if data_entrada and eh_data_futura(data_entrada):
+            flash('Data de Entrada não pode ser no futuro.', 'warning')
+            return render_template(
+                'nova_solicitacao.html',
+                especialidades=listar_especialidades(),
+                sistemas_insercao=listar_sistemas_insercao(),
+                form_data=form_data,
+            )
+
+        if data_insercao and eh_data_futura(data_insercao):
+            flash('Data de Inserção não pode ser no futuro.', 'warning')
+            return render_template(
+                'nova_solicitacao.html',
+                especialidades=listar_especialidades(),
+                sistemas_insercao=listar_sistemas_insercao(),
+                form_data=form_data,
+            )
 
         if status == 'RETORNO' and not data_retorno:
             flash('Informe a data de previsão de retorno quando o status for Retorno.', 'warning')
