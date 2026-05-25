@@ -101,6 +101,7 @@ def criar_tabelas():
         data_entrada TEXT,
         data_insercao TEXT,
         data_realizacao TEXT,
+        data_retorno TEXT,
         unidade_realizadora TEXT,
         tipo TEXT,
         especialidade TEXT,
@@ -111,6 +112,7 @@ def criar_tabelas():
         sistema_insercao TEXT,
         FOREIGN KEY(paciente_id) REFERENCES paciente(id)
     )''')
+    c.execute('ALTER TABLE solicitacao ADD COLUMN IF NOT EXISTS data_retorno TEXT')
     c.execute('ALTER TABLE solicitacao ADD COLUMN IF NOT EXISTS conclusao TEXT')
     c.execute('''CREATE TABLE IF NOT EXISTS sugestao_endereco (
         tipo TEXT NOT NULL,

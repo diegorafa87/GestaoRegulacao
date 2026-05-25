@@ -54,14 +54,6 @@
             {% endfor %}
         </select>
     </div>
-    <div class="col-md-4">
-        <label class="form-label">Paciente oncológico?</label>
-        <select id="oncologico" name="oncologico" class="form-control">
-            <option value="" {% if not form_data or not form_data.oncologico %}selected{% endif %}>Selecione...</option>
-            <option value="Sim" {% if form_data and form_data.oncologico == 'Sim' %}selected{% endif %}>Sim</option>
-            <option value="Não" {% if form_data and form_data.oncologico == 'Não' %}selected{% endif %}>Não</option>
-        </select>
-    </div>
     <div class="col-12">
         <button type="submit" class="btn btn-success" id="btnSalvarPaciente">Salvar</button>
         <a href="/pacientes" class="btn btn-secondary">Voltar</a>

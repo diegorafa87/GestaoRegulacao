@@ -42,7 +42,7 @@
         <tbody>
         {% for s in solicitacoes %}
                 {% if modo_urgencia_em_espera %}
-                <tr{% if s[6] and s[6]|lower == 'sim' %} style="color:#b30000;font-weight:bold;"{% endif %}>
+                <tr>
                         <td>{{ s[0]|formatar_documento }}</td>
                         <td>{{ s[1] }}</td>
                         <td>{{ s[2] if s[2] else '-' }}</td>
@@ -60,7 +60,7 @@
                                                 </td>
                 </tr>
                 {% else %}
-                <tr{% if s[6] and s[6]|lower == 'sim' %} style="color:#b30000;font-weight:bold;"{% endif %}>
+                <tr>
                         <td>{{ s[0]|formatar_documento }}</td>
                         <td>{{ s[1] }}</td>
                         <td>{{ s[2] }}</td>

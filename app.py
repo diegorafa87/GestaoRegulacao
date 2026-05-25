@@ -1578,7 +1578,16 @@ def nova_solicitacao():
         if data_insercao_form:
             data_insercao = normalizar_data_para_iso(data_insercao_form) or datetime.now().strftime('%Y-%m-%d')
         data_realizacao = normalizar_data_para_iso(request.form.get('data_realizacao'))
+        data_retorno = normalizar_data_para_iso(request.form.get('data_retorno'))
         unidade_realizadora = request.form.get('unidade_realizadora', '').upper() if request.form.get('unidade_realizadora') else None
+
+        if status == 'RETORNO' and not data_retorno:
+            flash('Informe a data de previsão de retorno quando o status for Retorno.', 'warning')
+            return render_template(
+                'nova_solicitacao.html',
+                especialidades=listar_especialidades(),
+                sistemas_insercao=listar_sistemas_insercao(),
+            )
 
         if not paciente_id_resolvido:
             flash('Paciente não encontrado. Selecione um paciente válido pelo CPF, SUS ou nome.', 'warning')
@@ -1656,13 +1665,14 @@ def nova_solicitacao():
         c = conn.cursor()
         for _ in range(quantidade_solicitacoes):
             c.execute(
-                "INSERT INTO solicitacao (paciente_id, data_solicitacao, data_entrada, data_insercao, data_realizacao, unidade_realizadora, tipo, especialidade, descricao, prioridade, encaminhamento, status, sistema_insercao) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "INSERT INTO solicitacao (paciente_id, data_solicitacao, data_entrada, data_insercao, data_realizacao, data_retorno, unidade_realizadora, tipo, especialidade, descricao, prioridade, encaminhamento, status, sistema_insercao) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     paciente_id_resolvido,
                     data_solicitacao,
                     data_entrada,
                     data_insercao,
                     data_realizacao,
+                    data_retorno,
                     unidade_realizadora,
                     tipo,
                     especialidade,

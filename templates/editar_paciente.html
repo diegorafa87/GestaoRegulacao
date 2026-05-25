@@ -21,15 +21,6 @@
         <input name="telefone" id="telefone" class="form-control" value="{{ paciente[3] or '' }}" maxlength="15" placeholder="(00) 00000-0000">
     </div>
 
-    <div class="col-md-4">
-        <label class="form-label">Paciente oncológico?</label>
-        <select name="oncologico" class="form-control">
-            <option value="" {% if not paciente or paciente[5] is none %}selected{% endif %}>Selecione...</option>
-            <option value="Sim" {% if paciente and paciente[5] == 'Sim' %}selected{% endif %}>Sim</option>
-            <option value="Não" {% if paciente and paciente[5] == 'Não' %}selected{% endif %}>Não</option>
-        </select>
-    </div>
-
     <div class="col-md-6">
         <label class="form-label">Nome:</label>
         <input name="nome" class="form-control" value="{{ paciente[1] }}" required>

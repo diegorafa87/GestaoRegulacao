@@ -58,11 +58,16 @@
     </div>
     <div class="col-md-3">
         <label class="form-label">Status:</label>
-        <select name="status" class="form-control" required>
+        <select id="status_select" name="status" class="form-control" required>
             <option value="">Selecione uma opção</option>
             <option value="ELETIVO">Eletivo</option>
             <option value="URGENTE">Urgente</option>
+            <option value="RETORNO">Retorno</option>
         </select>
+    </div>
+    <div id="campo_data_retorno_container" class="col-md-3 d-none">
+        <label class="form-label">Previsão de Retorno:</label>
+        <input id="data_retorno" name="data_retorno" class="form-control" placeholder="DD/MM/AAAA" maxlength="10">
     </div>
     <div class="col-md-3">
         <label class="form-label">Sistema de Inserção:</label>
@@ -141,6 +146,9 @@
     const ajudaQuantidadeSolicitacoes = document.getElementById('ajuda_quantidade_solicitacoes');
     const listaEspecialidades = document.getElementById('especialidades-sugestoes'); // null para não-admins (select)
     const seletorSistemaInsercao = document.getElementById('sistema_insercao_select');
+    const seletorStatus = document.getElementById('status_select');
+    const campoDataRetornoContainer = document.getElementById('campo_data_retorno_container');
+    const campoDataRetorno = document.getElementById('data_retorno');
     const campoEspecialidadeNovaAdmin = document.getElementById('especialidade_nova_admin');
     const campoSistemaInsercaoNovoAdmin = document.getElementById('sistema_insercao_novo_admin');
     const btnCopiarEspecialidadeAtual = document.getElementById('btnCopiarEspecialidadeAtual');
@@ -188,6 +196,23 @@
         if (ajudaQuantidadeSolicitacoes) {
             ajudaQuantidadeSolicitacoes.textContent = 'Informe quantas solicitações iguais serão criadas para este paciente.';
         }
+    }
+
+    function atualizarVisibilidadeDataRetorno() {
+        if (!seletorStatus || !campoDataRetornoContainer || !campoDataRetorno) return;
+        const mostrar = seletorStatus.value === 'RETORNO';
+        campoDataRetornoContainer.classList.toggle('d-none', !mostrar);
+        if (!mostrar) {
+            campoDataRetorno.value = '';
+            campoDataRetorno.removeAttribute('required');
+        } else {
+            campoDataRetorno.setAttribute('required', 'required');
+        }
+    }
+
+    if (seletorStatus) {
+        seletorStatus.addEventListener('change', atualizarVisibilidadeDataRetorno);
+        atualizarVisibilidadeDataRetorno();
     }
 
     campoPaciente.addEventListener('input', () => {
@@ -273,6 +298,7 @@
     if (camposEntrada) aplicarMascaraData(camposEntrada);
     if (camposRealizacao) aplicarMascaraData(camposRealizacao);
     if (camposInsercao) aplicarMascaraData(camposInsercao);
+    if (campoDataRetorno) aplicarMascaraData(campoDataRetorno);
 
     if (btnCopiarEspecialidadeAtual && campoEspecialidadeNovaAdmin && campoEspecialidade) {
         btnCopiarEspecialidadeAtual.addEventListener('click', () => {
