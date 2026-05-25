@@ -34,7 +34,6 @@ from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 from db import conectar, criar_tabelas
-from ia_utils import processar_pergunta_ia, gerar_relatorio_pdf, executar_query_relatorio
 
 load_dotenv()
 
@@ -2236,6 +2235,7 @@ def api_ia_perguntar():
         return jsonify({'sucesso': False, 'mensagem': 'Não autenticado'}), 401
     
     try:
+        from ia_utils import processar_pergunta_ia
         dados = request.get_json()
         pergunta = dados.get('pergunta', '').strip()
         
@@ -2261,6 +2261,7 @@ def api_ia_relatorio(tipo):
         return jsonify({'sucesso': False, 'mensagem': f'Tipo inválido. Use um de: {tipos_validos}'}), 400
     
     try:
+        from ia_utils import executar_query_relatorio
         dados = executar_query_relatorio(tipo)
         return jsonify({'sucesso': True, 'tipo': tipo, 'dados': dados})
     except Exception as e:
@@ -2273,6 +2274,7 @@ def api_ia_pdf():
         return jsonify({'sucesso': False, 'mensagem': 'Não autenticado'}), 401
     
     try:
+        from ia_utils import gerar_relatorio_pdf
         dados = request.get_json()
         titulo = dados.get('titulo', 'Relatório Gerado pela IA').strip()
         conteudo = dados.get('conteudo', '').strip()
