@@ -9,31 +9,31 @@
 <form method="post" class="row g-3">
     <div class="col-md-4">
         <label class="form-label">Paciente (CPF/SUS):</label>
-        <input id="paciente_id" name="paciente_id" class="form-control" required list="pacientes-sugestoes" autocomplete="off" placeholder="Digite CPF, SUS ou nome">
+        <input id="paciente_id" name="paciente_id" class="form-control" required list="pacientes-sugestoes" autocomplete="off" placeholder="Digite CPF, SUS ou nome" value="{{ form_data.paciente_id or '' }}">
         <datalist id="pacientes-sugestoes"></datalist>
         <small id="paciente-info" class="text-muted"></small>
     </div>
     <div class="col-md-4">
         <label class="form-label">Data Solicitação:</label>
-        <input id="data_solicitacao" name="data_solicitacao" class="form-control" required placeholder="DD/MM/AAAA" maxlength="10">
+        <input id="data_solicitacao" name="data_solicitacao" class="form-control" required placeholder="DD/MM/AAAA" maxlength="10" value="{{ form_data.data_solicitacao or '' }}">
     </div>
     <div class="col-md-4">
         <label class="form-label">Data Entrada:</label>
-        <input id="data_entrada" name="data_entrada" class="form-control" required placeholder="DD/MM/AAAA" maxlength="10">
+        <input id="data_entrada" name="data_entrada" class="form-control" required placeholder="DD/MM/AAAA" maxlength="10" value="{{ form_data.data_entrada or '' }}">
     </div>
     <div class="col-md-4">
         <label class="form-label">Tipo de Requisição:</label>
         <select name="tipo" class="form-control" required>
             <option value="">Selecione uma opção</option>
-            <option value="CONSULTA">Consulta</option>
-            <option value="EXAME">Exame</option>
-            <option value="CIRURGIA">Cirurgia</option>
+            <option value="CONSULTA" {% if form_data.tipo == 'CONSULTA' %}selected{% endif %}>Consulta</option>
+            <option value="EXAME" {% if form_data.tipo == 'EXAME' %}selected{% endif %}>Exame</option>
+            <option value="CIRURGIA" {% if form_data.tipo == 'CIRURGIA' %}selected{% endif %}>Cirurgia</option>
         </select>
     </div>
     <div class="col-md-4">
         <label class="form-label">Especialidade/Descrição:</label>
         {% if session.get('usuario_perfil') == 'ADMIN' %}
-        <input id="especialidade_input" name="especialidade" class="form-control" required list="especialidades-sugestoes" autocomplete="off" placeholder="Digite para sugerir especialidade">
+        <input id="especialidade_input" name="especialidade" class="form-control" required list="especialidades-sugestoes" autocomplete="off" placeholder="Digite para sugerir especialidade" value="{{ form_data.especialidade or '' }}">
         <datalist id="especialidades-sugestoes">
             {% for item in especialidades %}
             <option value="{{ item }}"></option>
@@ -43,7 +43,7 @@
         <select id="especialidade_input" name="especialidade" class="form-control" required>
             <option value="">Selecione uma especialidade</option>
             {% for item in especialidades %}
-            <option value="{{ item }}">{{ item }}</option>
+            <option value="{{ item }}" {% if form_data.especialidade == item %}selected{% endif %}>{{ item }}</option>
             {% endfor %}
         </select>
         {% endif %}
@@ -52,35 +52,35 @@
         <label class="form-label">Prioridade:</label>
         <select name="prioridade" class="form-control" required>
             <option value="">Selecione uma opção</option>
-            <option value="SIM">Sim</option>
-            <option value="NÃO">Não</option>
+            <option value="SIM" {% if form_data.prioridade == 'SIM' %}selected{% endif %}>Sim</option>
+            <option value="NÃO" {% if form_data.prioridade == 'NÃO' %}selected{% endif %}>Não</option>
         </select>
     </div>
     <div class="col-md-3">
         <label class="form-label">Status:</label>
         <select id="status_select" name="status" class="form-control" required>
             <option value="">Selecione uma opção</option>
-            <option value="ELETIVO">Eletivo</option>
-            <option value="URGENTE">Urgente</option>
-            <option value="RETORNO">Retorno</option>
+            <option value="ELETIVO" {% if form_data.status == 'ELETIVO' %}selected{% endif %}>Eletivo</option>
+            <option value="URGENTE" {% if form_data.status == 'URGENTE' %}selected{% endif %}>Urgente</option>
+            <option value="RETORNO" {% if form_data.status == 'RETORNO' %}selected{% endif %}>Retorno</option>
         </select>
     </div>
     <div id="campo_data_retorno_container" class="col-md-3 d-none">
         <label class="form-label">Previsão de Retorno:</label>
-        <input id="data_retorno" name="data_retorno" class="form-control" placeholder="DD/MM/AAAA" maxlength="10">
+        <input id="data_retorno" name="data_retorno" class="form-control" placeholder="DD/MM/AAAA" maxlength="10" value="{{ form_data.data_retorno or '' }}">
     </div>
     <div class="col-md-3">
         <label class="form-label">Sistema de Inserção:</label>
         <select id="sistema_insercao_select" name="sistema_insercao" class="form-control" required>
             <option value="">▼ Selecione um sistema já cadastrado</option>
             {% for item in sistemas_insercao %}
-            <option value="{{ item }}">{{ item }}</option>
+            <option value="{{ item }}" {% if form_data.sistema_insercao == item %}selected{% endif %}>{{ item }}</option>
             {% endfor %}
         </select>
     </div>
     <div class="col-md-3">
         <label class="form-label">Data de Inserção:</label>
-        <input id="data_insercao" name="data_insercao" class="form-control" placeholder="DD/MM/AAAA" maxlength="10">
+        <input id="data_insercao" name="data_insercao" class="form-control" placeholder="DD/MM/AAAA" maxlength="10" value="{{ form_data.data_insercao or '' }}">
     </div>
     <div class="col-md-3">
         <label class="form-label">Quantidade de Solicitações:</label>
@@ -91,7 +91,7 @@
             class="form-control"
             min="1"
             max="100"
-            value="1"
+            value="{{ form_data.quantidade_solicitacoes or '1' }}"
         >
         <small id="ajuda_quantidade_solicitacoes" class="text-muted">
             Use quantidade maior que 1 para EXAME anatomopatológico/laboratorial.
@@ -382,6 +382,224 @@
         }
         atualizaCampoQuantidadeSolicitacoes();
     });
+
+    // Verificar duplicatas antes de submeter
+    const formulario = document.querySelector('form');
+    if (formulario) {
+        formulario.addEventListener('submit', async (e) => {
+            // Se já passou pela confirmação, permite submeter
+            if (formulario.dataset.confirmedDuplicate === 'true') {
+                formulario.dataset.confirmedDuplicate = '';
+                return;
+            }
+
+            e.preventDefault();
+
+            const paciente_id = document.getElementById('paciente_id').value.trim();
+            const tipo = document.querySelector('select[name="tipo"]').value;
+            const especialidade = document.getElementById('especialidade_input').value.trim();
+
+            if (!paciente_id || !tipo || !especialidade) {
+                // Se campos vazios, submete normalmente (a validação do servidor cuida)
+                formulario.submit();
+                return;
+            }
+
+            try {
+                const resposta = await fetch('/api/verificar_solicitacao_duplicada', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        paciente_id: paciente_id,
+                        tipo: tipo,
+                        especialidade: especialidade
+                    })
+                });
+
+                if (!resposta.ok) {
+                    formulario.submit();
+                    return;
+                }
+
+                const dados = await resposta.json();
+                
+                if (!dados.encontradas) {
+                    // Sem duplicatas, submete normalmente
+                    formulario.submit();
+                    return;
+                }
+
+                // Há duplicatas, mostra modal
+                mostrarModalDuplicatas(dados, formulario);
+
+            } catch (erro) {
+                console.error('Erro ao verificar duplicatas:', erro);
+                // Em caso de erro, permite submeter mesmo assim
+                formulario.submit();
+            }
+        });
+    }
+
+    function mostrarModalDuplicatas(dados, formulario) {
+        const modal = document.getElementById('modalDuplicatas');
+        const conteudoDuplicatas = document.getElementById('conteudoDuplicatas');
+        const btnCriarAnyway = document.getElementById('btnCriarAnyway');
+        const btnCancelar = document.getElementById('btnCancelar');
+        const btnFecharModal = document.getElementById('btnFecharModal');
+
+        // Monta o conteúdo do modal
+        let html = '<div class="alert alert-warning mb-3">';
+        html += `<strong>Atenção!</strong> Foi encontrada ${dados.total === 1 ? 'uma solicitação' : dados.total + ' solicitações'} existente(s) para este paciente com o mesmo tipo e especialidade.`;
+        html += '</div>';
+        
+        html += '<div class="list-group">';
+        dados.solicitacoes.forEach((sol, idx) => {
+            const executada = sol.executada;
+            const statusExecucao = executada ? 'Executada' : 'Não executada';
+            const dataExecucao = sol.data_realizacao || sol.data_entrada || sol.data_solicitacao || 'sem data';
+            
+            html += '<div class="list-group-item">';
+            html += `<div class="d-flex w-100 justify-content-between">`;
+            html += `<h6 class="mb-1">Solicitação #${sol.id}</h6>`;
+            html += `<small class="badge ${executada ? 'bg-success' : 'bg-secondary'}">${statusExecucao}</small>`;
+            html += `</div>`;
+            html += `<p class="mb-1"><strong>Status:</strong> ${sol.status}</p>`;
+            if (executada) {
+                html += `<p class="mb-1"><strong>Data de execução/retorno:</strong> ${dataExecucao}</p>`;
+            } else {
+                html += `<p class="mb-1"><strong>Data de entrada:</strong> ${sol.data_entrada}</p>`;
+                html += `<p class="mb-1"><strong>Data de solicitação:</strong> ${sol.data_solicitacao}</p>`;
+            }
+            html += '</div>';
+        });
+        html += '</div>';
+
+        conteudoDuplicatas.innerHTML = html;
+
+        // Botões do modal
+        btnCriarAnyway.onclick = () => {
+            formulario.dataset.confirmedDuplicate = 'true';
+            modal.style.display = 'none';
+            formulario.submit();
+        };
+
+        btnCancelar.onclick = () => {
+            modal.style.display = 'none';
+        };
+
+        btnFecharModal.onclick = () => {
+            modal.style.display = 'none';
+        };
+
+        // Fecha ao clicar fora do modal
+        window.onclick = (evento) => {
+            if (evento.target === modal) {
+                modal.style.display = 'none';
+            }
+        };
+
+        modal.style.display = 'block';
+    }
 })();
 </script>
+
+<!-- Modal para duplicatas -->
+<div id="modalDuplicatas" class="modal-duplicatas" style="display: none;">
+    <div class="modal-content-duplicatas">
+        <div class="modal-header-duplicatas">
+            <h5 class="modal-title">Solicitação Duplicada</h5>
+            <button type="button" class="btn-close" id="btnFecharModal"></button>
+        </div>
+        <div class="modal-body-duplicatas">
+            <div id="conteudoDuplicatas"></div>
+        </div>
+        <div class="modal-footer-duplicatas">
+            <button type="button" class="btn btn-secondary" id="btnCancelar">Cancelar</button>
+            <button type="button" class="btn btn-primary" id="btnCriarAnyway">Criar mesmo assim</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .modal-duplicatas {
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.4);
+        animation: fadeIn 0.3s ease-in;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    .modal-content-duplicatas {
+        background-color: #fefefe;
+        margin: 5% auto;
+        padding: 0;
+        border: 1px solid #888;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        width: 90%;
+        max-width: 600px;
+        animation: slideIn 0.3s ease-out;
+    }
+
+    @keyframes slideIn {
+        from {
+            transform: translateY(-50px);
+            opacity: 0;
+        }
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    .modal-header-duplicatas {
+        padding: 1.5rem;
+        border-bottom: 1px solid #e9ecef;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .modal-header-duplicatas h5 {
+        margin: 0;
+        font-weight: 600;
+    }
+
+    .btn-close {
+        background: none;
+        border: none;
+        font-size: 1.5rem;
+        cursor: pointer;
+        padding: 0;
+        color: #999;
+    }
+
+    .btn-close:hover {
+        color: #000;
+    }
+
+    .modal-body-duplicatas {
+        padding: 1.5rem;
+        max-height: 60vh;
+        overflow-y: auto;
+    }
+
+    .modal-footer-duplicatas {
+        padding: 1rem 1.5rem;
+        border-top: 1px solid #e9ecef;
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.5rem;
+    }
+</style>
 {% endblock %}

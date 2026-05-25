@@ -151,10 +151,11 @@ def resolver_id_paciente(identificador):
             FROM paciente
             WHERE id = %s
                OR regexp_replace(COALESCE(id, ''), '\\D', '', 'g') = %s
+               OR regexp_replace(COALESCE(sus, ''), '\\D', '', 'g') = %s
             ORDER BY CASE WHEN id = %s THEN 0 ELSE 1 END, nome ASC
             LIMIT 1
             ''',
-            (identificador, documento, identificador)
+            (identificador, documento, documento, identificador)
         )
     else:
         c.execute('SELECT id FROM paciente WHERE id = %s LIMIT 1', (identificador,))
@@ -180,9 +181,10 @@ def buscar_paciente_existente_por_documentos(cpf=None, sus=None):
         SELECT id, nome
         FROM paciente
         WHERE regexp_replace(COALESCE(id, ''), '\\D', '', 'g') = ANY(%s)
+           OR regexp_replace(COALESCE(sus, ''), '\\D', '', 'g') = ANY(%s)
         LIMIT 1
         ''',
-        (documentos,)
+        (documentos, documentos)
     )
     paciente = c.fetchone()
     conn.close()
@@ -1031,6 +1033,82 @@ def permite_replicar_solicitacao(tipo, especialidade):
     )
     return any(termo in especialidade_normalizada for termo in termos_permitidos)
 
+def verificar_solicitacao_duplicada(paciente_id, tipo, especialidade):
+    """
+    Verifica se existe solicitação duplicada para o mesmo paciente, tipo e especialidade.
+    Retorna dict com duplicatas encontradas ou None.
+    """
+    if not paciente_id or not tipo or not especialidade:
+        return None
+    
+    conn = conectar()
+    c = conn.cursor()
+    
+    # Busca solicitações com mesmo paciente, tipo e especialidade
+    c.execute(
+        '''
+        SELECT id, status, data_realizacao, data_entrada, data_solicitacao
+        FROM solicitacao
+        WHERE paciente_id = %s 
+          AND tipo = %s 
+          AND especialidade = %s
+        ORDER BY data_solicitacao DESC, id DESC
+        LIMIT 5
+        ''',
+        (paciente_id, tipo, especialidade)
+    )
+    
+    duplicatas = c.fetchall()
+    conn.close()
+    
+    if not duplicatas:
+        return None
+    
+    # Formata os dados para retornar ao cliente
+    resultado = {
+        'encontradas': True,
+        'total': len(duplicatas),
+        'solicitacoes': []
+    }
+    
+    for solicitacao in duplicatas:
+        resultado['solicitacoes'].append({
+            'id': solicitacao[0],
+            'status': solicitacao[1],
+            'data_realizacao': formatar_data_br(solicitacao[2]),
+            'data_entrada': formatar_data_br(solicitacao[3]),
+            'data_solicitacao': formatar_data_br(solicitacao[4]),
+            'executada': solicitacao[1] == 'EXECUTADO' or solicitacao[2] is not None
+        })
+    
+    return resultado
+
+@app.route('/api/verificar_solicitacao_duplicada', methods=['POST'])
+def api_verificar_solicitacao_duplicada():
+    """Rota AJAX para verificar solicitação duplicada antes de criar"""
+    try:
+        paciente_id = request.json.get('paciente_id', '').strip()
+        tipo = request.json.get('tipo', '').strip()
+        especialidade = request.json.get('especialidade', '').strip()
+        
+        if not paciente_id or not tipo or not especialidade:
+            return jsonify({'encontradas': False}), 200
+        
+        # Resolve o ID do paciente
+        paciente_id_resolvido = resolver_id_paciente(paciente_id)
+        if not paciente_id_resolvido:
+            return jsonify({'encontradas': False}), 200
+        
+        resultado = verificar_solicitacao_duplicada(paciente_id_resolvido, tipo, especialidade)
+        
+        if resultado:
+            return jsonify(resultado), 200
+        else:
+            return jsonify({'encontradas': False}), 200
+            
+    except Exception as e:
+        return jsonify({'erro': str(e)}), 500
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -1080,6 +1158,7 @@ def novo_paciente():
         nascimento_raw = request.form['nascimento']
         nascimento = normalizar_data_para_iso(nascimento_raw)
         telefone = request.form.get('telefone', '').strip()
+        oncologico = request.form.get('oncologico') == 'on'
 
         rua = request.form.get('rua', '').strip().upper()
         numero = request.form.get('numero', '').strip()
@@ -1103,6 +1182,7 @@ def novo_paciente():
             'nome': nome,
             'nascimento': nascimento_raw,
             'telefone': telefone,
+            'oncologico': oncologico,
             'rua': rua,
             'numero': numero,
             'bairro': bairro,
@@ -1137,8 +1217,8 @@ def novo_paciente():
         c = conn.cursor()
 
         try:
-            c.execute("INSERT INTO paciente (id, nome, nascimento, telefone, endereco) VALUES (%s, %s, %s, %s, %s)",
-                      (id, nome, nascimento, telefone, endereco))
+            c.execute("INSERT INTO paciente (id, nome, nascimento, telefone, endereco, sus, oncologico) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                      (id, nome, nascimento, telefone, endereco, sus if sus else None, oncologico))
             # Salva rua e bairro como sugestões para futuros cadastros (somente admin)
             if apenas_admin() and rua and rua not in ruas_catalogo:
                 c.execute(
@@ -1210,6 +1290,8 @@ def editar_paciente(paciente_id):
     if request.method == 'POST':
         nome = request.form.get('nome', '').strip().upper()
         telefone = request.form.get('telefone', '').strip()
+        sus = normalizar_documento(request.form.get('sus', '').strip())
+        oncologico = request.form.get('oncologico') == 'on'
         endereco = request.form.get('endereco', '').strip().upper()
 
         if not nome:
@@ -1218,8 +1300,8 @@ def editar_paciente(paciente_id):
             return redirect(url_for('editar_paciente', paciente_id=paciente_id_resolvido))
 
         c.execute(
-            'UPDATE paciente SET nome = %s, telefone = %s, endereco = %s WHERE id = %s',
-            (nome, telefone, endereco, paciente_id_resolvido)
+            'UPDATE paciente SET nome = %s, telefone = %s, sus = %s, oncologico = %s, endereco = %s WHERE id = %s',
+            (nome, telefone, sus if sus else None, oncologico, endereco, paciente_id_resolvido)
         )
         conn.commit()
         conn.close()
@@ -1228,7 +1310,7 @@ def editar_paciente(paciente_id):
         return redirect(url_for('pacientes'))
 
     c.execute(
-        'SELECT id, nome, nascimento, telefone, endereco FROM paciente WHERE id = %s',
+        'SELECT id, nome, nascimento, telefone, endereco, sus, oncologico FROM paciente WHERE id = %s',
         (paciente_id_resolvido,)
     )
     paciente = c.fetchone()
@@ -1613,11 +1695,25 @@ def relatorios():
 
 @app.route('/nova_solicitacao', methods=['GET', 'POST'])
 def nova_solicitacao():
+    form_data = {
+        'paciente_id': request.form.get('paciente_id', '').strip(),
+        'data_solicitacao': request.form.get('data_solicitacao', '').strip(),
+        'data_entrada': request.form.get('data_entrada', '').strip(),
+        'tipo': request.form.get('tipo', ''),
+        'especialidade': request.form.get('especialidade', '').strip(),
+        'prioridade': request.form.get('prioridade', ''),
+        'status': request.form.get('status', ''),
+        'sistema_insercao': request.form.get('sistema_insercao', '').strip(),
+        'quantidade_solicitacoes': request.form.get('quantidade_solicitacoes', '1').strip(),
+        'data_insercao': request.form.get('data_insercao', '').strip(),
+        'data_retorno': request.form.get('data_retorno', '').strip(),
+    }
+
     if request.method == 'POST':
-        paciente_id = request.form['paciente_id'].strip()
+        paciente_id = form_data['paciente_id']
         paciente_id_resolvido = resolver_id_paciente(paciente_id)
-        data_solicitacao = normalizar_data_para_iso(request.form['data_solicitacao'])
-        data_entrada = normalizar_data_para_iso(request.form['data_entrada'])
+        data_solicitacao = normalizar_data_para_iso(form_data['data_solicitacao'])
+        data_entrada = normalizar_data_para_iso(form_data['data_entrada'])
         data_insercao = datetime.now().strftime('%Y-%m-%d')
         tipo = request.form['tipo']
         especialidade = request.form.get('especialidade', '').strip().upper()
@@ -1643,6 +1739,7 @@ def nova_solicitacao():
                 'nova_solicitacao.html',
                 especialidades=listar_especialidades(),
                 sistemas_insercao=listar_sistemas_insercao(),
+                form_data=form_data,
             )
 
         if not paciente_id_resolvido:
@@ -1651,6 +1748,7 @@ def nova_solicitacao():
                 'nova_solicitacao.html',
                 especialidades=listar_especialidades(),
                 sistemas_insercao=listar_sistemas_insercao(),
+                form_data=form_data,
             )
 
         if quantidade_solicitacoes < 1:
@@ -1659,6 +1757,7 @@ def nova_solicitacao():
                 'nova_solicitacao.html',
                 especialidades=listar_especialidades(),
                 sistemas_insercao=listar_sistemas_insercao(),
+                form_data=form_data,
             )
 
         if quantidade_solicitacoes > 100:
@@ -1667,6 +1766,7 @@ def nova_solicitacao():
                 'nova_solicitacao.html',
                 especialidades=listar_especialidades(),
                 sistemas_insercao=listar_sistemas_insercao(),
+                form_data=form_data,
             )
 
         if quantidade_solicitacoes > 1 and not permite_replicar_solicitacao(tipo, especialidade):
@@ -1678,6 +1778,7 @@ def nova_solicitacao():
                 'nova_solicitacao.html',
                 especialidades=listar_especialidades(),
                 sistemas_insercao=listar_sistemas_insercao(),
+                form_data=form_data,
             )
 
         if not especialidade:
@@ -1686,6 +1787,7 @@ def nova_solicitacao():
                 'nova_solicitacao.html',
                 especialidades=listar_especialidades(),
                 sistemas_insercao=listar_sistemas_insercao(),
+                form_data=form_data,
             )
 
         if not sistema_insercao:
@@ -1694,6 +1796,7 @@ def nova_solicitacao():
                 'nova_solicitacao.html',
                 especialidades=listar_especialidades(),
                 sistemas_insercao=listar_sistemas_insercao(),
+                form_data=form_data,
             )
 
         especialidades_catalogo = listar_especialidades()
@@ -1707,6 +1810,7 @@ def nova_solicitacao():
                 'nova_solicitacao.html',
                 especialidades=especialidades_catalogo,
                 sistemas_insercao=sistemas_catalogo,
+                form_data=form_data,
             )
 
         if not sistema_existe_catalogo and not apenas_admin():
@@ -1715,6 +1819,7 @@ def nova_solicitacao():
                 'nova_solicitacao.html',
                 especialidades=especialidades_catalogo,
                 sistemas_insercao=sistemas_catalogo,
+                form_data=form_data,
             )
 
         conn = conectar()
@@ -1768,6 +1873,7 @@ def nova_solicitacao():
         'nova_solicitacao.html',
         especialidades=listar_especialidades(),
         sistemas_insercao=listar_sistemas_insercao(),
+        form_data=form_data,
     )
 
 @app.route('/admin/especialidades', methods=['POST'])
@@ -1844,23 +1950,25 @@ def api_buscar_paciente():
             SELECT id, nome
             FROM paciente
             WHERE regexp_replace(COALESCE(id, ''), '\\D', '', 'g') LIKE %s
+               OR regexp_replace(COALESCE(sus, ''), '\\D', '', 'g') LIKE %s
                OR id ILIKE %s
+               OR sus ILIKE %s
                OR nome ILIKE %s
             ORDER BY nome
             LIMIT 10
             """,
-            (f"%{termo_normalizado}%", f"%{termo}%", f"%{termo}%")
+            (f"%{termo_normalizado}%", f"%{termo_normalizado}%", f"%{termo}%", f"%{termo}%", f"%{termo}%")
         )
     else:
         c.execute(
             """
             SELECT id, nome
             FROM paciente
-            WHERE id ILIKE %s OR nome ILIKE %s
+            WHERE id ILIKE %s OR sus ILIKE %s OR nome ILIKE %s
             ORDER BY nome
             LIMIT 10
             """,
-            (f"%{termo}%", f"%{termo}%")
+            (f"%{termo}%", f"%{termo}%", f"%{termo}%")
         )
     pacientes = c.fetchall()
     conn.close()

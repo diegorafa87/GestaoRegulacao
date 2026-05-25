@@ -15,6 +15,12 @@
         <label class="form-label">Cartão SUS:</label>
         <input id="sus" name="sus" class="form-control" maxlength="15" pattern="\d{0,15}" inputmode="numeric" placeholder="Somente números (até 15)" value="{{ form_data.sus if form_data else '' }}" oninput="this.value=this.value.replace(/\D/g,'').slice(0,15)">
     </div>
+    <div class="col-md-3 d-flex align-items-center">
+        <div class="form-check mt-4 pt-1">
+            <input class="form-check-input" type="checkbox" id="oncologico" name="oncologico" {% if form_data and form_data.oncologico %}checked{% endif %}>
+            <label class="form-check-label" for="oncologico">Paciente oncológico</label>
+        </div>
+    </div>
     <div class="col-12 d-none" id="avisoDuplicidadePaciente"></div>
     <div class="col-md-6">
         <label class="form-label">Nome:</label>
