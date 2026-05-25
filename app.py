@@ -756,7 +756,8 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                 s.prioridade,
                 s.status,
                 s.data_solicitacao,
-                s.data_entrada
+                s.data_entrada,
+                0 AS retorno_agendado_count
             FROM solicitacao s
             INNER JOIN paciente p ON p.id = s.paciente_id
             WHERE UPPER(s.status) = 'URGENTE'
@@ -768,7 +769,7 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
         c.execute(query)
         solicitacoes = c.fetchall()
         conn.close()
-        return solicitacoes, True, False
+        return solicitacoes, True, False, 0, []
 
     usar_data_urgencia = bool(especialidade and status)
     ultima_data_expr = 'MAX(s.data_entrada) AS ultima_data_entrada'
@@ -817,6 +818,13 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                 ORDER BY s2.data_entrada DESC, s2.status ASC
                 LIMIT 1
             ) AS status_atual,
+            (
+                SELECT COUNT(1)
+                FROM solicitacao sr
+                WHERE sr.paciente_id = p.id
+                  AND UPPER(COALESCE(sr.status, '')) = 'RETORNO'
+                  AND TRIM(COALESCE(sr.data_retorno, '')) <> ''
+            ) AS retorno_agendado_count,
             {tipos_radiografia_expr}
         FROM paciente p
         LEFT JOIN solicitacao s ON s.paciente_id = p.id
@@ -848,8 +856,52 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
     c = conn.cursor()
     c.execute(query, params)
     solicitacoes = c.fetchall()
+
+    query_retorno = '''
+        SELECT
+            s.id,
+            p.id,
+            p.nome,
+            s.especialidade,
+            s.prioridade,
+            s.status,
+            s.data_solicitacao,
+            s.data_entrada,
+            s.data_retorno
+        FROM solicitacao s
+        INNER JOIN paciente p ON p.id = s.paciente_id
+        WHERE UPPER(COALESCE(s.status, '')) = 'RETORNO'
+          AND TRIM(COALESCE(s.data_retorno, '')) <> ''
+    '''
+    params_retorno = []
+    filtros_retorno = []
+
+    if cpf_normalizado:
+        filtros_retorno.append("regexp_replace(COALESCE(p.id, ''), '\\D', '', 'g') LIKE %s")
+        params_retorno.append(f"%{cpf_normalizado}%")
+    if sus_normalizado:
+        filtros_retorno.append("regexp_replace(COALESCE(p.id, ''), '\\D', '', 'g') LIKE %s")
+        params_retorno.append(f"%{sus_normalizado}%")
+    if especialidade:
+        filtros_retorno.append("(p.nome ILIKE %s OR s.especialidade LIKE %s)")
+        params_retorno.append(f"%{especialidade}%")
+        params_retorno.append(f"%{especialidade}%")
+    if prioridade:
+        filtros_retorno.append("s.prioridade LIKE %s")
+        params_retorno.append(f"%{prioridade}%")
+    if status:
+        filtros_retorno.append("s.status LIKE %s")
+        params_retorno.append(f"%{status}%")
+
+    if filtros_retorno:
+        query_retorno += ' AND ' + ' AND '.join(filtros_retorno)
+
+    query_retorno += ' ORDER BY s.data_retorno ASC, s.data_entrada DESC'
+    c.execute(query_retorno, params_retorno)
+    retorno_agendado_registros = c.fetchall()
     conn.close()
-    return solicitacoes, False, mostrar_tipos_radiografia
+
+    return solicitacoes, False, mostrar_tipos_radiografia, len(retorno_agendado_registros), retorno_agendado_registros
 
 def listar_especialidades():
     conn = conectar()
@@ -1338,11 +1390,13 @@ def solicitacoes():
     especialidade = request.args.get('especialidade', '').strip()
     prioridade = request.args.get('prioridade', '').strip()
     status = request.args.get('status', '').strip()
-    lista_solicitacoes, modo_urgencia_em_espera, mostrar_tipos_radiografia = consultar_solicitacoes(cpf, sus, especialidade, prioridade, status)
+    lista_solicitacoes, modo_urgencia_em_espera, mostrar_tipos_radiografia, total_retorno_agendado, retorno_agendado_registros = consultar_solicitacoes(cpf, sus, especialidade, prioridade, status)
     paginacao = paginar_registros(lista_solicitacoes, pagina)
 
     return render_template('solicitacoes.html', solicitacoes=paginacao['registros'],
         cpf=cpf, sus=sus, especialidade=especialidade, prioridade=prioridade, status=status,
+        total_retorno_agendado=total_retorno_agendado,
+        retorno_agendado_registros=retorno_agendado_registros,
         modo_urgencia_em_espera=modo_urgencia_em_espera, mostrar_filtros=False,
         mostrar_tipos_radiografia=mostrar_tipos_radiografia,
         pagina_atual=paginacao['pagina_atual'], total_paginas=paginacao['total_paginas'],
@@ -1359,11 +1413,13 @@ def pesquisar():
     prioridade = request.args.get('prioridade', '').strip()
     status = request.args.get('status', '').strip()
 
-    lista_solicitacoes, modo_urgencia_em_espera, mostrar_tipos_radiografia = consultar_solicitacoes(cpf, sus, especialidade, prioridade, status)
+    lista_solicitacoes, modo_urgencia_em_espera, mostrar_tipos_radiografia, total_retorno_agendado, retorno_agendado_registros = consultar_solicitacoes(cpf, sus, especialidade, prioridade, status)
     paginacao = paginar_registros(lista_solicitacoes, pagina)
 
     return render_template('solicitacoes.html', solicitacoes=paginacao['registros'],
         cpf=cpf, sus=sus, especialidade=especialidade, prioridade=prioridade, status=status,
+        total_retorno_agendado=total_retorno_agendado,
+        retorno_agendado_registros=retorno_agendado_registros,
         modo_urgencia_em_espera=modo_urgencia_em_espera, mostrar_filtros=True,
         mostrar_tipos_radiografia=mostrar_tipos_radiografia,
         pagina_atual=paginacao['pagina_atual'], total_paginas=paginacao['total_paginas'],
