@@ -1,0 +1,551 @@
+{% extends 'base.html' %}
+{% block title %}Chat com IA - Gestor de Relatórios{% endblock %}
+{% block content %}
+<style>
+    .chat-container {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 120px);
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    }
+
+    .chat-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1.5rem;
+        border-radius: 0.5rem 0.5rem 0 0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .chat-header h2 {
+        margin: 0;
+        font-size: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .chat-header .badge {
+        background: rgba(255,255,255,0.3);
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+    }
+
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .message {
+        display: flex;
+        gap: 0.75rem;
+        animation: fadeIn 0.3s ease-in;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .message.usuario {
+        justify-content: flex-end;
+    }
+
+    .message-content {
+        max-width: 70%;
+        padding: 0.75rem 1rem;
+        border-radius: 18px;
+        word-wrap: break-word;
+        line-height: 1.5;
+    }
+
+    .message.usuario .message-content {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 18px 4px 18px 18px;
+    }
+
+    .message.ia .message-content {
+        background: white;
+        color: #333;
+        border-radius: 4px 18px 18px 18px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .message-timestamp {
+        font-size: 0.75rem;
+        color: #999;
+        margin-top: 0.25rem;
+    }
+
+    .chat-input-area {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 0 0 0.5rem 0.5rem;
+        border-top: 1px solid #e0e0e0;
+        box-shadow: 0 -2px 8px rgba(0,0,0,0.05);
+    }
+
+    .input-group-custom {
+        display: flex;
+        gap: 0.75rem;
+    }
+
+    #pergunta {
+        flex: 1;
+        padding: 0.75rem 1rem;
+        border: 2px solid #e0e0e0;
+        border-radius: 24px;
+        font-size: 1rem;
+        transition: border-color 0.3s;
+    }
+
+    #pergunta:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 8px rgba(102, 126, 234, 0.1);
+    }
+
+    .btn-enviar {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 24px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: transform 0.2s;
+    }
+
+    .btn-enviar:hover {
+        transform: scale(1.05);
+    }
+
+    .btn-enviar:active {
+        transform: scale(0.95);
+    }
+
+    .btn-enviar:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .atalhos-rapidos {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .btn-atalho {
+        padding: 0.75rem;
+        background: white;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        transition: all 0.3s;
+    }
+
+    .btn-atalho:hover {
+        border-color: #667eea;
+        background: #f0f4ff;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+    }
+
+    .loading {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: #667eea;
+    }
+
+    .loading::after {
+        content: '';
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #667eea;
+        animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 0.3; }
+        50% { opacity: 1; }
+    }
+
+    .resposta-ia {
+        background: #f9f9f9;
+        border-left: 4px solid #667eea;
+        padding: 1rem;
+        border-radius: 4px;
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    .resposta-ia h3,
+    .resposta-ia h4 {
+        color: #667eea;
+        margin-top: 1rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .resposta-ia ul,
+    .resposta-ia ol {
+        margin-left: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .resposta-ia li {
+        margin-bottom: 0.25rem;
+    }
+
+    .resposta-ia strong {
+        color: #333;
+    }
+
+    .resposta-ia code {
+        background: #e8e8e8;
+        padding: 0.2rem 0.4rem;
+        border-radius: 4px;
+        font-family: 'Courier New', monospace;
+    }
+
+    .btn-gerar-pdf {
+        background: #28a745;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 0.9rem;
+        margin-top: 0.75rem;
+        transition: all 0.3s;
+    }
+
+    .btn-gerar-pdf:hover {
+        background: #218838;
+        transform: translateY(-2px);
+    }
+
+    .info-resumida {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 0.75rem;
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid #ddd;
+        font-size: 0.85rem;
+    }
+
+    .info-item {
+        background: white;
+        padding: 0.5rem;
+        border-radius: 6px;
+        text-align: center;
+    }
+
+    .info-item-label {
+        color: #666;
+        font-size: 0.75rem;
+    }
+
+    .info-item-valor {
+        font-weight: 700;
+        color: #667eea;
+    }
+
+    .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #999;
+    }
+
+    .empty-state-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+
+    @media (max-width: 768px) {
+        .chat-container {
+            height: auto;
+        }
+
+        .message-content {
+            max-width: 85%;
+        }
+
+        .atalhos-rapidos {
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        }
+    }
+</style>
+
+<div class="text-center mb-4 pb-3 border-bottom border-2">
+    <div class="text-primary fw-bold text-uppercase small mb-1">Secretaria Municipal de Saúde de Fernando Pedroza</div>
+    <h2 class="mb-1 fw-bold text-primary">🤖 Assistente de IA - Gestor de Relatórios</h2>
+    <div class="text-muted small">Faça perguntas em linguagem natural e receba relatórios inteligentes</div>
+</div>
+
+<div class="chat-container">
+    <div class="chat-header">
+        <h2>
+            💬 Chat com IA Gemini
+            <span class="badge">Online</span>
+        </h2>
+        <small style="opacity: 0.9;">Faça perguntas sobre pacientes, solicitações, especialidades e gere relatórios</small>
+    </div>
+
+    <div class="chat-messages" id="chatMessages">
+        <div class="empty-state">
+            <div class="empty-state-icon">🤖</div>
+            <div class="text-center">
+                <h4>Bem-vindo ao Chat com IA!</h4>
+                <p>Faça uma pergunta ou clique em um dos atalhos abaixo para começar</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="chat-input-area">
+        <div class="atalhos-rapidos" id="atalhos">
+            <button class="btn-atalho" onclick="preencherPergunta('Quantos pacientes temos cadastrados?')">📊 Total de Pacientes</button>
+            <button class="btn-atalho" onclick="preencherPergunta('Qual é o status das solicitações?')">📈 Status de Solicitações</button>
+            <button class="btn-atalho" onclick="preencherPergunta('Quais são as especialidades mais solicitadas?')">🏥 Especialidades Top</button>
+            <button class="btn-atalho" onclick="preencherPergunta('Tendência de solicitações nos últimos 7 dias')">📉 Tendências</button>
+            <button class="btn-atalho" onclick="preencherPergunta('Gere um relatório completo do sistema')">📋 Relatório Completo</button>
+        </div>
+
+        <div class="input-group-custom">
+            <input 
+                type="text" 
+                id="pergunta" 
+                placeholder="Escreva sua pergunta aqui... Ex: 'Quantos pacientes têm solicitação de cardiologia?'"
+                autocomplete="off"
+            >
+            <button class="btn-enviar" id="btnEnviar" onclick="enviarPergunta()">Enviar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const chatMessages = document.getElementById('chatMessages');
+    const perguntaInput = document.getElementById('pergunta');
+    const btnEnviar = document.getElementById('btnEnviar');
+
+    let carregando = false;
+
+    function preencherPergunta(texto) {
+        perguntaInput.value = texto;
+        perguntaInput.focus();
+    }
+
+    function adicionarMensagem(texto, tipo = 'usuario', dados_resumidos = null) {
+        const limparEmpty = document.querySelector('.empty-state');
+        if (limparEmpty) limparEmpty.remove();
+
+        const div = document.createElement('div');
+        div.className = `message ${tipo}`;
+
+        const content = document.createElement('div');
+        content.className = 'message-content';
+
+        if (tipo === 'ia') {
+            content.innerHTML = formatarResposta(texto);
+            if (dados_resumidos) {
+                const resumo = document.createElement('div');
+                resumo.className = 'info-resumida';
+                resumo.innerHTML = `
+                    <div class="info-item">
+                        <div class="info-item-label">👥 Pacientes</div>
+                        <div class="info-item-valor">${dados_resumidos.total_pacientes || 0}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-item-label">📋 Solicitações</div>
+                        <div class="info-item-valor">${dados_resumidos.total_solicitacoes || 0}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-item-label">📊 Analisadas</div>
+                        <div class="info-item-valor">${dados_resumidos.registros_analisados || 0}</div>
+                    </div>
+                `;
+                div.appendChild(content);
+                div.appendChild(resumo);
+                chatMessages.appendChild(div);
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+                return;
+            }
+        } else {
+            content.textContent = texto;
+        }
+
+        const timestamp = document.createElement('div');
+        timestamp.className = 'message-timestamp';
+        timestamp.textContent = new Date().toLocaleTimeString('pt-BR');
+
+        div.appendChild(content);
+        div.appendChild(timestamp);
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function adicionarCarregamento() {
+        const div = document.createElement('div');
+        div.className = 'message ia';
+        div.id = 'loading-message';
+
+        const content = document.createElement('div');
+        content.className = 'message-content loading';
+        content.textContent = 'IA pensando...';
+
+        div.appendChild(content);
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function removerCarregamento() {
+        const loading = document.getElementById('loading-message');
+        if (loading) loading.remove();
+    }
+
+    function formatarResposta(texto) {
+        // Converter markdown básico para HTML
+        let html = texto
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+            .replace(/__(.*?)__/g, '<strong>$1</strong>')
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')
+            .replace(/_(.*?)_/g, '<em>$1</em>')
+            .replace(/\n\n/g, '</p><p>')
+            .replace(/\n- /g, '<br>• ')
+            .replace(/\n• /g, '<br>• ')
+            .replace(/\n\d+\. /g, '<br>')
+            .replace(/\n/g, '<br>');
+
+        html = `<div class="resposta-ia"><p>${html}</p></div>`;
+
+        return html;
+    }
+
+    async function enviarPergunta() {
+        const pergunta = perguntaInput.value.trim();
+
+        if (!pergunta) {
+            alert('Por favor, escreva uma pergunta');
+            return;
+        }
+
+        if (carregando) return;
+
+        // Adicionar mensagem do usuário
+        adicionarMensagem(pergunta, 'usuario');
+        perguntaInput.value = '';
+        perguntaInput.focus();
+
+        // Mostrar carregamento
+        carregando = true;
+        btnEnviar.disabled = true;
+        adicionarCarregamento();
+
+        try {
+            const resposta = await fetch('/api/ia_perguntar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ pergunta })
+            });
+
+            const dados = await resposta.json();
+            removerCarregamento();
+
+            if (dados.sucesso) {
+                adicionarMensagem(dados.resposta, 'ia', dados.dados_resumidos);
+
+                // Adicionar botão para gerar PDF
+                setTimeout(() => {
+                    const ultimaMensagem = chatMessages.lastElementChild;
+                    if (ultimaMensagem && !ultimaMensagem.querySelector('.btn-gerar-pdf')) {
+                        const btnPdf = document.createElement('button');
+                        btnPdf.className = 'btn-gerar-pdf';
+                        btnPdf.textContent = '📥 Baixar como PDF';
+                        btnPdf.onclick = () => gerarPDF(dados.resposta);
+                        ultimaMensagem.appendChild(btnPdf);
+                    }
+                }, 100);
+            } else {
+                adicionarMensagem(`❌ Erro: ${dados.mensagem}`, 'ia');
+            }
+        } catch (erro) {
+            removerCarregamento();
+            adicionarMensagem(`❌ Erro: ${erro.message}`, 'ia');
+        } finally {
+            carregando = false;
+            btnEnviar.disabled = false;
+        }
+    }
+
+    async function gerarPDF(conteudo) {
+        try {
+            const resposta = await fetch('/api/ia_pdf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    titulo: '📊 Relatório Gerado pela IA',
+                    conteudo: conteudo
+                })
+            });
+
+            const dados = await resposta.json();
+
+            if (dados.sucesso) {
+                window.open(`/relatorio_ia/${dados.arquivo}`, '_blank');
+                alert('📄 PDF gerado com sucesso!');
+            } else {
+                alert(`Erro ao gerar PDF: ${dados.mensagem}`);
+            }
+        } catch (erro) {
+            alert(`Erro: ${erro.message}`);
+        }
+    }
+
+    // Permitir enviar com Enter
+    perguntaInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey && !carregando) {
+            e.preventDefault();
+            enviarPergunta();
+        }
+    });
+
+    // Mensagem de boas-vindas
+    setTimeout(() => {
+        adicionarMensagem(
+            '👋 Olá! Sou a IA Gemini do sistema de gestão de regulação. Posso ajudar você com:\n\n' +
+            '• 📊 Análise de dados de pacientes e solicitações\n' +
+            '• 📈 Estatísticas e tendências\n' +
+            '• 🏥 Informações sobre especialidades\n' +
+            '• 📋 Geração de relatórios em PDF\n' +
+            '• 💡 Insights e sugestões\n\n' +
+            'Faça uma pergunta em linguagem natural ou clique em um dos atalhos acima!',
+            'ia'
+        );
+    }, 500);
+</script>
+{% endblock %}

@@ -34,6 +34,7 @@ from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 from db import conectar, criar_tabelas
+from ia_utils import processar_pergunta_ia, gerar_relatorio_pdf, executar_query_relatorio
 
 load_dotenv()
 
@@ -2218,6 +2219,89 @@ def admin_pacientes():
     pacientes = c.fetchall()
     conn.close()
     return render_template('admin_pacientes.html', pacientes=pacientes, mensagem=mensagem)
+
+# ======================== ROTAS DE IA ========================
+
+@app.route('/ia_chat')
+def ia_chat():
+    """Página de chat com IA"""
+    if not usuario_logado():
+        return redirect(url_for('login'))
+    return render_template('ia_chat.html')
+
+@app.route('/api/ia_perguntar', methods=['POST'])
+def api_ia_perguntar():
+    """Endpoint para processar perguntas da IA"""
+    if not usuario_logado():
+        return jsonify({'sucesso': False, 'mensagem': 'Não autenticado'}), 401
+    
+    try:
+        dados = request.get_json()
+        pergunta = dados.get('pergunta', '').strip()
+        
+        if not pergunta or len(pergunta) < 3:
+            return jsonify({'sucesso': False, 'mensagem': 'Pergunta muito curta'}), 400
+        
+        # Processar pergunta com IA
+        resultado = processar_pergunta_ia(pergunta)
+        return jsonify(resultado)
+    
+    except Exception as e:
+        return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
+
+@app.route('/api/ia_relatorio/<tipo>', methods=['GET'])
+def api_ia_relatorio(tipo):
+    """Endpoint para gerar dados de relatório"""
+    if not usuario_logado():
+        return jsonify({'sucesso': False, 'mensagem': 'Não autenticado'}), 401
+    
+    tipos_validos = ['pacientes', 'solicitacoes', 'especialidades', 'status', 'tendencias']
+    
+    if tipo not in tipos_validos:
+        return jsonify({'sucesso': False, 'mensagem': f'Tipo inválido. Use um de: {tipos_validos}'}), 400
+    
+    try:
+        dados = executar_query_relatorio(tipo)
+        return jsonify({'sucesso': True, 'tipo': tipo, 'dados': dados})
+    except Exception as e:
+        return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
+
+@app.route('/api/ia_pdf', methods=['POST'])
+def api_ia_pdf():
+    """Endpoint para gerar PDF do relatório"""
+    if not usuario_logado():
+        return jsonify({'sucesso': False, 'mensagem': 'Não autenticado'}), 401
+    
+    try:
+        dados = request.get_json()
+        titulo = dados.get('titulo', 'Relatório Gerado pela IA').strip()
+        conteudo = dados.get('conteudo', '').strip()
+        
+        if not conteudo:
+            return jsonify({'sucesso': False, 'mensagem': 'Conteúdo vazio'}), 400
+        
+        resultado = gerar_relatorio_pdf(titulo, conteudo)
+        return jsonify(resultado)
+    
+    except Exception as e:
+        return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
+
+@app.route('/relatorio_ia/<arquivo>')
+def download_relatorio_ia(arquivo):
+    """Download do relatório PDF gerado"""
+    if not usuario_logado():
+        return redirect(url_for('login'))
+    
+    try:
+        caminho = os.path.join('static', 'relatorios', arquivo)
+        if not os.path.exists(caminho):
+            return 'Arquivo não encontrado', 404
+        
+        return redirect(f'/static/relatorios/{arquivo}')
+    except Exception as e:
+        return f'Erro: {str(e)}', 500
+
+# ======================== FIM ROTAS DE IA ========================
 
 with app.app_context():
     criar_tabelas()
