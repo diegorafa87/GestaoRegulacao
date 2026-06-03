@@ -1598,8 +1598,11 @@ def relatorios():
 
     data_inicio = normalizar_data_para_iso(data_inicio_raw) if data_inicio_raw else ''
     data_fim = normalizar_data_para_iso(data_fim_raw) if data_fim_raw else ''
+    financiamento = request.args.get('financiamento', '').strip().upper()
+    financiamento = financiamento if financiamento in ('SUS', 'CONVENIO') else ''
+    tempo_espera = request.args.get('tempo_espera', '').strip() == '1'
 
-    filtros_aplicados = bool(tipo or especialidade or data_inicio_raw or data_fim_raw or situacao == 'EM_ESPERA')
+    filtros_aplicados = bool(tipo or especialidade or data_inicio_raw or data_fim_raw or situacao == 'EM_ESPERA' or financiamento or tempo_espera)
 
     query_resumo = '''
         SELECT
@@ -1619,6 +1622,10 @@ def relatorios():
     if tipo in ('CONSULTA', 'EXAME'):
         query_resumo += ' AND UPPER(s.tipo) = %s'
         params_resumo.append(tipo)
+
+    if financiamento:
+        query_resumo += " AND UPPER(COALESCE(s.financiamento, '')) = %s"
+        params_resumo.append(financiamento)
 
     if especialidade:
         query_resumo += (
@@ -1649,6 +1656,58 @@ def relatorios():
     c = conn.cursor()
     c.execute(query_resumo, params_resumo)
     resumo = c.fetchall()
+
+    tempo_medio_espera = []
+    if tempo_espera:
+        query_tempo = '''
+            SELECT
+                UPPER(s.tipo) AS tipo,
+                AVG(DATE(s.data_realizacao) - DATE(s.data_entrada))::numeric(10,1) AS tempo_medio_dias
+            FROM solicitacao s
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
+              AND UPPER(COALESCE(s.conclusao, '')) <> 'CANCELADO'
+        '''
+        params_tempo = []
+
+        if tipo in ('CONSULTA', 'EXAME'):
+            query_tempo += ' AND UPPER(s.tipo) = %s'
+            params_tempo.append(tipo)
+
+        if financiamento:
+            query_tempo += " AND UPPER(COALESCE(s.financiamento, '')) = %s"
+            params_tempo.append(financiamento)
+
+        if especialidade:
+            query_tempo += (
+                " AND translate(UPPER(COALESCE(s.especialidade, '')), "
+                "'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', "
+                "'AAAAAEEEEIIIIOOOOOUUUUC') LIKE %s"
+            )
+            params_tempo.append(f"%{normalizar_texto_busca(especialidade)}%")
+
+        if situacao == 'EM_ESPERA':
+            query_tempo += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
+        else:
+            query_tempo += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
+
+        if data_inicio:
+            if situacao == 'EM_ESPERA':
+                query_tempo += ' AND s.data_entrada >= %s'
+            else:
+                query_tempo += ' AND s.data_realizacao >= %s'
+            params_tempo.append(data_inicio)
+
+        if data_fim:
+            if situacao == 'EM_ESPERA':
+                query_tempo += ' AND s.data_entrada <= %s'
+            else:
+                query_tempo += ' AND s.data_realizacao <= %s'
+            params_tempo.append(data_fim)
+
+        query_tempo += ' GROUP BY UPPER(s.tipo) ORDER BY UPPER(s.tipo)'
+        c.execute(query_tempo, params_tempo)
+        tempo_medio_espera = c.fetchall()
+
     conn.close()
 
     if formato == 'csv':
@@ -1725,6 +1784,10 @@ def relatorios():
         '''.format(tipos_radiografia_expr=tipos_radiografia_expr)
         params_pacientes = [f"%{normalizar_texto_busca(especialidade)}%"]
 
+        if financiamento:
+            query_pacientes += " AND UPPER(COALESCE(s.financiamento, '')) = %s"
+            params_pacientes.append(financiamento)
+
         if situacao == 'EM_ESPERA':
             query_pacientes += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
         else:
@@ -1763,10 +1826,13 @@ def relatorios():
         situacao=situacao,
         data_inicio=data_inicio_raw,
         data_fim=data_fim_raw,
+        financiamento=financiamento,
+        tempo_espera=tempo_espera,
         filtros_aplicados=filtros_aplicados,
         resumo=resumo,
         total_registros=total_registros,
         pacientes_especialidade=pacientes_especialidade,
+        tempo_medio_espera=tempo_medio_espera,
         mostrar_tipos_radiografia_relatorio=mostrar_tipos_radiografia_relatorio
     )
 

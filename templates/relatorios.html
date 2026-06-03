@@ -53,6 +53,21 @@
             <input type="text" name="especialidade" class="form-control" value="{{ especialidade }}" placeholder="Ex.: Cardiologia">
         </div>
         <div class="col-md-2">
+            <label class="form-label">Financiamento</label>
+            <select name="financiamento" class="form-control">
+                <option value="" {% if not financiamento %}selected{% endif %}>Todos</option>
+                <option value="SUS" {% if financiamento == 'SUS' %}selected{% endif %}>SUS</option>
+                <option value="CONVENIO" {% if financiamento == 'CONVENIO' %}selected{% endif %}>Convênio</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Tempo médio de espera</label>
+            <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" name="tempo_espera" id="tempo_espera" value="1" {% if tempo_espera %}checked{% endif %}>
+                <label class="form-check-label" for="tempo_espera">Calcular</label>
+            </div>
+        </div>
+        <div class="col-md-2">
             <label class="form-label">Data Inicial</label>
             <input id="data_inicio" type="text" name="data_inicio" class="form-control" value="{{ data_inicio }}" placeholder="DD/MM/AAAA" maxlength="10">
         </div>
@@ -82,6 +97,36 @@
 {% if filtros_aplicados %}
 <div class="alert alert-info py-2">
     Total de registros encontrados: <strong>{{ total_registros }}</strong>
+</div>
+{% endif %}
+
+{% if tempo_espera %}
+<div class="card mb-4">
+    <div class="card-header bg-info text-white">Tempo Médio de Espera</div>
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th class="text-center">Tipo</th>
+                    <th class="text-center">Tempo Médio (dias)</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% if tempo_medio_espera %}
+                {% for t in tempo_medio_espera %}
+                <tr>
+                    <td class="text-center">{{ t[0] }}</td>
+                    <td class="text-center">{{ t[1]|round(1) if t[1] is not none else '-' }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="2" class="text-center text-muted">Nenhum agendamento com data de realização encontrado para calcular o tempo médio.</td>
+                </tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </div>
 </div>
 {% endif %}
 
