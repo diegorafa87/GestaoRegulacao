@@ -48,7 +48,7 @@
                 {% if conclusao == 'RETIRADO' %}
                     <a href="{{ url_for('termo_retirada_solicitacao', solicitacao_id=s[0]) }}" class="btn btn-sm btn-outline-danger mb-1">Termo de Retirada</a>
                 {% endif %}
-                {% if not s[7] or not unidade|trim or not conclusao|trim %}
+                {% if not s[7] or not unidade|trim or not conclusao|trim or (not s[10] or s[10]|trim == '-') %}
                     <a href="{{ url_for('editar_solicitacao', solicitacao_id=s[0], paciente_id=paciente_id) }}" class="btn btn-sm btn-warning">Editar</a>
                 {% else %}
                     -
