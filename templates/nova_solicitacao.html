@@ -165,13 +165,20 @@
         if (!campoQuantidadeSolicitacoes || !campoEspecialidade || !seletorTipo) return;
 
         const tipo = (seletorTipo.value || '').trim().toUpperCase();
-        const especialidade = normalizarTexto(campoEspecialidade.value);
+        const valorEspecialidade = campoEspecialidade.value || (campoEspecialidadeBusca ? campoEspecialidadeBusca.value : '');
+        const especialidadesAtuais = [normalizarTexto(valorEspecialidade)];
+
+        if (especialidadesSelecionadas && especialidadesSelecionadas.size) {
+            especialidadesSelecionadas.forEach((item) => especialidadesAtuais.push(normalizarTexto(item)));
+        }
+
         const ehExame = tipo === 'EXAME';
-        const permiteReplicacao =
-            especialidade.includes('ANATOMOPATOLOGICO') ||
+        const permiteReplicacao = especialidadesAtuais.some((especialidade) =>
+            especialidade.includes('ANATOMOPATOLOGIC') ||
             especialidade.includes('EXAMES LABORATORIAIS') ||
             especialidade.includes('EXAME LABORATORIAL') ||
-            especialidade.includes('LABORATORIAL');
+            especialidade.includes('LABORATORI')
+        );
 
         const habilitado = ehExame && permiteReplicacao;
         campoQuantidadeSolicitacoes.readOnly = !habilitado;
@@ -277,6 +284,8 @@
             hidden.value = especialidade;
             especialidadesHiddenInputs.appendChild(hidden);
         });
+
+        atualizaCampoQuantidadeSolicitacoes();
     }
 
     function adicionarEspecialidade(valor) {
@@ -400,6 +409,10 @@
         btnAdicionarEspecialidade.addEventListener('click', () => {
             adicionarEspecialidade(campoEspecialidadeBusca ? campoEspecialidadeBusca.value : '');
         });
+    }
+
+    if (campoEspecialidadeBusca) {
+        campoEspecialidadeBusca.addEventListener('input', atualizaCampoQuantidadeSolicitacoes);
     }
 
     // Obtém data máxima permitida (hoje)
