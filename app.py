@@ -1741,6 +1741,7 @@ def nova_solicitacao():
         'data_entrada': request.form.get('data_entrada', '').strip(),
         'tipo': request.form.get('tipo', ''),
         'especialidade': request.form.get('especialidade', '').strip(),
+        'especialidades_multiplas': request.form.getlist('especialidades_multiplas'),
         'prioridade': request.form.get('prioridade', ''),
         'status': request.form.get('status', ''),
         'sistema_insercao': request.form.get('sistema_insercao', '').strip(),
@@ -1757,6 +1758,7 @@ def nova_solicitacao():
         data_insercao = datetime.now().strftime('%Y-%m-%d')
         tipo = request.form['tipo']
         especialidade = request.form.get('especialidade', '').strip().upper()
+        especialidades_multiplas = [e.strip().upper() for e in request.form.getlist('especialidades_multiplas') if e.strip()]
         prioridade = request.form['prioridade']
         encaminhamento = request.form.get('encaminhamento', '').upper() if request.form.get('encaminhamento') else None
         status = request.form['status']
@@ -1837,7 +1839,7 @@ def nova_solicitacao():
                 form_data=form_data,
             )
 
-        if quantidade_solicitacoes > 1 and not permite_replicar_solicitacao(tipo, especialidade):
+        if len(especialidades) == 1 and quantidade_solicitacoes > 1 and not permite_replicar_solicitacao(tipo, especialidades[0]):
             flash(
                 'A replicação em quantidade é permitida apenas para exames anatomopatológicos e laboratoriais.',
                 'warning'
@@ -1849,7 +1851,15 @@ def nova_solicitacao():
                 form_data=form_data,
             )
 
-        if not especialidade:
+        if tipo == 'EXAME':
+            if not especialidades_multiplas and especialidade:
+                especialidades = [e.strip().upper() for e in re.split(r'[;,]+', especialidade) if e.strip()]
+            else:
+                especialidades = especialidades_multiplas
+        else:
+            especialidades = [especialidade] if especialidade else []
+
+        if not especialidades:
             flash('Informe a especialidade/descrição da solicitação.', 'warning')
             return render_template(
                 'nova_solicitacao.html',
@@ -1868,12 +1878,12 @@ def nova_solicitacao():
             )
 
         especialidades_catalogo = listar_especialidades()
-        especialidade_existe_catalogo = especialidade in especialidades_catalogo
+        especialidades_invalidas = [esp for esp in especialidades if esp not in especialidades_catalogo]
         sistemas_catalogo = listar_sistemas_insercao()
         sistema_existe_catalogo = sistema_insercao in sistemas_catalogo
 
-        if not especialidade_existe_catalogo and not apenas_admin():
-            flash('A criação de nova especialidade é permitida apenas para administradores. Selecione uma opção existente.', 'warning')
+        if especialidades_invalidas and not apenas_admin():
+            flash('A criação de nova especialidade é permitida apenas para administradores. Selecione apenas especialidades existentes.', 'warning')
             return render_template(
                 'nova_solicitacao.html',
                 especialidades=especialidades_catalogo,
@@ -1892,7 +1902,8 @@ def nova_solicitacao():
 
         conn = conectar()
         c = conn.cursor()
-        for _ in range(quantidade_solicitacoes):
+        solicitacoes_criadas = 0
+        for especialidade_item in especialidades:
             c.execute(
                 "INSERT INTO solicitacao (paciente_id, data_solicitacao, data_entrada, data_insercao, data_realizacao, data_retorno, unidade_realizadora, tipo, especialidade, descricao, prioridade, encaminhamento, status, sistema_insercao) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
@@ -1904,23 +1915,26 @@ def nova_solicitacao():
                     data_retorno,
                     unidade_realizadora,
                     tipo,
-                    especialidade,
-                    especialidade,
+                    especialidade_item,
+                    especialidade_item,
                     prioridade,
                     encaminhamento,
                     status,
                     sistema_insercao,
                 )
             )
-        if apenas_admin() and not especialidade_existe_catalogo:
-            c.execute(
-                '''
-                INSERT INTO sugestao_solicitacao (tipo, valor)
-                VALUES (%s, %s)
-                ON CONFLICT DO NOTHING
-                ''',
-                ('especialidade', especialidade)
-            )
+            solicitacoes_criadas += 1
+        if apenas_admin():
+            for especialidade_item in especialidades:
+                if especialidade_item not in especialidades_catalogo:
+                    c.execute(
+                        '''
+                        INSERT INTO sugestao_solicitacao (tipo, valor)
+                        VALUES (%s, %s)
+                        ON CONFLICT DO NOTHING
+                        ''',
+                        ('especialidade', especialidade_item)
+                    )
         if apenas_admin() and not sistema_existe_catalogo:
             c.execute(
                 '''
@@ -1932,8 +1946,8 @@ def nova_solicitacao():
             )
         conn.commit()
         conn.close()
-        if quantidade_solicitacoes > 1:
-            flash(f'{quantidade_solicitacoes} solicitações criadas com sucesso para o paciente.', 'success')
+        if solicitacoes_criadas > 1:
+            flash(f'{solicitacoes_criadas} solicitações criadas com sucesso para o paciente.', 'success')
         else:
             flash('Solicitação criada com sucesso.', 'success')
         return redirect(url_for('solicitacoes'))

@@ -30,7 +30,7 @@
             <option value="CIRURGIA" {% if form_data.tipo == 'CIRURGIA' %}selected{% endif %}>Cirurgia</option>
         </select>
     </div>
-    <div class="col-md-4">
+    <div id="especialidade_unica_container" class="col-md-4">
         <label class="form-label">Especialidade/Descrição:</label>
         {% if session.get('usuario_perfil') == 'ADMIN' %}
         <input id="especialidade_input" name="especialidade" class="form-control" required list="especialidades-sugestoes" autocomplete="off" placeholder="Digite para sugerir especialidade" value="{{ form_data.especialidade or '' }}">
@@ -47,6 +47,15 @@
             {% endfor %}
         </select>
         {% endif %}
+    </div>
+    <div id="especialidades_multiplas_container" class="col-md-4 d-none">
+        <label class="form-label">Especialidades/Exames (EXAME):</label>
+        <select id="especialidades_multiplas" name="especialidades_multiplas" class="form-control" multiple size="5">
+            {% for item in especialidades %}
+            <option value="{{ item }}" {% if item in form_data.especialidades_multiplas %}selected{% endif %}>{{ item }}</option>
+            {% endfor %}
+        </select>
+        <small class="text-muted">Use Ctrl/Cmd para selecionar mais de uma especialidade.</small>
     </div>
     <div class="col-md-4">
         <label class="form-label">Prioridade:</label>
@@ -141,6 +150,9 @@
     const listaSugestoes = document.getElementById('pacientes-sugestoes');
     const infoPaciente = document.getElementById('paciente-info');
     const campoEspecialidade = document.getElementById('especialidade_input');
+    const campoEspecialidadesMultiplas = document.getElementById('especialidades_multiplas');
+    const containerEspecialidadeUnica = document.getElementById('especialidade_unica_container');
+    const containerEspecialidadesMultiplas = document.getElementById('especialidades_multiplas_container');
     const seletorTipo = document.querySelector('select[name="tipo"]');
     const campoQuantidadeSolicitacoes = document.getElementById('quantidade_solicitacoes');
     const ajudaQuantidadeSolicitacoes = document.getElementById('ajuda_quantidade_solicitacoes');
@@ -195,6 +207,27 @@
 
         if (ajudaQuantidadeSolicitacoes) {
             ajudaQuantidadeSolicitacoes.textContent = 'Informe quantas solicitações iguais serão criadas para este paciente.';
+        }
+    }
+
+    function atualizaModoEspecialidade() {
+        if (!seletorTipo || !containerEspecialidadeUnica || !containerEspecialidadesMultiplas) return;
+
+        const ehExame = (seletorTipo.value || '').trim().toUpperCase() === 'EXAME';
+        containerEspecialidadeUnica.classList.toggle('d-none', ehExame);
+        containerEspecialidadesMultiplas.classList.toggle('d-none', !ehExame);
+
+        if (campoEspecialidade) {
+            campoEspecialidade.required = !ehExame;
+            campoEspecialidade.disabled = ehExame;
+        }
+        if (campoEspecialidadesMultiplas) {
+            campoEspecialidadesMultiplas.required = ehExame;
+            campoEspecialidadesMultiplas.disabled = !ehExame;
+        }
+
+        if (!ehExame && campoEspecialidadesMultiplas) {
+            Array.from(campoEspecialidadesMultiplas.options).forEach((option) => option.selected = false);
         }
     }
 
@@ -396,7 +429,12 @@
     }
 
     if (seletorTipo) {
-        seletorTipo.addEventListener('change', atualizaCampoQuantidadeSolicitacoes);
+        seletorTipo.addEventListener('change', () => {
+            atualizaCampoQuantidadeSolicitacoes();
+            atualizaModoEspecialidade();
+        });
+        atualizaModoEspecialidade();
+        atualizaCampoQuantidadeSolicitacoes();
     }
 
     if (campoQuantidadeSolicitacoes) {
