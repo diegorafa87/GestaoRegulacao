@@ -789,6 +789,7 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                   AND translate(UPPER(COALESCE(sr.especialidade, '')),
                         'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
                         'AAAAAEEEEIIIIOOOOOUUUUC') LIKE '%RADIOGRAFIA%'
+                  AND UPPER(COALESCE(sr.conclusao, '')) <> 'CANCELADO'
             ) AS tipos_radiografia
         '''
 
@@ -801,6 +802,7 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                     WHERE su.paciente_id = p.id
                       AND su.especialidade LIKE %s
                       AND UPPER(su.status) LIKE '%%URGENTE%%'
+                      AND UPPER(COALESCE(su.conclusao, '')) <> 'CANCELADO'
                 ),
                 MAX(s.data_entrada)
             ) AS ultima_data_entrada
@@ -817,6 +819,7 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                 SELECT s2.status
                 FROM solicitacao s2
                 WHERE s2.paciente_id = p.id
+                  AND UPPER(COALESCE(s2.conclusao, '')) <> 'CANCELADO'
                 ORDER BY s2.data_entrada DESC, s2.status ASC
                 LIMIT 1
             ) AS status_atual,
@@ -826,10 +829,11 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                 WHERE sr.paciente_id = p.id
                   AND UPPER(COALESCE(sr.status, '')) = 'RETORNO'
                   AND TRIM(COALESCE(sr.data_retorno, '')) <> ''
+                  AND UPPER(COALESCE(sr.conclusao, '')) <> 'CANCELADO'
             ) AS retorno_agendado_count,
             {tipos_radiografia_expr}
         FROM paciente p
-        LEFT JOIN solicitacao s ON s.paciente_id = p.id
+        LEFT JOIN solicitacao s ON s.paciente_id = p.id AND UPPER(COALESCE(s.conclusao, '')) <> 'CANCELADO'
         WHERE 1=1
     '''
 
@@ -843,14 +847,14 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
     if filtros_id:
         query += ' AND (' + ' OR '.join(filtros_id) + ')'
     if especialidade:
-        query += ' AND (p.nome ILIKE %s OR EXISTS (SELECT 1 FROM solicitacao sx WHERE sx.paciente_id = p.id AND sx.especialidade LIKE %s))'
+        query += " AND (p.nome ILIKE %s OR EXISTS (SELECT 1 FROM solicitacao sx WHERE sx.paciente_id = p.id AND sx.especialidade LIKE %s AND UPPER(COALESCE(sx.conclusao, '')) <> 'CANCELADO'))"
         params.append(f"%{especialidade}%")
         params.append(f"%{especialidade}%")
     if prioridade:
-        query += ' AND EXISTS (SELECT 1 FROM solicitacao sx WHERE sx.paciente_id = p.id AND sx.prioridade LIKE %s)'
+        query += " AND EXISTS (SELECT 1 FROM solicitacao sx WHERE sx.paciente_id = p.id AND sx.prioridade LIKE %s AND UPPER(COALESCE(sx.conclusao, '')) <> 'CANCELADO')"
         params.append(f"%{prioridade}%")
     if status:
-        query += ' AND EXISTS (SELECT 1 FROM solicitacao sx WHERE sx.paciente_id = p.id AND sx.status LIKE %s)'
+        query += " AND EXISTS (SELECT 1 FROM solicitacao sx WHERE sx.paciente_id = p.id AND sx.status LIKE %s AND UPPER(COALESCE(sx.conclusao, '')) <> 'CANCELADO')"
         params.append(f"%{status}%")
     query += ' GROUP BY p.id, p.nome ORDER BY p.nome ASC'
 
@@ -1362,7 +1366,7 @@ def historico_paciente(paciente_id):
             unidade_realizadora,
             conclusao,
             financiamento,
-            COUNT(*) AS quantidade_solicitacoes
+            COUNT(*) FILTER (WHERE UPPER(COALESCE(conclusao, '')) <> 'CANCELADO') AS quantidade_solicitacoes
         FROM solicitacao
         WHERE paciente_id = %s
         GROUP BY data_solicitacao, data_entrada, tipo, especialidade, prioridade, status, data_realizacao, unidade_realizadora, conclusao, financiamento
@@ -1432,7 +1436,7 @@ def editar_solicitacao(solicitacao_id):
         financiamento = request.form.get('financiamento', '').strip().upper()
         conclusao = request.form.get('conclusao', '').strip().upper()
 
-        opcoes_conclusao = {'PRESENTE', 'AUSENTE', 'CANCELADO', 'RETIRADO'}
+        opcoes_conclusao = {'PRESENTE', 'AUSENTE', 'CANCELADO', 'RETIRADO', 'DUPLICADA'}
         conclusao = conclusao if conclusao in opcoes_conclusao else None
         opcoes_financiamento = {'SUS', 'CONVENIO'}
         financiamento = financiamento if financiamento in opcoes_financiamento else None
@@ -1450,25 +1454,56 @@ def editar_solicitacao(solicitacao_id):
         
         if solicitacao_info:
             orig_paciente_id, data_solicitacao, tipo, especialidade = solicitacao_info
-            
-            # Aplicar a mesma ação para todas as solicitações do mesmo paciente 
-            # com a mesma especialidade e mesma data de solicitação
-            c.execute(
-                '''
-                UPDATE solicitacao 
-                SET data_realizacao = %s, unidade_realizadora = %s, conclusao = %s, financiamento = %s 
-                WHERE paciente_id = %s AND data_solicitacao = %s AND especialidade = %s
-                ''',
-                (
-                    data_realizacao if data_realizacao else None,
-                    unidade_realizadora if unidade_realizadora else None,
-                    conclusao,
-                    financiamento,
-                    orig_paciente_id,
-                    data_solicitacao,
-                    especialidade
+
+            if conclusao == 'DUPLICADA':
+                # Excluir o registro atual quando houver outra solicitação duplicada para o mesmo paciente.
+                c.execute(
+                    '''
+                    SELECT id
+                    FROM solicitacao
+                    WHERE paciente_id = %s AND data_solicitacao = %s AND tipo = %s AND especialidade = %s AND id <> %s
+                    LIMIT 1
+                    ''',
+                    (orig_paciente_id, data_solicitacao, tipo, especialidade, solicitacao_id)
                 )
-            )
+                registro_duplicado = c.fetchone()
+                if registro_duplicado:
+                    c.execute('DELETE FROM solicitacao WHERE id = %s', (solicitacao_id,))
+                else:
+                    c.execute(
+                        '''
+                        UPDATE solicitacao
+                        SET data_realizacao = %s, unidade_realizadora = %s, conclusao = %s, financiamento = %s 
+                        WHERE id = %s
+                        ''',
+                        (
+                            data_realizacao if data_realizacao else None,
+                            unidade_realizadora if unidade_realizadora else None,
+                            conclusao,
+                            financiamento,
+                            solicitacao_id
+                        )
+                    )
+            else:
+                # Aplicar a mesma ação para todas as solicitações do mesmo paciente 
+                # com a mesma especialidade, mesmo tipo e mesma data de solicitação
+                c.execute(
+                    '''
+                    UPDATE solicitacao 
+                    SET data_realizacao = %s, unidade_realizadora = %s, conclusao = %s, financiamento = %s 
+                    WHERE paciente_id = %s AND data_solicitacao = %s AND tipo = %s AND especialidade = %s
+                    ''',
+                    (
+                        data_realizacao if data_realizacao else None,
+                        unidade_realizadora if unidade_realizadora else None,
+                        conclusao,
+                        financiamento,
+                        orig_paciente_id,
+                        data_solicitacao,
+                        tipo,
+                        especialidade
+                    )
+                )
         
         conn.commit()
 
@@ -1572,6 +1607,7 @@ def relatorios():
             COUNT(*) AS total_registros
         FROM solicitacao s
         WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
+          AND UPPER(COALESCE(s.conclusao, '')) <> 'CANCELADO'
     '''
     params_resumo = []
 
@@ -1682,6 +1718,7 @@ def relatorios():
             FROM paciente p
             INNER JOIN solicitacao s ON s.paciente_id = p.id
             WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
+              AND UPPER(COALESCE(s.conclusao, '')) <> 'CANCELADO'
               AND translate(UPPER(COALESCE(s.especialidade, '')),
                     'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
                     'AAAAAEEEEIIIIOOOOOUUUUC') LIKE %s

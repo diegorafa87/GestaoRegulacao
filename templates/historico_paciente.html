@@ -27,7 +27,7 @@
             <td>{{ {'SUS': 'SUS', 'CONVENIO': 'Convênio'}.get(s[10], s[10] if s[10] else '-') }}</td>
             <td class="text-center">{{ s[11] if s[11] and s[11] > 1 else '' }}</td>
             {% set conclusao = s[9] if s[9] else '' %}
-            {% set conclusao_label = {'PRESENTE': 'Presente', 'AUSENTE': 'Ausente', 'CANCELADO': 'Cancelado', 'RETIRADO': 'Retirado'}.get(conclusao, conclusao) %}
+            {% set conclusao_label = {'PRESENTE': 'Presente', 'AUSENTE': 'Ausente', 'CANCELADO': 'Cancelado', 'RETIRADO': 'Retirado', 'DUPLICADA': 'Duplicada'}.get(conclusao, conclusao) %}
             <td class="text-center">
                 {% if conclusao == 'PRESENTE' %}
                     <span class="badge text-bg-success">{{ conclusao_label }}</span>
@@ -37,6 +37,8 @@
                     <span class="badge text-bg-danger">{{ conclusao_label }}</span>
                 {% elif conclusao == 'RETIRADO' %}
                     <span class="badge" style="background-color: #fd7e14;">{{ conclusao_label }}</span>
+                {% elif conclusao == 'DUPLICADA' %}
+                    <span class="badge bg-secondary text-white">{{ conclusao_label }}</span>
                 {% else %}
                     -
                 {% endif %}
