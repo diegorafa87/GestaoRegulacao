@@ -909,20 +909,34 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
 
     return solicitacoes, False, mostrar_tipos_radiografia, len(retorno_agendado_registros), retorno_agendado_registros
 
-def listar_especialidades():
+def listar_especialidades(categoria=None, full=False):
     conn = conectar()
     c = conn.cursor()
-    c.execute(
+    query = '''
+        SELECT valor, categoria
+        FROM sugestao_solicitacao
+        WHERE tipo = 'especialidade'
+            AND TRIM(valor) <> ''
+    '''
+    params = []
+    if categoria in ('CONSULTA', 'EXAME', 'CIRURGIA'):
+        query += '''
+            AND (categoria = %s OR categoria IS NULL)
         '''
-        SELECT valor
-                FROM sugestao_solicitacao
-                WHERE tipo = 'especialidade'
-                    AND TRIM(valor) <> ''
-        ORDER BY valor
-        '''
-    )
+        params.append(categoria)
+    query += ' ORDER BY valor'
+    c.execute(query, params)
     resultados = c.fetchall()
     conn.close()
+
+    if full:
+        return [
+            {
+                'valor': r[0],
+                'categoria': (r[1] or '').strip().upper()
+            }
+            for r in resultados if r and r[0]
+        ]
     return [r[0] for r in resultados if r and r[0]]
 
 SISTEMAS_INSERCAO_PADRAO = [
@@ -952,6 +966,22 @@ def listar_sistemas_insercao():
 
     catalogo = [r[0] for r in resultados if r and r[0]]
     return sorted(set(SISTEMAS_INSERCAO_PADRAO + catalogo))
+
+def listar_sistemas_insercao_catalogo():
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        '''
+        SELECT DISTINCT TRIM(valor) AS valor
+        FROM sugestao_solicitacao
+        WHERE tipo = 'sistema_insercao'
+          AND TRIM(valor) <> ''
+        ORDER BY valor
+        '''
+    )
+    resultados = c.fetchall()
+    conn.close()
+    return [r[0] for r in resultados if r and r[0]]
 
 def listar_sugestoes_endereco(tipo):
     if tipo not in ('rua', 'bairro'):
@@ -1257,7 +1287,7 @@ def novo_paciente():
             return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo)
         conn.close()
         flash('Paciente cadastrado com sucesso!', 'success')
-        return redirect(url_for('pacientes'))
+        return redirect(url_for('novo_paciente'))
     return render_template(
         'novo_paciente.html',
         ruas=listar_sugestoes_endereco('rua'),
@@ -1272,11 +1302,11 @@ def adicionar_sugestao_endereco_admin():
 
     if tipo not in ('rua', 'bairro'):
         flash('Tipo de sugestão inválido.', 'warning')
-        return redirect(url_for('novo_paciente'))
+        return redirect(url_for('admin_catalogos'))
 
     if not valor:
         flash('Informe o valor para adicionar ao catálogo.', 'warning')
-        return redirect(url_for('novo_paciente'))
+        return redirect(url_for('admin_catalogos'))
 
     conn = conectar()
     c = conn.cursor()
@@ -1294,7 +1324,202 @@ def adicionar_sugestao_endereco_admin():
     else:
         flash(f'Esse {tipo} já existe no catálogo.', 'info')
 
-    return redirect(url_for('novo_paciente'))
+    return redirect(url_for('admin_catalogos'))
+
+@app.route('/admin/endereco-sugestao/editar', methods=['POST'])
+@login_required_admin
+def editar_sugestao_endereco_admin():
+    tipo = request.form.get('tipo', '').strip().lower()
+    valor_atual = request.form.get('valor_atual', '').strip().upper()
+    valor_novo = request.form.get('valor_novo', '').strip().upper()
+
+    if tipo not in ('rua', 'bairro'):
+        flash('Tipo de sugestão inválido.', 'warning')
+        return redirect(url_for('admin_catalogos'))
+
+    if not valor_atual or not valor_novo:
+        flash('Informe o valor atual e o novo valor para editar.', 'warning')
+        return redirect(url_for('admin_catalogos'))
+
+    conn = conectar()
+    c = conn.cursor()
+    try:
+        c.execute(
+            '''
+            UPDATE sugestao_endereco
+            SET valor = %s
+            WHERE tipo = %s AND valor = %s
+            ''',
+            (valor_novo, tipo, valor_atual)
+        )
+        if c.rowcount == 0:
+            flash('Registro não encontrado para edição.', 'warning')
+        else:
+            conn.commit()
+            flash('Sugestão de endereço atualizada com sucesso.', 'success')
+    except Exception:
+        conn.rollback()
+        flash('Não foi possível atualizar a sugestão. O valor já pode existir no catálogo.', 'warning')
+    finally:
+        conn.close()
+
+    return redirect(url_for('admin_catalogos'))
+
+@app.route('/admin/endereco-sugestao/excluir', methods=['POST'])
+@login_required_admin
+def excluir_sugestao_endereco_admin():
+    tipo = request.form.get('tipo', '').strip().lower()
+    valor = request.form.get('valor', '').strip().upper()
+
+    if tipo not in ('rua', 'bairro') or not valor:
+        flash('Dados inválidos para excluir a sugestão.', 'warning')
+        return redirect(url_for('admin_catalogos'))
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        '''
+        DELETE FROM sugestao_endereco
+        WHERE tipo = %s AND valor = %s
+        ''',
+        (tipo, valor)
+    )
+    conn.commit()
+    conn.close()
+
+    if c.rowcount > 0:
+        flash('Sugestão de endereço removida com sucesso.', 'success')
+    else:
+        flash('Sugestão não encontrada.', 'warning')
+
+    return redirect(url_for('admin_catalogos'))
+
+@app.route('/admin/especialidade/editar', methods=['POST'])
+@login_required_admin
+def editar_especialidade_admin():
+    valor_atual = request.form.get('valor_atual', '').strip().upper()
+    categoria_atual = request.form.get('categoria_atual', '').strip().upper() or None
+    valor_novo = request.form.get('valor_novo', '').strip().upper()
+    categoria_nova = request.form.get('categoria_nova', '').strip().upper()
+
+    if not valor_atual or not valor_novo or categoria_nova not in ('CONSULTA', 'EXAME', 'CIRURGIA'):
+        flash('Informe a especialidade e selecione se é Consulta, Exame ou Cirurgia.', 'warning')
+        return redirect(url_for('admin_catalogos'))
+
+    conn = conectar()
+    c = conn.cursor()
+    try:
+        c.execute(
+            '''
+            UPDATE sugestao_solicitacao
+            SET valor = %s, categoria = %s
+            WHERE tipo = 'especialidade'
+              AND valor = %s
+            ''',
+            (valor_novo, categoria_nova, valor_atual)
+        )
+        if c.rowcount == 0:
+            flash('Especialidade não encontrada para edição.', 'warning')
+        else:
+            conn.commit()
+            flash('Especialidade atualizada com sucesso.', 'success')
+    except Exception:
+        conn.rollback()
+        flash('Não foi possível atualizar a especialidade. O valor já pode existir no catálogo.', 'warning')
+    finally:
+        conn.close()
+
+    return redirect(url_for('admin_catalogos'))
+
+@app.route('/admin/especialidade/excluir', methods=['POST'])
+@login_required_admin
+def excluir_especialidade_admin():
+    valor = request.form.get('valor', '').strip().upper()
+
+    if not valor:
+        flash('Informe a especialidade para excluir.', 'warning')
+        return redirect(url_for('admin_catalogos'))
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        '''
+        DELETE FROM sugestao_solicitacao
+        WHERE tipo = 'especialidade' AND valor = %s
+        ''',
+        (valor,)
+    )
+    conn.commit()
+    conn.close()
+
+    if c.rowcount > 0:
+        flash('Especialidade removida do catálogo.', 'success')
+    else:
+        flash('Especialidade não encontrada.', 'warning')
+
+    return redirect(url_for('admin_catalogos'))
+
+@app.route('/admin/sistema-insercao/editar', methods=['POST'])
+@login_required_admin
+def editar_sistema_insercao_admin():
+    valor_atual = request.form.get('valor_atual', '').strip().upper()
+    valor_novo = request.form.get('valor_novo', '').strip().upper()
+
+    if not valor_atual or not valor_novo:
+        flash('Informe o sistema atual e o novo sistema.', 'warning')
+        return redirect(url_for('admin_catalogos'))
+
+    conn = conectar()
+    c = conn.cursor()
+    try:
+        c.execute(
+            '''
+            UPDATE sugestao_solicitacao
+            SET valor = %s
+            WHERE tipo = 'sistema_insercao' AND valor = %s
+            ''',
+            (valor_novo, valor_atual)
+        )
+        if c.rowcount == 0:
+            flash('Sistema de inserção não encontrado para edição.', 'warning')
+        else:
+            conn.commit()
+            flash('Sistema de inserção atualizado com sucesso.', 'success')
+    except Exception:
+        conn.rollback()
+        flash('Não foi possível atualizar o sistema de inserção. O valor já pode existir no catálogo.', 'warning')
+    finally:
+        conn.close()
+
+    return redirect(url_for('admin_catalogos'))
+
+@app.route('/admin/sistema-insercao/excluir', methods=['POST'])
+@login_required_admin
+def excluir_sistema_insercao_admin():
+    valor = request.form.get('valor', '').strip().upper()
+
+    if not valor:
+        flash('Informe o sistema de inserção para excluir.', 'warning')
+        return redirect(url_for('admin_catalogos'))
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        '''
+        DELETE FROM sugestao_solicitacao
+        WHERE tipo = 'sistema_insercao' AND valor = %s
+        ''',
+        (valor,)
+    )
+    conn.commit()
+    conn.close()
+
+    if c.rowcount > 0:
+        flash('Sistema de inserção removido do catálogo.', 'success')
+    else:
+        flash('Sistema de inserção não encontrada.', 'warning')
+
+    return redirect(url_for('admin_catalogos'))
 
 @app.route('/paciente/<paciente_id>/editar', methods=['GET', 'POST'])
 def editar_paciente(paciente_id):
@@ -1853,6 +2078,20 @@ def nova_solicitacao():
         'data_retorno': request.form.get('data_retorno', '').strip(),
     }
 
+    tipo_selecionado = form_data['tipo'].strip().upper()
+    especialidades_filtradas = listar_especialidades(tipo_selecionado if tipo_selecionado in ('CONSULTA', 'EXAME') else None)
+    especialidades_completas = listar_especialidades(full=True)
+
+    def render_nova_solicitacao_page():
+        return render_template(
+            'nova_solicitacao.html',
+            especialidades=especialidades_filtradas,
+            especialidades_completas=especialidades_completas,
+            sistemas_insercao=listar_sistemas_insercao(),
+            sistemas_insercao_catalogo=listar_sistemas_insercao_catalogo(),
+            form_data=form_data,
+        )
+
     if request.method == 'POST':
         paciente_id = form_data['paciente_id']
         paciente_id_resolvido = resolver_id_paciente(paciente_id)
@@ -1881,78 +2120,38 @@ def nova_solicitacao():
         # Validar datas futuras
         if data_solicitacao and eh_data_futura(data_solicitacao):
             flash('Data de Solicitação não pode ser no futuro.', 'warning')
-            return render_template(
-                'nova_solicitacao.html',
-                especialidades=listar_especialidades(),
-                sistemas_insercao=listar_sistemas_insercao(),
-                form_data=form_data,
-            )
+            return render_nova_solicitacao_page()
 
         if data_entrada and eh_data_futura(data_entrada):
             flash('Data de Entrada não pode ser no futuro.', 'warning')
-            return render_template(
-                'nova_solicitacao.html',
-                especialidades=listar_especialidades(),
-                sistemas_insercao=listar_sistemas_insercao(),
-                form_data=form_data,
-            )
+            return render_nova_solicitacao_page()
 
         if data_insercao and eh_data_futura(data_insercao):
             flash('Data de Inserção não pode ser no futuro.', 'warning')
-            return render_template(
-                'nova_solicitacao.html',
-                especialidades=listar_especialidades(),
-                sistemas_insercao=listar_sistemas_insercao(),
-                form_data=form_data,
-            )
+            return render_nova_solicitacao_page()
 
         if status == 'RETORNO' and not data_retorno:
             flash('Informe a data de previsão de retorno quando o status for Retorno.', 'warning')
-            return render_template(
-                'nova_solicitacao.html',
-                especialidades=listar_especialidades(),
-                sistemas_insercao=listar_sistemas_insercao(),
-                form_data=form_data,
-            )
+            return render_nova_solicitacao_page()
 
         if not paciente_id_resolvido:
             flash('Paciente não encontrado. Selecione um paciente válido pelo CPF, SUS ou nome.', 'warning')
-            return render_template(
-                'nova_solicitacao.html',
-                especialidades=listar_especialidades(),
-                sistemas_insercao=listar_sistemas_insercao(),
-                form_data=form_data,
-            )
+            return render_nova_solicitacao_page()
 
         if quantidade_solicitacoes < 1:
             flash('A quantidade de solicitações deve ser maior ou igual a 1.', 'warning')
-            return render_template(
-                'nova_solicitacao.html',
-                especialidades=listar_especialidades(),
-                sistemas_insercao=listar_sistemas_insercao(),
-                form_data=form_data,
-            )
+            return render_nova_solicitacao_page()
 
         if quantidade_solicitacoes > 100:
             flash('Quantidade máxima permitida por envio: 100 solicitações.', 'warning')
-            return render_template(
-                'nova_solicitacao.html',
-                especialidades=listar_especialidades(),
-                sistemas_insercao=listar_sistemas_insercao(),
-                form_data=form_data,
-            )
+            return render_nova_solicitacao_page()
 
         if len(especialidades) == 1 and quantidade_solicitacoes > 1 and not permite_replicar_solicitacao(tipo, especialidades[0]):
             flash(
                 'A replicação em quantidade é permitida apenas para exames anatomopatológicos e laboratoriais.',
                 'warning'
             )
-            return render_template(
-                'nova_solicitacao.html',
-                especialidades=listar_especialidades(),
-                sistemas_insercao=listar_sistemas_insercao(),
-                form_data=form_data,
-            )
+            return render_nova_solicitacao_page()
 
         if tipo == 'EXAME':
             if not especialidades_multiplas and especialidade:
@@ -1964,21 +2163,11 @@ def nova_solicitacao():
 
         if not especialidades:
             flash('Informe a especialidade/descrição da solicitação.', 'warning')
-            return render_template(
-                'nova_solicitacao.html',
-                especialidades=listar_especialidades(),
-                sistemas_insercao=listar_sistemas_insercao(),
-                form_data=form_data,
-            )
+            return render_nova_solicitacao_page()
 
         if not sistema_insercao:
             flash('Informe o sistema de inserção.', 'warning')
-            return render_template(
-                'nova_solicitacao.html',
-                especialidades=listar_especialidades(),
-                sistemas_insercao=listar_sistemas_insercao(),
-                form_data=form_data,
-            )
+            return render_nova_solicitacao_page()
 
         especialidades_catalogo = listar_especialidades()
         especialidades_invalidas = [esp for esp in especialidades if esp not in especialidades_catalogo]
@@ -1987,21 +2176,11 @@ def nova_solicitacao():
 
         if especialidades_invalidas and not apenas_admin():
             flash('A criação de nova especialidade é permitida apenas para administradores. Selecione apenas especialidades existentes.', 'warning')
-            return render_template(
-                'nova_solicitacao.html',
-                especialidades=especialidades_catalogo,
-                sistemas_insercao=sistemas_catalogo,
-                form_data=form_data,
-            )
+            return render_nova_solicitacao_page()
 
         if not sistema_existe_catalogo and not apenas_admin():
             flash('A criação de novo sistema de inserção é permitida apenas para administradores. Selecione uma opção existente.', 'warning')
-            return render_template(
-                'nova_solicitacao.html',
-                especialidades=especialidades_catalogo,
-                sistemas_insercao=sistemas_catalogo,
-                form_data=form_data,
-            )
+            return render_nova_solicitacao_page()
 
         conn = conectar()
         c = conn.cursor()
@@ -2030,13 +2209,14 @@ def nova_solicitacao():
         if apenas_admin():
             for especialidade_item in especialidades:
                 if especialidade_item not in especialidades_catalogo:
+                    categoria_nova_sugestao = tipo if tipo in ('CONSULTA', 'EXAME') else None
                     c.execute(
                         '''
-                        INSERT INTO sugestao_solicitacao (tipo, valor)
-                        VALUES (%s, %s)
+                        INSERT INTO sugestao_solicitacao (tipo, valor, categoria)
+                        VALUES (%s, %s, %s)
                         ON CONFLICT DO NOTHING
                         ''',
-                        ('especialidade', especialidade_item)
+                        ('especialidade', especialidade_item, categoria_nova_sugestao)
                     )
         if apenas_admin() and not sistema_existe_catalogo:
             c.execute(
@@ -2053,31 +2233,27 @@ def nova_solicitacao():
             flash(f'{solicitacoes_criadas} solicitações criadas com sucesso para o paciente.', 'success')
         else:
             flash('Solicitação criada com sucesso.', 'success')
-        return redirect(url_for('solicitacoes'))
-    return render_template(
-        'nova_solicitacao.html',
-        especialidades=listar_especialidades(),
-        sistemas_insercao=listar_sistemas_insercao(),
-        form_data=form_data,
-    )
+        return render_nova_solicitacao_page()
+    return render_nova_solicitacao_page()
 
 @app.route('/admin/especialidades', methods=['POST'])
 @login_required_admin
 def adicionar_especialidade_admin():
     especialidade = request.form.get('especialidade_nova', '').strip().upper()
-    if not especialidade:
-        flash('Informe a especialidade para adicionar ao catálogo.', 'warning')
-        return redirect(url_for('nova_solicitacao'))
+    categoria = request.form.get('categoria_nova', '').strip().upper()
+    if not especialidade or categoria not in ('CONSULTA', 'EXAME', 'CIRURGIA'):
+        flash('Informe a especialidade e selecione se é Consulta, Exame ou Cirurgia.', 'warning')
+        return redirect(url_for('admin_catalogos'))
 
     conn = conectar()
     c = conn.cursor()
     c.execute(
         '''
-        INSERT INTO sugestao_solicitacao (tipo, valor)
-        VALUES (%s, %s)
+        INSERT INTO sugestao_solicitacao (tipo, valor, categoria)
+        VALUES (%s, %s, %s)
         ON CONFLICT DO NOTHING
         ''',
-        ('especialidade', especialidade)
+        ('especialidade', especialidade, categoria)
     )
     inseriu = c.rowcount > 0
     conn.commit()
@@ -2088,7 +2264,7 @@ def adicionar_especialidade_admin():
     else:
         flash('Essa especialidade já existe no catálogo.', 'info')
 
-    return redirect(url_for('nova_solicitacao'))
+    return redirect(url_for('admin_catalogos'))
 
 @app.route('/admin/sistemas-insercao', methods=['POST'])
 @login_required_admin
@@ -2096,7 +2272,7 @@ def adicionar_sistema_insercao_admin():
     sistema_insercao = request.form.get('sistema_insercao_novo', '').strip().upper()
     if not sistema_insercao:
         flash('Informe o sistema de inserção para adicionar ao catálogo.', 'warning')
-        return redirect(url_for('nova_solicitacao'))
+        return redirect(url_for('admin_catalogos'))
 
     conn = conectar()
     c = conn.cursor()
@@ -2117,7 +2293,7 @@ def adicionar_sistema_insercao_admin():
     else:
         flash('Esse sistema de inserção já existe no catálogo.', 'info')
 
-    return redirect(url_for('nova_solicitacao'))
+    return redirect(url_for('admin_catalogos'))
 
 @app.route('/api/buscar_paciente')
 def api_buscar_paciente():
@@ -2222,19 +2398,26 @@ def api_sugestoes_solicitacao():
             conn.close()
             return jsonify([])
 
+        categoria = request.args.get('categoria', '').strip().upper()
         filtro = f'%{termo}%'
-        c.execute(
-            '''
+        query = '''
             SELECT DISTINCT TRIM(valor) AS valor
             FROM sugestao_solicitacao
             WHERE tipo = 'especialidade'
               AND TRIM(valor) <> ''
               AND valor ILIKE %s
+        '''
+        params = [filtro]
+        if categoria in ('CONSULTA', 'EXAME', 'CIRURGIA'):
+            query += '''
+              AND (categoria = %s OR categoria IS NULL)
+            '''
+            params.append(categoria)
+        query += '''
             ORDER BY valor
             LIMIT 30
-            ''',
-            (filtro,)
-        )
+        '''
+        c.execute(query, tuple(params))
     else:
         if len(termo) < 1:
             conn.close()
@@ -2360,6 +2543,17 @@ def admin_pacientes():
     pacientes = c.fetchall()
     conn.close()
     return render_template('admin_pacientes.html', pacientes=pacientes, mensagem=mensagem)
+
+@app.route('/admin/catalogos')
+@login_required_admin
+def admin_catalogos():
+    return render_template(
+        'admin_catalogos.html',
+        especialidades=listar_especialidades(full=True),
+        ruas=listar_sugestoes_endereco('rua'),
+        bairros=listar_sugestoes_endereco('bairro'),
+        sistemas_insercao_catalogo=listar_sistemas_insercao_catalogo(),
+    )
 
 # ======================== ROTAS DE IA ========================
 

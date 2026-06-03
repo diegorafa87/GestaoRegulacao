@@ -50,12 +50,17 @@
     </div>
     <div id="especialidades_multiplas_container" class="col-md-4 d-none">
         <label class="form-label">Especialidades/Exames (EXAME):</label>
-        <select id="especialidades_multiplas" name="especialidades_multiplas" class="form-control" multiple size="5">
-            {% for item in especialidades %}
-            <option value="{{ item }}" {% if item in form_data.especialidades_multiplas %}selected{% endif %}>{{ item }}</option>
+        <div class="input-group mb-2">
+            <input id="especialidade_busca" name="especialidade_busca" type="text" class="form-control" autocomplete="off" placeholder="Digite para buscar especialidade" list="especialidades-sugestoes">
+            <button id="btnAdicionarEspecialidade" type="button" class="btn btn-outline-primary">Adicionar</button>
+        </div>
+        <div id="especialidades_selecionadas" class="d-flex flex-wrap gap-2 mb-2"></div>
+        <div id="especialidades_hidden_inputs">
+            {% for item in form_data.especialidades_multiplas %}
+            <input type="hidden" name="especialidades_multiplas" value="{{ item }}">
             {% endfor %}
-        </select>
-        <small class="text-muted">Use Ctrl/Cmd para selecionar mais de uma especialidade.</small>
+        </div>
+        <small class="text-muted">Digite para buscar e adicione cada especialidade. Você pode escolher mais de uma.</small>
     </div>
     <div class="col-md-4">
         <label class="form-label">Prioridade:</label>
@@ -113,34 +118,8 @@
 </form>
 
 {% if session.get('usuario_perfil') == 'ADMIN' %}
-<div class="card border-0 shadow-sm mt-4">
-    <div class="card-body">
-        <h6 class="fw-semibold mb-3">Catálogo de Especialidades (Admin)</h6>
-        <form method="post" action="{{ url_for('adicionar_especialidade_admin') }}" class="row g-2 align-items-end">
-            <div class="col-md-8">
-                <label class="form-label">Adicionar nova especialidade sem criar solicitação</label>
-                <input id="especialidade_nova_admin" name="especialidade_nova" class="form-control" placeholder="Ex: CARDIOLOGIA" required>
-            </div>
-            <div class="col-md-4 d-flex gap-2">
-                <button type="button" id="btnCopiarEspecialidadeAtual" class="btn btn-outline-secondary w-50">Usar campo acima</button>
-                <button type="submit" class="btn btn-primary w-50">Adicionar</button>
-            </div>
-        </form>
-
-        <hr class="my-4">
-
-        <h6 class="fw-semibold mb-3">Catálogo de Sistemas de Inserção (Admin)</h6>
-        <form method="post" action="{{ url_for('adicionar_sistema_insercao_admin') }}" class="row g-2 align-items-end">
-            <div class="col-md-8">
-                <label class="form-label">Adicionar novo sistema sem criar solicitação</label>
-                <input id="sistema_insercao_novo_admin" name="sistema_insercao_novo" class="form-control" placeholder="Ex: NOVO SISTEMA" required>
-            </div>
-            <div class="col-md-4 d-flex gap-2">
-                <button type="button" id="btnCopiarSistemaAtual" class="btn btn-outline-secondary w-50">Usar campo acima</button>
-                <button type="submit" class="btn btn-primary w-50">Adicionar</button>
-            </div>
-        </form>
-    </div>
+<div class="alert alert-info mt-4">
+    <strong>Catálogo administrativo removido deste formulário.</strong> Gerencie procedimentos e endereços em <a href="{{ url_for('admin_catalogos') }}">Catálogos</a>.
 </div>
 {% endif %}
 
@@ -150,13 +129,17 @@
     const listaSugestoes = document.getElementById('pacientes-sugestoes');
     const infoPaciente = document.getElementById('paciente-info');
     const campoEspecialidade = document.getElementById('especialidade_input');
-    const campoEspecialidadesMultiplas = document.getElementById('especialidades_multiplas');
+    const campoEspecialidadeBusca = document.getElementById('especialidade_busca');
+    const btnAdicionarEspecialidade = document.getElementById('btnAdicionarEspecialidade');
+    const especialidadesSelecionadasContainer = document.getElementById('especialidades_selecionadas');
+    const especialidadesHiddenInputs = document.getElementById('especialidades_hidden_inputs');
     const containerEspecialidadeUnica = document.getElementById('especialidade_unica_container');
     const containerEspecialidadesMultiplas = document.getElementById('especialidades_multiplas_container');
     const seletorTipo = document.querySelector('select[name="tipo"]');
     const campoQuantidadeSolicitacoes = document.getElementById('quantidade_solicitacoes');
     const ajudaQuantidadeSolicitacoes = document.getElementById('ajuda_quantidade_solicitacoes');
     const listaEspecialidades = document.getElementById('especialidades-sugestoes'); // null para não-admins (select)
+    const especialidadesComCategoria = {{ especialidades_completas | tojson | safe }};
     const seletorSistemaInsercao = document.getElementById('sistema_insercao_select');
     const seletorStatus = document.getElementById('status_select');
     const campoDataRetornoContainer = document.getElementById('campo_data_retorno_container');
@@ -221,14 +204,98 @@
             campoEspecialidade.required = !ehExame;
             campoEspecialidade.disabled = ehExame;
         }
-        if (campoEspecialidadesMultiplas) {
-            campoEspecialidadesMultiplas.required = ehExame;
-            campoEspecialidadesMultiplas.disabled = !ehExame;
+        if (campoEspecialidadeBusca) {
+            campoEspecialidadeBusca.required = ehExame;
+            campoEspecialidadeBusca.disabled = !ehExame;
         }
 
-        if (!ehExame && campoEspecialidadesMultiplas) {
-            Array.from(campoEspecialidadesMultiplas.options).forEach((option) => option.selected = false);
+        if (!ehExame && especialidadesSelecionadasContainer) {
+            especialidadesSelecionadasContainer.innerHTML = '';
         }
+    }
+
+    function filtrarEspecialidadesPorTipo(tipo) {
+        if (!especialidadesComCategoria || !Array.isArray(especialidadesComCategoria)) return;
+        if (!document.getElementById('especialidade_input')) return;
+
+        const categoria = ['CONSULTA', 'EXAME'].includes(tipo) ? tipo : null;
+        const select = document.getElementById('especialidade_input');
+        const valorAtual = select.value;
+
+        if (select.tagName !== 'SELECT') return;
+
+        select.innerHTML = '<option value="">Selecione uma especialidade</option>';
+        especialidadesComCategoria.forEach((item) => {
+            if (!categoria || item.categoria === categoria || !item.categoria) {
+                const option = document.createElement('option');
+                option.value = item.valor;
+                option.textContent = item.valor;
+                if (item.valor === valorAtual) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            }
+        });
+    }
+
+    const especialidadesSelecionadas = new Set();
+    if (especialidadesHiddenInputs) {
+        Array.from(especialidadesHiddenInputs.querySelectorAll('input[name="especialidades_multiplas"]')).forEach((input) => {
+            const value = (input.value || '').trim();
+            if (value) {
+                especialidadesSelecionadas.add(value.toUpperCase());
+            }
+        });
+    }
+
+    function renderEspecialidadesSelecionadas() {
+        if (!especialidadesSelecionadasContainer || !especialidadesHiddenInputs) return;
+
+        especialidadesSelecionadasContainer.innerHTML = '';
+        especialidadesHiddenInputs.innerHTML = '';
+
+        especialidadesSelecionadas.forEach((especialidade) => {
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-secondary d-inline-flex align-items-center me-1 mb-1';
+            badge.textContent = especialidade;
+
+            const remover = document.createElement('button');
+            remover.type = 'button';
+            remover.className = 'btn-close btn-close-white btn-sm ms-2';
+            remover.setAttribute('aria-label', 'Remover');
+            remover.addEventListener('click', () => {
+                especialidadesSelecionadas.delete(especialidade);
+                renderEspecialidadesSelecionadas();
+            });
+
+            badge.appendChild(remover);
+            especialidadesSelecionadasContainer.appendChild(badge);
+
+            const hidden = document.createElement('input');
+            hidden.type = 'hidden';
+            hidden.name = 'especialidades_multiplas';
+            hidden.value = especialidade;
+            especialidadesHiddenInputs.appendChild(hidden);
+        });
+    }
+
+    function adicionarEspecialidade(valor) {
+        if (!valor) return;
+        const especialidade = valor.trim().toUpperCase();
+        if (!especialidade) return;
+        if (especialidadesSelecionadas.has(especialidade)) return;
+        especialidadesSelecionadas.add(especialidade);
+        renderEspecialidadesSelecionadas();
+    }
+
+    function removerEspecialidade(especialidade) {
+        if (!especialidade) return;
+        especialidadesSelecionadas.delete(especialidade);
+        renderEspecialidadesSelecionadas();
+    }
+
+    if (especialidadesSelecionadas.size) {
+        renderEspecialidadesSelecionadas();
     }
 
     function atualizarVisibilidadeDataRetorno() {
@@ -293,6 +360,47 @@
             }
         }, 250);
     });
+
+    if (campoEspecialidadeBusca) {
+        campoEspecialidadeBusca.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                adicionarEspecialidade(campoEspecialidadeBusca.value);
+            }
+        });
+
+        campoEspecialidadeBusca.addEventListener('input', () => {
+            const termo = campoEspecialidadeBusca.value.trim();
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(async () => {
+                if (!termo) {
+                    if (listaEspecialidades) listaEspecialidades.innerHTML = '';
+                    return;
+                }
+
+                try {
+                    const resposta = await fetch(`/api/sugestoes_solicitacao?campo=especialidade&termo=${encodeURIComponent(termo)}&categoria=${encodeURIComponent(seletorTipo ? seletorTipo.value : '')}`);
+                    if (!resposta.ok) return;
+                    const itens = await resposta.json();
+                    if (!listaEspecialidades) return;
+                    listaEspecialidades.innerHTML = '';
+                    itens.forEach((item) => {
+                        const option = document.createElement('option');
+                        option.value = item;
+                        listaEspecialidades.appendChild(option);
+                    });
+                } catch (e) {
+                    // Falha silenciosa para não atrapalhar digitação
+                }
+            }, 220);
+        });
+    }
+
+    if (btnAdicionarEspecialidade) {
+        btnAdicionarEspecialidade.addEventListener('click', () => {
+            adicionarEspecialidade(campoEspecialidadeBusca ? campoEspecialidadeBusca.value : '');
+        });
+    }
 
     // Obtém data máxima permitida (hoje)
     function obterDataMaxima() {
@@ -412,7 +520,7 @@
                 }
 
                 try {
-                    const resposta = await fetch(`/api/sugestoes_solicitacao?campo=especialidade&termo=${encodeURIComponent(termo)}`);
+                    const resposta = await fetch(`/api/sugestoes_solicitacao?campo=especialidade&termo=${encodeURIComponent(termo)}&categoria=${encodeURIComponent(seletorTipo ? seletorTipo.value : '')}`);
                     if (!resposta.ok) return;
                     const itens = await resposta.json();
                     listaEspecialidades.innerHTML = '';
@@ -432,8 +540,10 @@
         seletorTipo.addEventListener('change', () => {
             atualizaCampoQuantidadeSolicitacoes();
             atualizaModoEspecialidade();
+            filtrarEspecialidadesPorTipo(seletorTipo.value);
         });
         atualizaModoEspecialidade();
+        filtrarEspecialidadesPorTipo(seletorTipo.value);
         atualizaCampoQuantidadeSolicitacoes();
     }
 

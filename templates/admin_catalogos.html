@@ -1,0 +1,239 @@
+{% extends 'base.html' %}
+{% block title %}Catálogos Administrativos{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-1 text-primary fw-bold">Catálogos Administrativos</h2>
+        <div class="text-muted small">Gerencie procedimentos, ruas, bairros e sistemas de inserção em uma área separada.</div>
+    </div>
+</div>
+
+<div class="row gy-4">
+    <div class="col-12">
+        <div class="alert alert-info">
+            A administração de catálogos foi separada dos formulários de solicitação e paciente. Use esta página para inserir, editar e excluir itens.
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <h5 class="fw-semibold mb-3">Procedimentos</h5>
+                <form method="post" action="{{ url_for('adicionar_especialidade_admin') }}" class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <label class="form-label">Nome do procedimento</label>
+                        <input type="text" name="especialidade_nova" class="form-control" placeholder="Ex: CARDIOLOGIA" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Categoria</label>
+                        <select name="categoria_nova" class="form-select" required>
+                            <option value="">Selecione</option>
+                            <option value="CONSULTA">Consulta</option>
+                            <option value="EXAME">Exame</option>
+                            <option value="CIRURGIA">Cirurgia</option>
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-success">Adicionar procedimento</button>
+                    </div>
+                </form>
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Procedimento</th>
+                                <th>Categoria</th>
+                                <th style="width: 280px;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in especialidades %}
+                            <tr>
+                                <td>{{ item.valor }}</td>
+                                <td>{{ item.categoria or 'Sem tipo' }}</td>
+                                <td class="d-flex gap-2 flex-wrap">
+                                    <form method="post" action="{{ url_for('editar_especialidade_admin') }}" class="d-flex gap-2 flex-wrap w-100">
+                                        <input type="hidden" name="valor_atual" value="{{ item.valor }}">
+                                        <input type="hidden" name="categoria_atual" value="{{ item.categoria }}">
+                                        <input type="text" name="valor_novo" class="form-control form-control-sm" value="{{ item.valor }}" required>
+                                        <select name="categoria_nova" class="form-select form-select-sm" required>
+                                            <option value="CONSULTA" {% if item.categoria == 'CONSULTA' %}selected{% endif %}>Consulta</option>
+                                            <option value="EXAME" {% if item.categoria == 'EXAME' %}selected{% endif %}>Exame</option>
+                                            <option value="CIRURGIA" {% if item.categoria == 'CIRURGIA' %}selected{% endif %}>Cirurgia</option>
+                                        </select>
+                                        <button type="submit" class="btn btn-sm btn-primary">Salvar</button>
+                                    </form>
+                                    <form method="post" action="{{ url_for('excluir_especialidade_admin') }}">
+                                        <input type="hidden" name="valor" value="{{ item.valor }}">
+                                        <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" class="text-center text-muted">Nenhum procedimento cadastrado.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body">
+                <h5 class="fw-semibold mb-3">Ruas</h5>
+                <form method="post" action="{{ url_for('adicionar_sugestao_endereco_admin') }}" class="row g-3 mb-4">
+                    <input type="hidden" name="tipo" value="rua">
+                    <div class="col-12">
+                        <label class="form-label">Adicionar nova rua</label>
+                        <input type="text" name="valor" class="form-control" placeholder="Ex: RUA DAS FLORES" required>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-success">Adicionar rua</button>
+                    </div>
+                </form>
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Rua</th>
+                                <th style="width: 240px;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in ruas %}
+                            <tr>
+                                <td>{{ item }}</td>
+                                <td class="d-flex gap-2 flex-wrap">
+                                    <form method="post" action="{{ url_for('editar_sugestao_endereco_admin') }}" class="d-flex gap-2 w-100">
+                                        <input type="hidden" name="tipo" value="rua">
+                                        <input type="hidden" name="valor_atual" value="{{ item }}">
+                                        <input type="text" name="valor_novo" class="form-control form-control-sm" value="{{ item }}" required>
+                                        <button type="submit" class="btn btn-sm btn-primary">Salvar</button>
+                                    </form>
+                                    <form method="post" action="{{ url_for('excluir_sugestao_endereco_admin') }}">
+                                        <input type="hidden" name="tipo" value="rua">
+                                        <input type="hidden" name="valor" value="{{ item }}">
+                                        <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="2" class="text-center text-muted">Nenhuma rua cadastrada.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <h5 class="fw-semibold mb-3">Bairros</h5>
+                <form method="post" action="{{ url_for('adicionar_sugestao_endereco_admin') }}" class="row g-3 mb-4">
+                    <input type="hidden" name="tipo" value="bairro">
+                    <div class="col-12">
+                        <label class="form-label">Adicionar novo bairro</label>
+                        <input type="text" name="valor" class="form-control" placeholder="Ex: CENTRO" required>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-success">Adicionar bairro</button>
+                    </div>
+                </form>
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Bairro</th>
+                                <th style="width: 240px;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in bairros %}
+                            <tr>
+                                <td>{{ item }}</td>
+                                <td class="d-flex gap-2 flex-wrap">
+                                    <form method="post" action="{{ url_for('editar_sugestao_endereco_admin') }}" class="d-flex gap-2 w-100">
+                                        <input type="hidden" name="tipo" value="bairro">
+                                        <input type="hidden" name="valor_atual" value="{{ item }}">
+                                        <input type="text" name="valor_novo" class="form-control form-control-sm" value="{{ item }}" required>
+                                        <button type="submit" class="btn btn-sm btn-primary">Salvar</button>
+                                    </form>
+                                    <form method="post" action="{{ url_for('excluir_sugestao_endereco_admin') }}">
+                                        <input type="hidden" name="tipo" value="bairro">
+                                        <input type="hidden" name="valor" value="{{ item }}">
+                                        <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="2" class="text-center text-muted">Nenhum bairro cadastrado.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <h5 class="fw-semibold mb-3">Sistemas de inserção</h5>
+                <form method="post" action="{{ url_for('adicionar_sistema_insercao_admin') }}" class="row g-3 mb-4">
+                    <div class="col-md-9">
+                        <label class="form-label">Nome do sistema</label>
+                        <input type="text" name="sistema_insercao_novo" class="form-control" placeholder="Ex: SISREG" required>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-success w-100">Adicionar sistema</button>
+                    </div>
+                </form>
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Sistema</th>
+                                <th style="width: 280px;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in sistemas_insercao_catalogo %}
+                            <tr>
+                                <td>{{ item }}</td>
+                                <td class="d-flex gap-2 flex-wrap">
+                                    <form method="post" action="{{ url_for('editar_sistema_insercao_admin') }}" class="d-flex gap-2 w-100">
+                                        <input type="hidden" name="valor_atual" value="{{ item }}">
+                                        <input type="text" name="valor_novo" class="form-control form-control-sm" value="{{ item }}" required>
+                                        <button type="submit" class="btn btn-sm btn-primary">Salvar</button>
+                                    </form>
+                                    <form method="post" action="{{ url_for('excluir_sistema_insercao_admin') }}">
+                                        <input type="hidden" name="valor" value="{{ item }}">
+                                        <button type="submit" class="btn btn-sm btn-danger">Excluir</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="2" class="text-center text-muted">Nenhum sistema cadastrado.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

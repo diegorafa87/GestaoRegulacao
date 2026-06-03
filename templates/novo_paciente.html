@@ -67,35 +67,8 @@
 </form>
 
 {% if session.get('usuario_perfil') == 'ADMIN' %}
-<div class="card border-0 shadow-sm mt-4">
-    <div class="card-body">
-        <h6 class="fw-semibold mb-3">Catálogo de Endereço (Admin)</h6>
-        <form method="post" action="{{ url_for('adicionar_sugestao_endereco_admin') }}" class="row g-2 align-items-end">
-            <input type="hidden" name="tipo" value="rua">
-            <div class="col-md-8">
-                <label class="form-label">Adicionar nova rua</label>
-                <input id="rua_nova_admin" name="valor" class="form-control" placeholder="Ex: RUA DAS FLORES" required>
-            </div>
-            <div class="col-md-4 d-flex gap-2">
-                <button type="button" id="btnCopiarRuaAtual" class="btn btn-outline-secondary w-50">Usar campo acima</button>
-                <button type="submit" class="btn btn-primary w-50">Adicionar</button>
-            </div>
-        </form>
-
-        <hr class="my-4">
-
-        <form method="post" action="{{ url_for('adicionar_sugestao_endereco_admin') }}" class="row g-2 align-items-end">
-            <input type="hidden" name="tipo" value="bairro">
-            <div class="col-md-8">
-                <label class="form-label">Adicionar novo bairro</label>
-                <input id="bairro_novo_admin" name="valor" class="form-control" placeholder="Ex: CENTRO" required>
-            </div>
-            <div class="col-md-4 d-flex gap-2">
-                <button type="button" id="btnCopiarBairroAtual" class="btn btn-outline-secondary w-50">Usar campo acima</button>
-                <button type="submit" class="btn btn-primary w-50">Adicionar</button>
-            </div>
-        </form>
-    </div>
+<div class="alert alert-info mt-4">
+    <strong>Catálogo administrativo removido deste formulário.</strong> Gerencie ruas e bairros em <a href="{{ url_for('admin_catalogos') }}">Catálogos</a>.
 </div>
 {% endif %}
 
