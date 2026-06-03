@@ -2146,13 +2146,6 @@ def nova_solicitacao():
             flash('Quantidade máxima permitida por envio: 100 solicitações.', 'warning')
             return render_nova_solicitacao_page()
 
-        if len(especialidades) == 1 and quantidade_solicitacoes > 1 and not permite_replicar_solicitacao(tipo, especialidades[0]):
-            flash(
-                'A replicação em quantidade é permitida apenas para exames anatomopatológicos e laboratoriais.',
-                'warning'
-            )
-            return render_nova_solicitacao_page()
-
         if tipo == 'EXAME':
             if not especialidades_multiplas and especialidade:
                 especialidades = [e.strip().upper() for e in re.split(r'[;,]+', especialidade) if e.strip()]
@@ -2160,6 +2153,13 @@ def nova_solicitacao():
                 especialidades = especialidades_multiplas
         else:
             especialidades = [especialidade] if especialidade else []
+
+        if len(especialidades) == 1 and quantidade_solicitacoes > 1 and not permite_replicar_solicitacao(tipo, especialidades[0]):
+            flash(
+                'A replicação em quantidade é permitida apenas para exames anatomopatológicos e laboratoriais.',
+                'warning'
+            )
+            return render_nova_solicitacao_page()
 
         if not especialidades:
             flash('Informe a especialidade/descrição da solicitação.', 'warning')
