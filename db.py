@@ -118,6 +118,7 @@ def criar_tabelas():
     )''')
     c.execute('ALTER TABLE solicitacao ADD COLUMN IF NOT EXISTS data_retorno TEXT')
     c.execute('ALTER TABLE solicitacao ADD COLUMN IF NOT EXISTS conclusao TEXT')
+    c.execute('ALTER TABLE solicitacao ADD COLUMN IF NOT EXISTS financiamento TEXT')
     c.execute('''CREATE TABLE IF NOT EXISTS sugestao_endereco (
         tipo TEXT NOT NULL,
         valor TEXT NOT NULL,

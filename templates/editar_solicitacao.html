@@ -22,6 +22,15 @@
     </div>
 
     <div class="col-md-6">
+        <label class="form-label">Financiamento:</label>
+        <select name="financiamento" class="form-select">
+            <option value="">Selecione</option>
+            <option value="SUS" {% if solicitacao[11] == 'SUS' %}selected{% endif %}>SUS</option>
+            <option value="CONVENIO" {% if solicitacao[11] == 'CONVENIO' %}selected{% endif %}>Convênio</option>
+        </select>
+    </div>
+
+    <div class="col-md-6">
         <label class="form-label">Conclusão:</label>
         <select name="conclusao" class="form-select">
             <option value="">Selecione</option>

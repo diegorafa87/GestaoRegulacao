@@ -1348,7 +1348,28 @@ def historico_paciente(paciente_id):
     c = conn.cursor()
     c.execute('SELECT id, nome FROM paciente WHERE id = %s', (paciente_id_resolvido,))
     paciente = c.fetchone()
-    c.execute('SELECT * FROM solicitacao WHERE paciente_id = %s ORDER BY data_entrada DESC, status ASC', (paciente_id_resolvido,))
+    c.execute(
+        '''
+        SELECT
+            MIN(id) AS id,
+            data_solicitacao,
+            data_entrada,
+            tipo,
+            especialidade,
+            prioridade,
+            status,
+            data_realizacao,
+            unidade_realizadora,
+            conclusao,
+            financiamento,
+            COUNT(*) AS quantidade_solicitacoes
+        FROM solicitacao
+        WHERE paciente_id = %s
+        GROUP BY data_solicitacao, data_entrada, tipo, especialidade, prioridade, status, data_realizacao, unidade_realizadora, conclusao, financiamento
+        ORDER BY data_entrada DESC, status ASC
+        ''',
+        (paciente_id_resolvido,)
+    )
     historico = c.fetchall()
     conn.close()
     return render_template('historico_paciente.html', paciente_id=paciente_id_resolvido, paciente=paciente, historico=historico)
@@ -1408,10 +1429,13 @@ def editar_solicitacao(solicitacao_id):
         paciente_id = request.form.get('paciente_id', '').strip()
         data_realizacao = normalizar_data_para_iso(request.form.get('data_realizacao'))
         unidade_realizadora = request.form.get('unidade_realizadora', '').strip().upper()
+        financiamento = request.form.get('financiamento', '').strip().upper()
         conclusao = request.form.get('conclusao', '').strip().upper()
 
         opcoes_conclusao = {'PRESENTE', 'AUSENTE', 'CANCELADO', 'RETIRADO'}
         conclusao = conclusao if conclusao in opcoes_conclusao else None
+        opcoes_financiamento = {'SUS', 'CONVENIO'}
+        financiamento = financiamento if financiamento in opcoes_financiamento else None
 
         # Buscar dados da solicitação original
         c.execute(
@@ -1432,13 +1456,14 @@ def editar_solicitacao(solicitacao_id):
             c.execute(
                 '''
                 UPDATE solicitacao 
-                SET data_realizacao = %s, unidade_realizadora = %s, conclusao = %s 
+                SET data_realizacao = %s, unidade_realizadora = %s, conclusao = %s, financiamento = %s 
                 WHERE paciente_id = %s AND data_solicitacao = %s AND especialidade = %s
                 ''',
                 (
                     data_realizacao if data_realizacao else None,
                     unidade_realizadora if unidade_realizadora else None,
                     conclusao,
+                    financiamento,
                     orig_paciente_id,
                     data_solicitacao,
                     especialidade
@@ -1464,7 +1489,7 @@ def editar_solicitacao(solicitacao_id):
 
     c.execute(
         '''
-        SELECT id, paciente_id, data_solicitacao, data_entrada, tipo, especialidade, prioridade, status, data_realizacao, unidade_realizadora, conclusao
+        SELECT id, paciente_id, data_solicitacao, data_entrada, tipo, especialidade, prioridade, status, data_realizacao, unidade_realizadora, conclusao, financiamento
         FROM solicitacao
         WHERE id = %s
         ''',
@@ -2242,11 +2267,22 @@ def api_ia_perguntar():
         if not pergunta or len(pergunta) < 3:
             return jsonify({'sucesso': False, 'mensagem': 'Pergunta muito curta'}), 400
         
-        # Processar pergunta com IA
+        # Adicionar timestamp para evitar cache no backend
+        import time
+        timestamp = int(time.time() * 1000)
+        
+        # Processar pergunta com IA - sempre gera nova resposta
         resultado = processar_pergunta_ia(pergunta)
+        
+        # Adicionar timestamp à resposta para garantir que não é cache
+        resultado['timestamp'] = timestamp
+        
         return jsonify(resultado)
     
     except Exception as e:
+        import traceback
+        print(f"Erro em /api/ia_perguntar: {e}")
+        print(traceback.format_exc())
         return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
 
 @app.route('/api/ia_relatorio/<tipo>', methods=['GET'])
