@@ -79,7 +79,7 @@
         </tr>
         {% else %}
         <tr>
-            <th class="text-center">ID (CPF/SUS)</th><th>Paciente</th><th>Total Solicitações</th><th>Última Entrada</th><th>Status Atual</th>{% if mostrar_tipos_radiografia %}<th>Tipo de Radiografia</th>{% endif %}<th>Ação</th>
+            <th class="text-center">ID (CPF/SUS)</th><th>Paciente</th><th class="text-center">Total Solicitações</th><th>Última Entrada</th><th>Status Atual</th>{% if mostrar_tipos_radiografia %}<th>Tipo de Radiografia</th>{% endif %}<th>Ação</th>
         </tr>
         {% endif %}
     </thead>
@@ -107,7 +107,7 @@
         <tr>
             <td class="text-center">{{ s[0]|formatar_documento }}</td>
             <td>{{ s[1] }}</td>
-            <td>{{ s[2] }}</td>
+            <td class="text-center">{{ s[2] }}</td>
             <td>{{ s[3]|formatar_data }}</td>
             <td>
                 {{ s[4] if s[4] else '-' }}
