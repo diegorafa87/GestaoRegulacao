@@ -79,7 +79,7 @@
         </tr>
         {% else %}
         <tr>
-            <th class="text-center">ID (CPF/SUS)</th><th>Paciente</th><th class="text-center">Total Solicitações</th><th>Última Entrada</th><th>Status Atual</th>{% if mostrar_tipos_radiografia %}<th>Tipo de Radiografia</th>{% endif %}<th>Ação</th>
+            <th class="text-center">ID (CPF/SUS)</th><th>Paciente</th><th class="text-center">Total Solicitações</th><th class="text-center">Última Entrada</th><th class="text-center">Status Atual</th>{% if mostrar_tipos_radiografia %}<th>Tipo de Radiografia</th>{% endif %}<th class="text-center">Ação</th>
         </tr>
         {% endif %}
     </thead>
@@ -108,8 +108,8 @@
             <td class="text-center">{{ s[0]|formatar_documento }}</td>
             <td>{{ s[1] }}</td>
             <td class="text-center">{{ s[2] }}</td>
-            <td>{{ s[3]|formatar_data }}</td>
-            <td>
+            <td class="text-center">{{ s[3]|formatar_data }}</td>
+            <td class="text-center">
                 {{ s[4] if s[4] else '-' }}
                 {% if s[5] and s[5] > 0 %}
                     <span class="badge bg-warning text-dark ms-1">Retorno agendado</span>
@@ -126,7 +126,7 @@
                 {% endif %}
             </td>
             {% endif %}
-            <td>
+            <td class="text-center">
                 <a href="{{ url_for('historico_paciente', paciente_id=s[0]) }}" class="btn btn-sm btn-info">Ver Histórico</a>
                 {% if s[4] == 'RETIRADO' %}
                     <a href="{{ url_for('termo_retirada_solicitacao', solicitacao_id=s[0]) }}" class="btn btn-sm btn-warning ms-1" title="Baixar termo de retirada" target="_blank">
