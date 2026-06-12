@@ -75,11 +75,11 @@
     <thead class="table-dark">
         {% if modo_urgencia_em_espera %}
         <tr>
-            <th>ID (CPF/SUS)</th><th>Paciente</th><th>Especialidade</th><th>Prioridade</th><th>Status</th><th>Data Solicitação</th><th>Data Entrada</th><th>Ação</th>
+            <th class="text-center">ID (CPF/SUS)</th><th>Paciente</th><th>Especialidade</th><th>Prioridade</th><th>Status</th><th>Data Solicitação</th><th>Data Entrada</th><th>Ação</th>
         </tr>
         {% else %}
         <tr>
-            <th>ID (CPF/SUS)</th><th>Paciente</th><th>Total Solicitações</th><th>Última Entrada</th><th>Status Atual</th>{% if mostrar_tipos_radiografia %}<th>Tipo de Radiografia</th>{% endif %}<th>Ação</th>
+            <th class="text-center">ID (CPF/SUS)</th><th>Paciente</th><th>Total Solicitações</th><th>Última Entrada</th><th>Status Atual</th>{% if mostrar_tipos_radiografia %}<th>Tipo de Radiografia</th>{% endif %}<th>Ação</th>
         </tr>
         {% endif %}
     </thead>
@@ -87,7 +87,7 @@
     {% for s in solicitacoes %}
         {% if modo_urgencia_em_espera %}
         <tr>
-            <td>{{ s[0]|formatar_documento }}</td>
+            <td class="text-center">{{ s[0]|formatar_documento }}</td>
             <td>{{ s[1] }}</td>
             <td>{{ s[2] if s[2] else '-' }}</td>
             <td>{{ s[3] if s[3] else '-' }}</td>
@@ -105,7 +105,7 @@
         </tr>
         {% else %}
         <tr>
-            <td>{{ s[0]|formatar_documento }}</td>
+            <td class="text-center">{{ s[0]|formatar_documento }}</td>
             <td>{{ s[1] }}</td>
             <td>{{ s[2] }}</td>
             <td>{{ s[3]|formatar_data }}</td>
