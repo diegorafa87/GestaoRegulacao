@@ -75,11 +75,11 @@
     <thead class="table-dark">
         {% if modo_urgencia_em_espera %}
         <tr>
-            <th class="text-center">ID (CPF/SUS)</th><th>Paciente</th><th>Especialidade</th><th>Prioridade</th><th>Status</th><th>Data Solicitação</th><th>Data Entrada</th><th>Ação</th>
+            <th class="text-center">ID (CPF/SUS)</th><th class="text-center">Paciente</th><th>Especialidade</th><th>Prioridade</th><th>Status</th><th>Data Solicitação</th><th>Data Entrada</th><th>Ação</th>
         </tr>
         {% else %}
         <tr>
-            <th class="text-center">ID (CPF/SUS)</th><th>Paciente</th><th class="text-center">Total Solicitações</th><th class="text-center">Última Entrada</th><th class="text-center">Status Atual</th>{% if mostrar_tipos_radiografia %}<th>Tipo de Radiografia</th>{% endif %}<th class="text-center">Ação</th>
+            <th class="text-center">ID (CPF/SUS)</th><th class="text-center">Paciente</th><th class="text-center">Total Solicitações</th><th class="text-center">Última Entrada</th><th class="text-center">Status Atual</th>{% if mostrar_tipos_radiografia %}<th>Tipo de Radiografia</th>{% endif %}<th class="text-center">Ação</th>
         </tr>
         {% endif %}
     </thead>
