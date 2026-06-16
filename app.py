@@ -34,6 +34,7 @@ from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 from db import conectar, criar_tabelas
+import ia_utils
 
 load_dotenv()
 
@@ -1821,73 +1822,183 @@ def relatorios():
     data_inicio_raw = request.args.get('data_inicio', '').strip()
     data_fim_raw = request.args.get('data_fim', '').strip()
     formato = request.args.get('formato', 'html').strip().lower()
+    view = request.args.get('view', 'resumo').strip().lower()
 
     if situacao not in ('REALIZADOS', 'EM_ESPERA'):
         situacao = 'REALIZADOS'
+    if view not in ('resumo', 'pacientes_mais_solicitacoes', 'especialidades_maior_espera', 'ia'):
+        view = 'resumo'
 
     data_inicio = normalizar_data_para_iso(data_inicio_raw) if data_inicio_raw else ''
     data_fim = normalizar_data_para_iso(data_fim_raw) if data_fim_raw else ''
     financiamento = request.args.get('financiamento', '').strip().upper()
     financiamento = financiamento if financiamento in ('SUS', 'CONVENIO') else ''
     tempo_espera = request.args.get('tempo_espera', '').strip() == '1'
+    pergunta_ia = request.args.get('pergunta_ia', '').strip()
 
-    filtros_aplicados = bool(tipo or especialidade or data_inicio_raw or data_fim_raw or situacao == 'EM_ESPERA' or financiamento or tempo_espera)
+    resposta_ia = None
+    ia_contexto = {}
 
-    query_resumo = '''
-        SELECT
-            s.especialidade,
-            COUNT(*) AS total_registros
-        FROM solicitacao s
-        WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
-          AND UPPER(COALESCE(s.conclusao, '')) <> 'CANCELADO'
-    '''
-    params_resumo = []
+    if view == 'ia':
+        ia_contexto = ia_utils.obter_contexto_dados()
+        if pergunta_ia:
+            resposta_ia = ia_utils.processar_pergunta_ia(pergunta_ia)
 
-    if situacao == 'EM_ESPERA':
-        query_resumo += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
-    else:
-        query_resumo += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
+    filtros_aplicados = bool(
+        tipo or especialidade or data_inicio_raw or data_fim_raw or situacao == 'EM_ESPERA' or financiamento or tempo_espera or view != 'resumo' or pergunta_ia
+    )
 
-    if tipo in ('CONSULTA', 'EXAME'):
-        query_resumo += ' AND UPPER(s.tipo) = %s'
-        params_resumo.append(tipo)
-
-    if financiamento:
-        query_resumo += " AND UPPER(COALESCE(s.financiamento, '')) = %s"
-        params_resumo.append(financiamento)
-
-    if especialidade:
-        query_resumo += (
-            " AND translate(UPPER(COALESCE(s.especialidade, '')), "
-            "'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', "
-            "'AAAAAEEEEIIIIOOOOOUUUUC') LIKE %s"
-        )
-        valor_busca = normalizar_texto_busca(especialidade)
-        params_resumo.append(f"%{valor_busca}%")
-
-    if data_inicio:
-        if situacao == 'EM_ESPERA':
-            query_resumo += ' AND s.data_entrada >= %s'
-        else:
-            query_resumo += ' AND s.data_realizacao >= %s'
-        params_resumo.append(data_inicio)
-
-    if data_fim:
-        if situacao == 'EM_ESPERA':
-            query_resumo += ' AND s.data_entrada <= %s'
-        else:
-            query_resumo += ' AND s.data_realizacao <= %s'
-        params_resumo.append(data_fim)
-
-    query_resumo += ' GROUP BY s.especialidade ORDER BY total_registros DESC, s.especialidade'
+    resumo = []
+    pacientes_mais_solicitacoes = []
+    especialidades_maior_espera = []
+    tempo_medio_espera = []
+    total_registros = 0
 
     conn = conectar()
     c = conn.cursor()
-    c.execute(query_resumo, params_resumo)
-    resumo = c.fetchall()
 
-    tempo_medio_espera = []
-    if tempo_espera:
+    if view == 'resumo':
+        query_resumo = '''
+            SELECT
+                s.especialidade,
+                COUNT(*) AS total_registros
+            FROM solicitacao s
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
+              AND UPPER(COALESCE(s.conclusao, '')) <> 'CANCELADO'
+        '''
+        params_resumo = []
+
+        if situacao == 'EM_ESPERA':
+            query_resumo += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
+        else:
+            query_resumo += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
+
+        if tipo in ('CONSULTA', 'EXAME'):
+            query_resumo += ' AND UPPER(s.tipo) = %s'
+            params_resumo.append(tipo)
+
+        if financiamento:
+            query_resumo += " AND UPPER(COALESCE(s.financiamento, '')) = %s"
+            params_resumo.append(financiamento)
+
+        if especialidade:
+            query_resumo += (
+                " AND translate(UPPER(COALESCE(s.especialidade, '')), "
+                "'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', "
+                "'AAAAAEEEEIIIIOOOOOUUUUC') LIKE %s"
+            )
+            params_resumo.append(f"%{normalizar_texto_busca(especialidade)}%")
+
+        if data_inicio:
+            if situacao == 'EM_ESPERA':
+                query_resumo += ' AND s.data_entrada >= %s'
+            else:
+                query_resumo += ' AND s.data_realizacao >= %s'
+            params_resumo.append(data_inicio)
+
+        if data_fim:
+            if situacao == 'EM_ESPERA':
+                query_resumo += ' AND s.data_entrada <= %s'
+            else:
+                query_resumo += ' AND s.data_realizacao <= %s'
+            params_resumo.append(data_fim)
+
+        query_resumo += ' GROUP BY s.especialidade ORDER BY total_registros DESC, s.especialidade'
+        c.execute(query_resumo, params_resumo)
+        resumo = c.fetchall()
+
+    elif view == 'pacientes_mais_solicitacoes':
+        query_pacientes_top = '''
+            SELECT
+                p.id,
+                p.nome,
+                COUNT(s.id) AS total_solicitacoes
+            FROM paciente p
+            INNER JOIN solicitacao s ON s.paciente_id = p.id
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
+              AND UPPER(COALESCE(s.conclusao, '')) <> 'CANCELADO'
+        '''
+        params_pacientes_top = []
+
+        if situacao == 'EM_ESPERA':
+            query_pacientes_top += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
+        else:
+            query_pacientes_top += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
+
+        if tipo in ('CONSULTA', 'EXAME'):
+            query_pacientes_top += ' AND UPPER(s.tipo) = %s'
+            params_pacientes_top.append(tipo)
+
+        if financiamento:
+            query_pacientes_top += " AND UPPER(COALESCE(s.financiamento, '')) = %s"
+            params_pacientes_top.append(financiamento)
+
+        if data_inicio:
+            if situacao == 'EM_ESPERA':
+                query_pacientes_top += ' AND s.data_entrada >= %s'
+            else:
+                query_pacientes_top += ' AND s.data_realizacao >= %s'
+            params_pacientes_top.append(data_inicio)
+
+        if data_fim:
+            if situacao == 'EM_ESPERA':
+                query_pacientes_top += ' AND s.data_entrada <= %s'
+            else:
+                query_pacientes_top += ' AND s.data_realizacao <= %s'
+            params_pacientes_top.append(data_fim)
+
+        query_pacientes_top += ' GROUP BY p.id, p.nome ORDER BY total_solicitacoes DESC, p.nome LIMIT 50'
+        c.execute(query_pacientes_top, params_pacientes_top)
+        pacientes_mais_solicitacoes = c.fetchall()
+
+    elif view == 'especialidades_maior_espera':
+        query_espera = '''
+            SELECT
+                s.especialidade,
+                AVG(DATE(%s) - DATE(s.data_entrada))::numeric(10,1) AS tempo_medio_dias,
+                COUNT(*) AS total_registros
+            FROM solicitacao s
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
+              AND UPPER(COALESCE(s.conclusao, '')) <> 'CANCELADO'
+        '''
+        params_espera = []
+
+        if situacao == 'EM_ESPERA':
+            query_espera = query_espera.replace('%s', 'CURRENT_DATE')
+            query_espera += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
+        else:
+            query_espera = query_espera.replace('%s', 's.data_realizacao')
+            query_espera += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
+
+        if tipo in ('CONSULTA', 'EXAME'):
+            query_espera += ' AND UPPER(s.tipo) = %s'
+            params_espera.append(tipo)
+
+        if financiamento:
+            query_espera += " AND UPPER(COALESCE(s.financiamento, '')) = %s"
+            params_espera.append(financiamento)
+
+        if especialidade:
+            query_espera += (
+                " AND translate(UPPER(COALESCE(s.especialidade, '')), "
+                "'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', "
+                "'AAAAAEEEEIIIIOOOOOUUUUC') LIKE %s"
+            )
+            params_espera.append(f"%{normalizar_texto_busca(especialidade)}%")
+
+        if data_inicio:
+            query_espera += ' AND s.data_entrada >= %s'
+            params_espera.append(data_inicio)
+
+        if data_fim:
+            query_espera += ' AND s.data_entrada <= %s'
+            params_espera.append(data_fim)
+
+        query_espera += ' GROUP BY s.especialidade ORDER BY tempo_medio_dias DESC, s.especialidade LIMIT 50'
+        c.execute(query_espera, params_espera)
+        especialidades_maior_espera = c.fetchall()
+
+    if tempo_espera and view == 'resumo':
         query_tempo = '''
             SELECT
                 UPPER(s.tipo) AS tipo,
@@ -1939,7 +2050,7 @@ def relatorios():
 
     conn.close()
 
-    if formato == 'csv':
+    if formato == 'csv' and view == 'resumo':
         output = io.StringIO()
         writer = csv.writer(output, delimiter=';')
         writer.writerow([
@@ -1966,7 +2077,7 @@ def relatorios():
             }
         )
 
-    if formato == 'pdf':
+    if formato == 'pdf' and view == 'resumo':
         total_registros = sum(item[1] for item in resumo) if resumo else 0
         pdf_content = gerar_pdf_relatorio_resumo(
             resumo,
@@ -1986,7 +2097,14 @@ def relatorios():
             }
         )
 
-    total_registros = sum(item[1] for item in resumo) if resumo else 0
+    if view == 'resumo':
+        total_registros = sum(item[1] for item in resumo) if resumo else 0
+    elif view == 'pacientes_mais_solicitacoes':
+        total_registros = sum(item[2] for item in pacientes_mais_solicitacoes) if pacientes_mais_solicitacoes else 0
+    elif view == 'especialidades_maior_espera':
+        total_registros = sum(item[2] for item in especialidades_maior_espera) if especialidades_maior_espera else 0
+    elif view == 'ia':
+        total_registros = ia_contexto.get('total_solicitacoes', 0) if ia_contexto else 0
 
     pacientes_especialidade = []
     mostrar_tipos_radiografia_relatorio = 'RADIOGRAFIA' in normalizar_texto_busca(especialidade)
@@ -2057,9 +2175,15 @@ def relatorios():
         data_fim=data_fim_raw,
         financiamento=financiamento,
         tempo_espera=tempo_espera,
+        view=view,
+        pergunta_ia=pergunta_ia,
+        resposta_ia=resposta_ia,
+        ia_contexto=ia_contexto,
         filtros_aplicados=filtros_aplicados,
         resumo=resumo,
         total_registros=total_registros,
+        pacientes_mais_solicitacoes=pacientes_mais_solicitacoes,
+        especialidades_maior_espera=especialidades_maior_espera,
         pacientes_especialidade=pacientes_especialidade,
         tempo_medio_espera=tempo_medio_espera,
         mostrar_tipos_radiografia_relatorio=mostrar_tipos_radiografia_relatorio

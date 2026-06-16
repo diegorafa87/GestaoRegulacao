@@ -48,7 +48,16 @@
                 <option value="EM_ESPERA" {% if situacao == 'EM_ESPERA' %}selected{% endif %}>Em Espera</option>
             </select>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-2">
+            <label class="form-label">Visão</label>
+            <select name="view" class="form-control">
+                <option value="resumo" {% if view == 'resumo' %}selected{% endif %}>Resumo</option>
+                <option value="pacientes_mais_solicitacoes" {% if view == 'pacientes_mais_solicitacoes' %}selected{% endif %}>Pacientes com mais solicitações</option>
+                <option value="especialidades_maior_espera" {% if view == 'especialidades_maior_espera' %}selected{% endif %}>Especialidades com maior tempo de agendamento</option>
+                <option value="ia" {% if view == 'ia' %}selected{% endif %}>Visão IA</option>
+            </select>
+        </div>
+        <div class="col-md-3">
             <label class="form-label">Especialidade</label>
             <input type="text" name="especialidade" class="form-control" value="{{ especialidade }}" placeholder="Ex.: Cardiologia">
         </div>
@@ -76,6 +85,21 @@
             <input id="data_fim" type="text" name="data_fim" class="form-control" value="{{ data_fim }}" placeholder="DD/MM/AAAA" maxlength="10">
         </div>
     </div>
+
+    {% if view == 'ia' %}
+    <div class="card mb-4 border-warning shadow-sm">
+        <div class="card-header bg-warning text-dark">Modo IA - Pergunte em linguagem natural</div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label">Pergunta para o sistema</label>
+                <textarea name="pergunta_ia" class="form-control" rows="3" placeholder="Ex.: Quais especialidades têm mais solicitações em espera?">{{ pergunta_ia }}</textarea>
+            </div>
+            <div class="text-muted small">
+                O modo IA gera um resumo inteligente baseado nos dados do sistema. Use perguntas como "Quais são as especialidades com maior demanda?" ou "Quantos pacientes estão em espera?".
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="row g-2">
         <div class="col-md-4 d-grid">
@@ -130,6 +154,7 @@
 </div>
 {% endif %}
 
+{% if view == 'resumo' %}
 <div class="card mb-4">
     <div class="card-header bg-primary text-white">
         {% if situacao == 'EM_ESPERA' %}
@@ -171,8 +196,111 @@
         </table>
     </div>
 </div>
+{% elif view == 'pacientes_mais_solicitacoes' %}
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">Pacientes com mais solicitações</div>
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th class="text-center">ID (CPF/SUS)</th>
+                    <th>Paciente</th>
+                    <th class="text-center">Total de Solicitações</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% if pacientes_mais_solicitacoes %}
+                {% for p in pacientes_mais_solicitacoes %}
+                <tr>
+                    <td class="text-center">{{ p[0]|formatar_documento }}</td>
+                    <td>{{ p[1] }}</td>
+                    <td class="text-center">{{ p[2] }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="3" class="text-center text-muted">Nenhum paciente encontrado para os filtros informados.</td>
+                </tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% elif view == 'especialidades_maior_espera' %}
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">Especialidades com maior tempo de agendamento</div>
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered mb-0">
+            <thead class="table-dark">
+                <tr>
+                    <th>Especialidade</th>
+                    <th class="text-center">Tempo Médio de Espera (dias)</th>
+                    <th class="text-center">Total de Registros</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% if especialidades_maior_espera %}
+                {% for e in especialidades_maior_espera %}
+                <tr>
+                    <td>{{ e[0] if e[0] else '-' }}</td>
+                    <td class="text-center">{{ e[1]|round(1) if e[1] is not none else '-' }}</td>
+                    <td class="text-center">{{ e[2] }}</td>
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="3" class="text-center text-muted">Nenhum registro encontrado para os filtros informados.</td>
+                </tr>
+            {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% elif view == 'ia' %}
+<div class="card mb-4">
+    <div class="card-header bg-info text-dark">Visão IA</div>
+    <div class="card-body">
+        <div class="mb-3">
+            <h5 class="card-title">Resumo do sistema</h5>
+            <p class="card-text">Total de pacientes: <strong>{{ ia_contexto.total_pacientes }}</strong><br>
+            Total de solicitações: <strong>{{ ia_contexto.total_solicitacoes }}</strong><br>
+            Data de consulta: <strong>{{ ia_contexto.data_atual }}</strong></p>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="small text-muted">Solicitações por status</div>
+                    <ul class="small mb-0">
+                        {% for status, count in ia_contexto.solicitacoes_por_status.items() %}
+                        <li>{{ status or 'SEM STATUS' }}: {{ count }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <div class="small text-muted">Solicitações por tipo</div>
+                    <ul class="small mb-0">
+                        {% for tipo_item, count in ia_contexto.solicitacoes_por_tipo.items() %}
+                        <li>{{ tipo_item or 'SEM TIPO' }}: {{ count }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
 
-{% if especialidade and pacientes_especialidade %}
+        {% if resposta_ia %}
+        <div class="mt-4">
+            <h5 class="card-title">Resposta</h5>
+            <div class="border rounded p-3 bg-light text-break" style="white-space: pre-wrap;">{{ resposta_ia.resposta }}</div>
+            <div class="text-muted small mt-2">Modo: <strong>{{ resposta_ia.modo }}</strong>{% if resposta_ia.erro_api %} · API: {{ resposta_ia.erro_api }}{% endif %}</div>
+        </div>
+        {% else %}
+        <div class="alert alert-secondary mt-3">
+            Faça uma pergunta ao modo IA acima e envie o relatório para receber insights baseados nos dados do sistema.
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if view == 'resumo' and especialidade and pacientes_especialidade %}
 <div class="card mb-4">
     <div class="card-header bg-success text-white">
         Pacientes da Especialidade: <strong>{{ especialidade }}</strong>
