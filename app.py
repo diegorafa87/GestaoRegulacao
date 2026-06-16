@@ -2302,26 +2302,33 @@ def nova_solicitacao():
         c = conn.cursor()
         solicitacoes_criadas = 0
         for especialidade_item in especialidades:
-            c.execute(
-                "INSERT INTO solicitacao (paciente_id, data_solicitacao, data_entrada, data_insercao, data_realizacao, data_retorno, unidade_realizadora, tipo, especialidade, descricao, prioridade, encaminhamento, status, sistema_insercao) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                (
-                    paciente_id_resolvido,
-                    data_solicitacao,
-                    data_entrada,
-                    data_insercao,
-                    data_realizacao,
-                    data_retorno,
-                    unidade_realizadora,
-                    tipo,
-                    especialidade_item,
-                    especialidade_item,
-                    prioridade,
-                    encaminhamento,
-                    status,
-                    sistema_insercao,
-                )
+            replicar = (
+                len(especialidades) == 1
+                and quantidade_solicitacoes > 1
+                and permite_replicar_solicitacao(tipo, especialidade_item)
             )
-            solicitacoes_criadas += 1
+            repeticoes = quantidade_solicitacoes if replicar else 1
+            for _ in range(repeticoes):
+                c.execute(
+                    "INSERT INTO solicitacao (paciente_id, data_solicitacao, data_entrada, data_insercao, data_realizacao, data_retorno, unidade_realizadora, tipo, especialidade, descricao, prioridade, encaminhamento, status, sistema_insercao) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    (
+                        paciente_id_resolvido,
+                        data_solicitacao,
+                        data_entrada,
+                        data_insercao,
+                        data_realizacao,
+                        data_retorno,
+                        unidade_realizadora,
+                        tipo,
+                        especialidade_item,
+                        especialidade_item,
+                        prioridade,
+                        encaminhamento,
+                        status,
+                        sistema_insercao,
+                    )
+                )
+                solicitacoes_criadas += 1
         if apenas_admin():
             for especialidade_item in especialidades:
                 if especialidade_item not in especialidades_catalogo:
@@ -2349,7 +2356,7 @@ def nova_solicitacao():
             flash(f'{solicitacoes_criadas} solicitações criadas com sucesso para o paciente.', 'success')
         else:
             flash('Solicitação criada com sucesso.', 'success')
-        return render_nova_solicitacao_page()
+        return redirect(url_for('nova_solicitacao'))
     return render_nova_solicitacao_page()
 
 @app.route('/admin/especialidades', methods=['POST'])
