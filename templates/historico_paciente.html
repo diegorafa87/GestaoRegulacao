@@ -24,7 +24,7 @@
             <td>{{ s[6] }}</td>
             <td>{{ s[7]|formatar_data }}</td>
             <td>{{ s[8] }}</td>
-            <td>{{ {'SUS': 'SUS', 'CONVENIO': 'Convênio'}.get(s[10], s[10] if s[10] else '-') }}</td>
+            <td>{{ {'SUS': 'SUS', 'CONVENIO': 'RECURSOS PROPRIOS'}.get(s[10], s[10] if s[10] else '-') }}</td>
             <td class="text-center">{{ s[11] if s[11] and s[11] > 1 else '' }}</td>
             {% set conclusao = s[9] if s[9] else '' %}
             {% set conclusao_label = {'PRESENTE': 'Presente', 'AUSENTE': 'Ausente', 'CANCELADO': 'Cancelado', 'RETIRADO': 'Retirado', 'DUPLICADA': 'Duplicada'}.get(conclusao, conclusao) %}
