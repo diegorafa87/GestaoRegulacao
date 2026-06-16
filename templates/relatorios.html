@@ -155,9 +155,9 @@
                     <td class="text-center">{{ r[1] }}</td>
                     <td>
                         {% if situacao == 'EM_ESPERA' %}
-                            {{ r[1] }} {{ r[0] if r[0] else 'solicitações sem especialidade informada' }} em espera
+                            {{ r[0] if r[0] else 'solicitações sem especialidade informada' }} em espera
                         {% else %}
-                            {{ r[1] }} {{ r[0] if r[0] else 'procedimentos sem especialidade informada' }}
+                            {{ r[0] if r[0] else 'procedimentos sem especialidade informada' }}
                         {% endif %}
                     </td>
                 </tr>
