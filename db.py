@@ -127,8 +127,10 @@ def criar_tabelas():
     c.execute('''CREATE TABLE IF NOT EXISTS sugestao_solicitacao (
         tipo TEXT NOT NULL,
         valor TEXT NOT NULL,
+        categoria TEXT,
         UNIQUE(tipo, valor)
     )''')
+    c.execute('ALTER TABLE sugestao_solicitacao ADD COLUMN IF NOT EXISTS categoria TEXT')
     conn.commit()
     conn.close()
 

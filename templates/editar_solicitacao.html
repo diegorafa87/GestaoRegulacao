@@ -21,18 +21,18 @@
         <datalist id="unidades-sugestoes"></datalist>
     </div>
 
-    <div class="col-md-6">
+    <div class="col-md-6" id="financiamento_wrapper">
         <label class="form-label">Financiamento:</label>
-        <select name="financiamento" class="form-select">
+        <select id="financiamento_select" name="financiamento" class="form-select">
             <option value="">Selecione</option>
             <option value="SUS" {% if solicitacao[11] == 'SUS' %}selected{% endif %}>SUS</option>
-            <option value="CONVENIO" {% if solicitacao[11] == 'CONVENIO' %}selected{% endif %}>Convênio</option>
+            <option value="CONVENIO" {% if solicitacao[11] == 'CONVENIO' %}selected{% endif %}>Recursos Próprios</option>
         </select>
     </div>
 
     <div class="col-md-6">
         <label class="form-label">Conclusão:</label>
-        <select name="conclusao" class="form-select">
+        <select id="conclusao_select" name="conclusao" class="form-select">
             <option value="">Selecione</option>
             <option value="PRESENTE" {% if solicitacao[10] == 'PRESENTE' %}selected{% endif %}>Presente</option>
             <option value="AUSENTE" {% if solicitacao[10] == 'AUSENTE' %}selected{% endif %}>Ausente</option>
@@ -100,6 +100,29 @@
                 }
             }, 220);
         });
+    }
+
+    // Lógica: quando a conclusão for CANCELADO ou RETIRADO, não exigir/mostrar financiamento
+    const conclSelect = document.getElementById('conclusao_select');
+    const financWrapper = document.getElementById('financiamento_wrapper');
+    const financSelect = document.getElementById('financiamento_select');
+
+    function atualizarFinanciamento() {
+        if (!conclSelect || !financSelect || !financWrapper) return;
+        const val = (conclSelect.value || '').toUpperCase();
+        if (val === 'CANCELADO' || val === 'RETIRADO') {
+            financWrapper.style.display = 'none';
+            financSelect.disabled = true;
+            financSelect.value = '';
+        } else {
+            financWrapper.style.display = '';
+            financSelect.disabled = false;
+        }
+    }
+
+    if (conclSelect) {
+        conclSelect.addEventListener('change', atualizarFinanciamento);
+        atualizarFinanciamento();
     }
 })();
 </script>

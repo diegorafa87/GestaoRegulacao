@@ -1666,6 +1666,10 @@ def editar_solicitacao(solicitacao_id):
         opcoes_financiamento = {'SUS', 'CONVENIO'}
         financiamento = financiamento if financiamento in opcoes_financiamento else None
 
+        # Se a conclusão for CANCELADO ou RETIRADO, limpar o financiamento (não deve ser exigido)
+        if conclusao in ('CANCELADO', 'RETIRADO'):
+            financiamento = None
+
         # Buscar dados da solicitação original
         c.execute(
             '''

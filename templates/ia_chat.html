@@ -330,6 +330,9 @@
             <button class="btn-atalho" onclick="preencherPergunta('Quais são as especialidades mais solicitadas?')">🏥 Especialidades Top</button>
             <button class="btn-atalho" onclick="preencherPergunta('Tendência de solicitações nos últimos 7 dias')">📉 Tendências</button>
             <button class="btn-atalho" onclick="preencherPergunta('Gere um relatório completo do sistema')">📋 Relatório Completo</button>
+            <button class="btn-atalho" onclick="preencherPergunta('Quantas solicitações estão URGENTES?')">⚠️ Urgentes</button>
+            <button class="btn-atalho" onclick="preencherPergunta('Mostre pacientes com mais solicitações')">👥 Top Pacientes</button>
+            <button class="btn-atalho" onclick="preencherPergunta('Quantas solicitações estão EXECUTADAS?')">✅ Executadas</button>
         </div>
 
         <div class="input-group-custom">
@@ -442,6 +445,9 @@
         return html;
     }
 
+    let ultimaResposta = null;
+    let tentativasProcessamento = 0;
+
     async function enviarPergunta() {
         const pergunta = perguntaInput.value.trim();
 
@@ -461,21 +467,54 @@
         carregando = true;
         btnEnviar.disabled = true;
         adicionarCarregamento();
+        tentativasProcessamento = 0;
 
         try {
-            const resposta = await fetch('/api/ia_perguntar', {
+            // Adicionar timestamp e parâmetros anti-cache
+            const timestamp = new Date().getTime();
+            const random = Math.random().toString(36).substring(7);
+            
+            const resposta = await fetch(`/api/ia_perguntar?t=${timestamp}&r=${random}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0'
                 },
-                body: JSON.stringify({ pergunta })
+                body: JSON.stringify({ 
+                    pergunta: pergunta,
+                    timestamp: timestamp,
+                    tentativa: tentativasProcessamento
+                })
             });
 
             const dados = await resposta.json();
             removerCarregamento();
 
             if (dados.sucesso) {
-                adicionarMensagem(dados.resposta, 'ia', dados.dados_resumidos);
+                const novaResposta = dados.resposta;
+                
+                // Verificar se a resposta é muito semelhante à anterior
+                if (ultimaResposta && saoRespostasIguais(ultimaResposta, novaResposta)) {
+                    console.warn('Resposta detectada como duplicada. Tentando novamente...');
+                    tentativasProcessamento++;
+                    
+                    if (tentativasProcessamento < 2) {
+                        // Remover a resposta duplicada e tentar novamente
+                        const ultimaMensagem = chatMessages.lastElementChild;
+                        if (ultimaMensagem && ultimaMensagem.classList.contains('ia')) {
+                            ultimaMensagem.remove();
+                        }
+                        
+                        // Tentar novamente
+                        await enviarPergunta();
+                        return;
+                    }
+                }
+                
+                ultimaResposta = novaResposta;
+                adicionarMensagem(novaResposta, 'ia', dados.dados_resumidos);
 
                 // Adicionar botão para gerar PDF
                 setTimeout(() => {
@@ -484,7 +523,7 @@
                         const btnPdf = document.createElement('button');
                         btnPdf.className = 'btn-gerar-pdf';
                         btnPdf.textContent = '📥 Baixar como PDF';
-                        btnPdf.onclick = () => gerarPDF(dados.resposta);
+                        btnPdf.onclick = () => gerarPDF(novaResposta);
                         ultimaMensagem.appendChild(btnPdf);
                     }
                 }, 100);
@@ -493,11 +532,37 @@
             }
         } catch (erro) {
             removerCarregamento();
-            adicionarMensagem(`❌ Erro: ${erro.message}`, 'ia');
+            adicionarMensagem(`❌ Erro na requisição: ${erro.message}`, 'ia');
         } finally {
             carregando = false;
             btnEnviar.disabled = false;
         }
+    }
+
+    function saoRespostasIguais(resposta1, resposta2) {
+        if (!resposta1 || !resposta2) return false;
+        
+        // Normalizar as respostas para comparação
+        const norm1 = resposta1.toLowerCase().replace(/\s+/g, ' ').trim();
+        const norm2 = resposta2.toLowerCase().replace(/\s+/g, ' ').trim();
+        
+        // Verificar se são idênticas ou muito semelhantes (acima de 95%)
+        if (norm1 === norm2) return true;
+        
+        // Similaridade de Jaccard simplificada
+        const palavras1 = new Set(norm1.split(' '));
+        const palavras2 = new Set(norm2.split(' '));
+        
+        let comuns = 0;
+        for (let palavra of palavras1) {
+            if (palavras2.has(palavra)) comuns++;
+        }
+        
+        const total = Math.max(palavras1.size, palavras2.size);
+        const similaridade = comuns / total;
+        
+        // Se mais de 85% das palavras são iguais, é duplicada
+        return similaridade > 0.85;
     }
 
     async function gerarPDF(conteudo) {
@@ -538,12 +603,21 @@
     setTimeout(() => {
         adicionarMensagem(
             '👋 Olá! Sou a IA Gemini do sistema de gestão de regulação. Posso ajudar você com:\n\n' +
-            '• 📊 Análise de dados de pacientes e solicitações\n' +
+            '**Buscas Específicas:**\n' +
+            '• 🔍 Procurar paciente por nome ou CPF\n' +
+            '• 🏥 Buscar por especialidade específica (ex: "cardiologia")\n' +
+            '• 📊 Filtrar por status (URGENTE, EXECUTADO, PENDENTE, etc)\n' +
+            '• 📅 Análise temporal (últimos 7 dias, 30 dias, etc)\n\n' +
+            '**Análises Gerais:**\n' +
             '• 📈 Estatísticas e tendências\n' +
-            '• 🏥 Informações sobre especialidades\n' +
             '• 📋 Geração de relatórios em PDF\n' +
-            '• 💡 Insights e sugestões\n\n' +
-            'Faça uma pergunta em linguagem natural ou clique em um dos atalhos acima!',
+            '• 💡 Insights e sugestões de ação\n\n' +
+            '**Exemplos de Perguntas:**\n' +
+            '• "Paciente João Silva"\n' +
+            '• "Solicitações de ortopedia"\n' +
+            '• "Quantas consultas estão urgentes?"\n' +
+            '• "Mostre solicitações executadas"\n\n' +
+            'Clique em um dos atalhos ou faça uma pergunta em linguagem natural!',
             'ia'
         );
     }, 500);

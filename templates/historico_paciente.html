@@ -45,10 +45,13 @@
             </td>
             <td>
                 {% set unidade = s[8] if s[8] else '' %}
+                {% set financiamento = s[10] if s[10] else '' %}
                 {% if conclusao == 'RETIRADO' %}
                     <a href="{{ url_for('termo_retirada_solicitacao', solicitacao_id=s[0]) }}" class="btn btn-sm btn-outline-danger mb-1">Termo de Retirada</a>
                 {% endif %}
-                {% if not s[7] or not unidade|trim or not conclusao|trim or (not s[10] or s[10]|trim == '-') %}
+                {# Só exigir financiamento quando a conclusão NÃO for CANCELADO ou RETIRADO #}
+                {% set precisa_financiamento = not (conclusao in ['CANCELADO', 'RETIRADO']) %}
+                {% if not s[7] or not unidade|trim or not conclusao|trim or (precisa_financiamento and (not financiamento or financiamento|trim == '-')) %}
                     <a href="{{ url_for('editar_solicitacao', solicitacao_id=s[0], paciente_id=paciente_id) }}" class="btn btn-sm btn-warning">Editar</a>
                 {% else %}
                     -
