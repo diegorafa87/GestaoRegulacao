@@ -1685,36 +1685,24 @@ def editar_solicitacao(solicitacao_id):
         if solicitacao_info:
             orig_paciente_id, data_solicitacao, tipo, especialidade = solicitacao_info
 
-            if conclusao == 'DUPLICADA':
-                # Excluir o registro atual quando houver outra solicitação duplicada para o mesmo paciente.
-                c.execute(
-                    '''
-                    SELECT id
-                    FROM solicitacao
-                    WHERE paciente_id = %s AND data_solicitacao = %s AND tipo = %s AND especialidade = %s AND id <> %s
-                    LIMIT 1
-                    ''',
-                    (orig_paciente_id, data_solicitacao, tipo, especialidade, solicitacao_id)
-                )
-                registro_duplicado = c.fetchone()
-                if registro_duplicado:
-                    c.execute('DELETE FROM solicitacao WHERE id = %s', (solicitacao_id,))
-                else:
-                    c.execute(
-                        '''
-                        UPDATE solicitacao
-                        SET data_realizacao = %s, unidade_realizadora = %s, conclusao = %s, financiamento = %s 
-                        WHERE id = %s
-                        ''',
-                        (
-                            data_realizacao if data_realizacao else None,
-                            unidade_realizadora if unidade_realizadora else None,
-                            conclusao,
-                            financiamento,
-                            solicitacao_id
-                        )
-                    )
+            # Verificar se existe outra solicitação com os mesmos dados (duplicada)
+            c.execute(
+                '''
+                SELECT id
+                FROM solicitacao
+                WHERE paciente_id = %s AND data_solicitacao = %s AND tipo = %s AND especialidade = %s AND id <> %s
+                LIMIT 1
+                ''',
+                (orig_paciente_id, data_solicitacao, tipo, especialidade, solicitacao_id)
+            )
+            registro_duplicado = c.fetchone()
+
+            if conclusao == 'DUPLICADA' or (conclusao == 'CANCELADO' and registro_duplicado):
+                # Se marcar como DUPLICADA ou CANCELADO com duplicata encontrada:
+                # Excluir apenas o registro atual, deixando a outra solicitação intacta
+                c.execute('DELETE FROM solicitacao WHERE id = %s', (solicitacao_id,))
             else:
+                # Para outros status ou CANCELADO sem duplicata:
                 # Aplicar a mesma ação para todas as solicitações do mesmo paciente 
                 # com a mesma especialidade, mesmo tipo e mesma data de solicitação
                 c.execute(
