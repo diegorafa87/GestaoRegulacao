@@ -22,7 +22,6 @@
         <li class="nav-item"><a class="nav-link" href="/pacientes">Pacientes</a></li>
         <li class="nav-item"><a class="nav-link" href="/solicitacoes">Solicitações</a></li>
         <li class="nav-item"><a class="nav-link" href="/relatorios">Relatórios</a></li>
-        <li class="nav-item"><a class="nav-link" href="/ia_chat">🤖 IA Chat</a></li>
         {% if session.get('usuario_perfil') == 'ADMIN' %}
         <li class="nav-item"><a class="nav-link" href="{{ url_for('admin_catalogos') }}">Catálogos</a></li>
         <li class="nav-item"><a class="nav-link" href="/usuarios">Usuários</a></li>

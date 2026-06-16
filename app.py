@@ -2559,46 +2559,7 @@ def admin_catalogos():
         sistemas_insercao_catalogo=listar_sistemas_insercao_catalogo(),
     )
 
-# ======================== ROTAS DE IA ========================
-
-@app.route('/ia_chat')
-def ia_chat():
-    """Página de chat com IA"""
-    if not usuario_logado():
-        return redirect(url_for('login'))
-    return render_template('ia_chat.html')
-
-@app.route('/api/ia_perguntar', methods=['POST'])
-def api_ia_perguntar():
-    """Endpoint para processar perguntas da IA"""
-    if not usuario_logado():
-        return jsonify({'sucesso': False, 'mensagem': 'Não autenticado'}), 401
-    
-    try:
-        from ia_utils import processar_pergunta_ia
-        dados = request.get_json()
-        pergunta = dados.get('pergunta', '').strip()
-        
-        if not pergunta or len(pergunta) < 3:
-            return jsonify({'sucesso': False, 'mensagem': 'Pergunta muito curta'}), 400
-        
-        # Adicionar timestamp para evitar cache no backend
-        import time
-        timestamp = int(time.time() * 1000)
-        
-        # Processar pergunta com IA - sempre gera nova resposta
-        resultado = processar_pergunta_ia(pergunta)
-        
-        # Adicionar timestamp à resposta para garantir que não é cache
-        resultado['timestamp'] = timestamp
-        
-        return jsonify(resultado)
-    
-    except Exception as e:
-        import traceback
-        print(f"Erro em /api/ia_perguntar: {e}")
-        print(traceback.format_exc())
-        return jsonify({'sucesso': False, 'mensagem': str(e)}), 500
+# NOTE: Rotas de chat IA removidas (feature desativada)
 
 @app.route('/api/ia_relatorio/<tipo>', methods=['GET'])
 def api_ia_relatorio(tipo):
