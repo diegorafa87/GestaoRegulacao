@@ -22,12 +22,12 @@
 <div class="card mb-4">
     <div class="card-header bg-secondary text-white">Atalhos de Relatórios</div>
     <div class="card-body d-flex flex-wrap gap-2">
-        <a class="btn btn-outline-primary btn-sm" href="/relatorios">Consultas e Exames Realizados</a>
-        <a class="btn btn-outline-warning btn-sm" href="/relatorios?tipo=CONSULTA&situacao=EM_ESPERA">Consultas em Espera</a>
-        <a class="btn btn-outline-warning btn-sm" href="/relatorios?tipo=EXAME&situacao=EM_ESPERA">Exames em Espera</a>
-        <a class="btn btn-outline-primary btn-sm" href="/solicitacoes">Resumo de Solicitações</a>
-        <a class="btn btn-outline-primary btn-sm" href="/solicitacoes?status=URGENTE">Urgentes em Espera</a>
-        <a class="btn btn-outline-primary btn-sm" href="/pacientes">Pacientes Cadastrados</a>
+        <a class="btn btn-outline-primary btn-sm" href="{{ url_for('relatorios', next=request.full_path) }}">Consultas e Exames Realizados</a>
+        <a class="btn btn-outline-warning btn-sm" href="{{ url_for('relatorios', tipo='CONSULTA', situacao='EM_ESPERA', next=request.full_path) }}">Consultas em Espera</a>
+        <a class="btn btn-outline-warning btn-sm" href="{{ url_for('relatorios', tipo='EXAME', situacao='EM_ESPERA', next=request.full_path) }}">Exames em Espera</a>
+        <a class="btn btn-outline-primary btn-sm" href="{{ url_for('solicitacoes', next=request.full_path) }}">Resumo de Solicitações</a>
+        <a class="btn btn-outline-primary btn-sm" href="{{ url_for('solicitacoes', status='URGENTE', next=request.full_path) }}">Urgentes em Espera</a>
+        <a class="btn btn-outline-primary btn-sm" href="{{ url_for('pacientes', next=request.full_path) }}">Pacientes Cadastrados</a>
     </div>
 </div>
 
@@ -336,7 +336,7 @@
                     </td>
                     {% endif %}
                     <td class="text-center">
-                        <a href="{{ url_for('historico_paciente', paciente_id=p[0]) }}" class="btn btn-sm btn-info">Ver Histórico</a>
+                        <a href="{{ url_for('historico_paciente', paciente_id=p[0], next=request.full_path) }}" class="btn btn-sm btn-info">Ver Histórico</a>
                     </td>
                 </tr>
             {% endfor %}

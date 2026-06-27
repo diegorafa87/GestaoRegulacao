@@ -52,7 +52,7 @@
                 {# Só exigir financiamento quando a conclusão NÃO for CANCELADO ou RETIRADO #}
                 {% set precisa_financiamento = not (conclusao in ['CANCELADO', 'RETIRADO']) %}
                 {% if not s[7] or not unidade|trim or not conclusao|trim or (precisa_financiamento and (not financiamento or financiamento|trim == '-')) %}
-                    <a href="{{ url_for('editar_solicitacao', solicitacao_id=s[0], paciente_id=paciente_id) }}" class="btn btn-sm btn-warning">Editar</a>
+                    <a href="{{ url_for('editar_solicitacao', solicitacao_id=s[0], paciente_id=paciente_id, next=request.full_path) }}" class="btn btn-sm btn-warning">Editar</a>
                 {% else %}
                     -
                 {% endif %}
@@ -61,5 +61,5 @@
     {% endfor %}
     </tbody>
 </table>
-<a href="/solicitacoes" class="btn btn-secondary">Voltar</a>
+<a href="{{ origem_retorno }}" class="btn btn-secondary">Voltar</a>
 {% endblock %}

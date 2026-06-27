@@ -9,8 +9,9 @@
 
 <div class="mb-3">
     <form class="row g-2 align-items-center" method="get" action="/pesquisar">
+        <input type="hidden" name="next" value="{{ origem_retorno }}">
         <div class="col-auto">
-            <a href="/nova_solicitacao" class="btn btn-primary">Nova Solicitação</a>
+            <a href="{{ url_for('nova_solicitacao', next=request.full_path) }}" class="btn btn-primary">Nova Solicitação</a>
         </div>
         <div class="col-md-3">
             <input type="text" id="filtroCpf" name="cpf" class="form-control form-control-sm" placeholder="CPF" maxlength="14" value="{{ cpf|formatar_documento if cpf else '' }}">
@@ -20,7 +21,7 @@
         </div>
         <div class="col-auto d-flex gap-2">
             <button type="submit" class="btn btn-success btn-sm">Buscar</button>
-            <a href="/solicitacoes" class="btn btn-outline-secondary btn-sm">Limpar</a>
+            <a href="{{ url_for('solicitacoes', next=origem_retorno) }}" class="btn btn-outline-secondary btn-sm">Limpar</a>
         </div>
     </form>
 </div>
@@ -49,7 +50,7 @@
             <td>{{ s[5]|formatar_data }}</td>
             <td>{{ s[6]|formatar_data }}</td>
             <td>
-                <a href="{{ url_for('historico_paciente', paciente_id=s[0]) }}" class="btn btn-sm btn-info">Ver Histórico</a>
+                <a href="{{ url_for('historico_paciente', paciente_id=s[0], next=request.full_path) }}" class="btn btn-sm btn-info">Ver Histórico</a>
                 {% if s[4] == 'RETIRADO' or s[10] == 'RETIRADO' %}
                     <a href="{{ url_for('termo_retirada_solicitacao', solicitacao_id=s[0]) }}" class="btn btn-sm btn-warning ms-1" title="Baixar termo de retirada" target="_blank">
                         Termo de Retirada
@@ -81,7 +82,7 @@
             </td>
             {% endif %}
             <td class="text-center">
-                <a href="{{ url_for('historico_paciente', paciente_id=s[0]) }}" class="btn btn-sm btn-info">Ver Histórico</a>
+                <a href="{{ url_for('historico_paciente', paciente_id=s[0], next=request.full_path) }}" class="btn btn-sm btn-info">Ver Histórico</a>
                 {% if s[4] == 'RETIRADO' %}
                     <a href="{{ url_for('termo_retirada_solicitacao', solicitacao_id=s[0]) }}" class="btn btn-sm btn-warning ms-1" title="Baixar termo de retirada" target="_blank">
                         Termo de Retirada
@@ -107,7 +108,7 @@
     <nav aria-label="Paginação de solicitações">
         <ul class="pagination pagination-sm mb-0 flex-wrap">
             <li class="page-item {% if pagina_atual == 1 %}disabled{% endif %}">
-                <a class="page-link" href="{{ url_for(rota_paginacao, pagina=pagina_atual - 1, cpf=cpf, sus=sus, especialidade=especialidade, prioridade=prioridade, status=status) }}" aria-label="Anterior">&laquo;</a>
+                <a class="page-link" href="{{ url_for(rota_paginacao, pagina=pagina_atual - 1, cpf=cpf, sus=sus, especialidade=especialidade, prioridade=prioridade, status=status, next=origem_retorno) }}" aria-label="Anterior">&laquo;</a>
             </li>
 
             {% for numero in paginas_visiveis %}
@@ -117,20 +118,20 @@
             </li>
             {% else %}
             <li class="page-item {% if numero == pagina_atual %}active{% endif %}">
-                <a class="page-link" href="{{ url_for(rota_paginacao, pagina=numero, cpf=cpf, sus=sus, especialidade=especialidade, prioridade=prioridade, status=status) }}">{{ numero }}</a>
+                <a class="page-link" href="{{ url_for(rota_paginacao, pagina=numero, cpf=cpf, sus=sus, especialidade=especialidade, prioridade=prioridade, status=status, next=origem_retorno) }}">{{ numero }}</a>
             </li>
             {% endif %}
             {% endfor %}
 
             <li class="page-item {% if pagina_atual == total_paginas %}disabled{% endif %}">
-                <a class="page-link" href="{{ url_for(rota_paginacao, pagina=pagina_atual + 1, cpf=cpf, sus=sus, especialidade=especialidade, prioridade=prioridade, status=status) }}" aria-label="Próxima">&raquo;</a>
+                <a class="page-link" href="{{ url_for(rota_paginacao, pagina=pagina_atual + 1, cpf=cpf, sus=sus, especialidade=especialidade, prioridade=prioridade, status=status, next=origem_retorno) }}" aria-label="Próxima">&raquo;</a>
             </li>
         </ul>
     </nav>
     {% endif %}
 </div>
 
-<a href="/" class="btn btn-secondary">Voltar</a>
+<a href="{{ origem_retorno }}" class="btn btn-secondary">Voltar</a>
 
 <script>
 (() => {

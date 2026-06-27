@@ -7,6 +7,7 @@
     <div class="text-muted small">Cadastro de novo paciente no sistema de regulação</div>
 </div>
 <form method="post" class="row g-3" id="formNovoPaciente">
+    <input type="hidden" name="next" value="{{ origem_retorno }}">
     <div class="col-md-3">
         <label class="form-label">CPF:</label>
         <input id="cpf" name="cpf" class="form-control" maxlength="14" placeholder="000.000.000-00" value="{{ form_data.cpf if form_data else '' }}">
@@ -62,7 +63,7 @@
     </div>
     <div class="col-12">
         <button type="submit" class="btn btn-success" id="btnSalvarPaciente">Salvar</button>
-        <a href="/pacientes" class="btn btn-secondary">Voltar</a>
+        <a href="{{ origem_retorno }}" class="btn btn-secondary">Voltar</a>
     </div>
 </form>
 

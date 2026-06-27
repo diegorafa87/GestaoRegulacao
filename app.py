@@ -30,6 +30,7 @@ import unicodedata
 from datetime import datetime
 import csv
 import io
+from urllib.parse import urlparse
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
@@ -1027,6 +1028,22 @@ def montar_paginas_visiveis(pagina_atual, total_paginas, alcance=2):
 
     return paginas_visiveis
 
+def normalizar_url_retorno(url_retorno, fallback='/'):
+    url_retorno = (url_retorno or '').strip()
+    if not url_retorno:
+        return fallback
+
+    parsed = urlparse(url_retorno)
+    # Evita redirecionamento externo: aceita apenas caminhos relativos internos
+    if parsed.scheme or parsed.netloc:
+        return fallback
+
+    caminho = parsed.path or ''
+    if not caminho.startswith('/') or caminho.startswith('//'):
+        return fallback
+
+    return url_retorno
+
 def paginar_registros(registros, pagina_atual, itens_por_pagina=30):
     total_registros = len(registros)
     total_paginas = max(1, (total_registros + itens_por_pagina - 1) // itens_por_pagina)
@@ -1165,6 +1182,7 @@ def index():
 
 @app.route('/pacientes')
 def pacientes():
+    origem_retorno = normalizar_url_retorno(request.args.get('next'), fallback=url_for('index'))
     pacientes_por_pagina = 30
     pagina = request.args.get('pagina', 1, type=int) or 1
     if pagina < 1:
@@ -1191,6 +1209,7 @@ def pacientes():
     return render_template(
         'pacientes.html',
         pacientes=pacientes,
+        origem_retorno=origem_retorno,
         pagina_atual=pagina,
         total_paginas=total_paginas,
         total_pacientes=total_pacientes,
@@ -1199,6 +1218,10 @@ def pacientes():
 
 @app.route('/novo_paciente', methods=['GET', 'POST'])
 def novo_paciente():
+    origem_retorno = normalizar_url_retorno(
+        request.form.get('next') or request.args.get('next'),
+        fallback=url_for('pacientes')
+    )
     if request.method == 'POST':
         cpf_input = request.form.get('cpf', '').strip()
         sus_input = request.form.get('sus', '').strip()
@@ -1243,15 +1266,15 @@ def novo_paciente():
 
         if not cpf and not sus:
             flash('Informe CPF ou Cartão SUS para cadastrar o paciente.', 'warning')
-            return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo)
+            return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo, origem_retorno=origem_retorno)
 
         if rua and rua not in ruas_catalogo and not apenas_admin():
             flash('A criação de nova rua é permitida apenas para administradores. Selecione uma opção existente.', 'warning')
-            return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo)
+            return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo, origem_retorno=origem_retorno)
 
         if bairro and bairro not in bairros_catalogo and not apenas_admin():
             flash('A criação de novo bairro é permitida apenas para administradores. Selecione uma opção existente.', 'warning')
-            return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo)
+            return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo, origem_retorno=origem_retorno)
 
         paciente_existente = buscar_paciente_existente_por_documentos(cpf=cpf, sus=sus)
         if paciente_existente:
@@ -1259,7 +1282,7 @@ def novo_paciente():
                 f'Paciente já existe no sistema (ID: {formatar_identificador_paciente(paciente_existente[0])} - {paciente_existente[1]}).',
                 'danger'
             )
-            return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo)
+            return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo, origem_retorno=origem_retorno)
 
         # Prioridade: se CPF preenchido, usar como id; senão, usar SUS
         id = formatar_identificador_paciente(cpf) if cpf else sus
@@ -1285,14 +1308,15 @@ def novo_paciente():
             conn.rollback()
             conn.close()
             flash('Não foi possível cadastrar o paciente. Verifique os dados e tente novamente.', 'danger')
-            return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo)
+            return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo, origem_retorno=origem_retorno)
         conn.close()
         flash('Paciente cadastrado com sucesso!', 'success')
-        return redirect(url_for('novo_paciente'))
+        return redirect(url_for('novo_paciente', next=origem_retorno))
     return render_template(
         'novo_paciente.html',
         ruas=listar_sugestoes_endereco('rua'),
         bairros=listar_sugestoes_endereco('bairro'),
+        origem_retorno=origem_retorno,
     )
 
 @app.route('/admin/endereco-sugestao', methods=['POST'])
@@ -1524,10 +1548,14 @@ def excluir_sistema_insercao_admin():
 
 @app.route('/paciente/<paciente_id>/editar', methods=['GET', 'POST'])
 def editar_paciente(paciente_id):
+    origem_retorno = normalizar_url_retorno(
+        request.form.get('next') or request.args.get('next'),
+        fallback=url_for('pacientes')
+    )
     paciente_id_resolvido = resolver_id_paciente(paciente_id)
     if not paciente_id_resolvido:
         flash('Paciente não encontrado.', 'warning')
-        return redirect(url_for('pacientes'))
+        return redirect(origem_retorno)
 
     conn = conectar()
     c = conn.cursor()
@@ -1542,7 +1570,7 @@ def editar_paciente(paciente_id):
         if not nome:
             conn.close()
             flash('O nome do paciente é obrigatório.', 'warning')
-            return redirect(url_for('editar_paciente', paciente_id=paciente_id_resolvido))
+            return redirect(url_for('editar_paciente', paciente_id=paciente_id_resolvido, next=origem_retorno))
 
         c.execute(
             'UPDATE paciente SET nome = %s, telefone = %s, sus = %s, oncologico = %s, endereco = %s WHERE id = %s',
@@ -1552,7 +1580,7 @@ def editar_paciente(paciente_id):
         conn.close()
 
         flash('Paciente atualizado com sucesso!', 'success')
-        return redirect(url_for('pacientes'))
+        return redirect(origem_retorno)
 
     c.execute(
         'SELECT id, nome, nascimento, telefone, endereco, sus, oncologico FROM paciente WHERE id = %s',
@@ -1563,9 +1591,9 @@ def editar_paciente(paciente_id):
 
     if not paciente:
         flash('Paciente não encontrado.', 'warning')
-        return redirect(url_for('pacientes'))
+        return redirect(origem_retorno)
 
-    return render_template('editar_paciente.html', paciente=paciente)
+    return render_template('editar_paciente.html', paciente=paciente, origem_retorno=origem_retorno)
 
 @app.route('/paciente/<paciente_id>')
 def historico_paciente(paciente_id):
@@ -1602,7 +1630,14 @@ def historico_paciente(paciente_id):
     )
     historico = c.fetchall()
     conn.close()
-    return render_template('historico_paciente.html', paciente_id=paciente_id_resolvido, paciente=paciente, historico=historico)
+    origem_retorno = normalizar_url_retorno(request.args.get('next'), fallback=url_for('solicitacoes'))
+    return render_template(
+        'historico_paciente.html',
+        paciente_id=paciente_id_resolvido,
+        paciente=paciente,
+        historico=historico,
+        origem_retorno=origem_retorno,
+    )
 
 @app.route('/solicitacao/<int:solicitacao_id>/termo-retirada')
 def termo_retirada_solicitacao(solicitacao_id):
@@ -1654,6 +1689,7 @@ def termo_retirada_solicitacao(solicitacao_id):
 def editar_solicitacao(solicitacao_id):
     conn = conectar()
     c = conn.cursor()
+    origem_retorno = normalizar_url_retorno(request.form.get('next') or request.args.get('next'), fallback=None)
 
     if request.method == 'POST':
         paciente_id = request.form.get('paciente_id', '').strip()
@@ -1736,6 +1772,8 @@ def editar_solicitacao(solicitacao_id):
         paciente_id = resolver_id_paciente(paciente_id) or paciente_id
 
         conn.close()
+        if origem_retorno:
+            return redirect(origem_retorno)
         if paciente_id:
             return redirect(url_for('historico_paciente', paciente_id=paciente_id))
         return redirect(url_for('solicitacoes'))
@@ -1755,10 +1793,18 @@ def editar_solicitacao(solicitacao_id):
         return redirect(url_for('solicitacoes'))
 
     paciente_id = resolver_id_paciente(request.args.get('paciente_id', solicitacao[1])) or solicitacao[1]
-    return render_template('editar_solicitacao.html', solicitacao=solicitacao, paciente_id=paciente_id)
+    if not request.args.get('next'):
+        origem_retorno = url_for('historico_paciente', paciente_id=paciente_id)
+    return render_template(
+        'editar_solicitacao.html',
+        solicitacao=solicitacao,
+        paciente_id=paciente_id,
+        origem_retorno=origem_retorno,
+    )
 
 @app.route('/solicitacoes')
 def solicitacoes():
+    origem_retorno = normalizar_url_retorno(request.args.get('next'), fallback=url_for('index'))
     pagina = request.args.get('pagina', 1, type=int) or 1
     cpf = request.args.get('cpf', '').strip()
     sus = request.args.get('sus', '').strip()
@@ -1770,6 +1816,7 @@ def solicitacoes():
 
     return render_template('solicitacoes.html', solicitacoes=paginacao['registros'],
         cpf=cpf, sus=sus, especialidade=especialidade, prioridade=prioridade, status=status,
+        origem_retorno=origem_retorno,
         total_retorno_agendado=total_retorno_agendado,
         retorno_agendado_registros=retorno_agendado_registros,
         modo_urgencia_em_espera=modo_urgencia_em_espera, mostrar_filtros=False,
@@ -1781,6 +1828,7 @@ def solicitacoes():
 
 @app.route('/pesquisar')
 def pesquisar():
+    origem_retorno = normalizar_url_retorno(request.args.get('next'), fallback=url_for('index'))
     pagina = request.args.get('pagina', 1, type=int) or 1
     cpf = request.args.get('cpf', '').strip()
     sus = request.args.get('sus', '').strip()
@@ -1793,6 +1841,7 @@ def pesquisar():
 
     return render_template('solicitacoes.html', solicitacoes=paginacao['registros'],
         cpf=cpf, sus=sus, especialidade=especialidade, prioridade=prioridade, status=status,
+        origem_retorno=origem_retorno,
         total_retorno_agendado=total_retorno_agendado,
         retorno_agendado_registros=retorno_agendado_registros,
         modo_urgencia_em_espera=modo_urgencia_em_espera, mostrar_filtros=True,
@@ -2179,6 +2228,10 @@ def relatorios():
 
 @app.route('/nova_solicitacao', methods=['GET', 'POST'])
 def nova_solicitacao():
+    origem_retorno = normalizar_url_retorno(
+        request.form.get('next') or request.args.get('next'),
+        fallback=url_for('solicitacoes')
+    )
     form_data = {
         'paciente_id': request.form.get('paciente_id', '').strip(),
         'data_solicitacao': request.form.get('data_solicitacao', '').strip(),
@@ -2206,6 +2259,7 @@ def nova_solicitacao():
             sistemas_insercao=listar_sistemas_insercao(),
             sistemas_insercao_catalogo=listar_sistemas_insercao_catalogo(),
             form_data=form_data,
+            origem_retorno=origem_retorno,
         )
 
     if request.method == 'POST':
@@ -2356,7 +2410,7 @@ def nova_solicitacao():
             flash(f'{solicitacoes_criadas} solicitações criadas com sucesso para o paciente.', 'success')
         else:
             flash('Solicitação criada com sucesso.', 'success')
-        return redirect(url_for('nova_solicitacao'))
+        return redirect(url_for('nova_solicitacao', next=origem_retorno))
     return render_nova_solicitacao_page()
 
 @app.route('/admin/especialidades', methods=['POST'])

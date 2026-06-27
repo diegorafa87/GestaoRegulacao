@@ -12,9 +12,9 @@
         <h2 class="h4 mb-3">Acesso rápido</h2>
         <p class="text-muted mb-4">Escolha uma das opções abaixo para gerenciar pacientes, solicitações e relatórios.</p>
         <div class="d-flex flex-wrap justify-content-center gap-2">
-            <a href="/pacientes" class="btn btn-primary btn-lg">Pacientes</a>
-            <a href="/solicitacoes" class="btn btn-success btn-lg">Solicitações</a>
-            <a href="/relatorios" class="btn btn-outline-primary btn-lg">Relatórios</a>
+            <a href="{{ url_for('pacientes', next=request.full_path) }}" class="btn btn-primary btn-lg">Pacientes</a>
+            <a href="{{ url_for('solicitacoes', next=request.full_path) }}" class="btn btn-success btn-lg">Solicitações</a>
+            <a href="{{ url_for('relatorios', next=request.full_path) }}" class="btn btn-outline-primary btn-lg">Relatórios</a>
         </div>
     </div>
 </div>

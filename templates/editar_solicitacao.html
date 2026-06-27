@@ -9,6 +9,7 @@
 
 <form method="post" class="row g-3">
     <input type="hidden" name="paciente_id" value="{{ paciente_id }}">
+    <input type="hidden" name="next" value="{{ origem_retorno }}">
 
     <div class="col-md-6">
         <label class="form-label">Data de Realização (DD/MM/AAAA):</label>
@@ -44,7 +45,7 @@
 
     <div class="col-12">
         <button type="submit" class="btn btn-success">Salvar</button>
-        <a href="{{ url_for('historico_paciente', paciente_id=paciente_id) }}" class="btn btn-secondary">Cancelar</a>
+        <a href="{{ origem_retorno }}" class="btn btn-secondary">Cancelar</a>
     </div>
 </form>
 

@@ -147,7 +147,8 @@
     function renderizarItens(dados) {
         // Duplica para loop contínuo
         const html = [...dados, ...dados].map(d => {
-            const href = d.paciente_id ? `/paciente/${encodeURIComponent(d.paciente_id)}` : '#';
+            const origemAtual = `${window.location.pathname}${window.location.search}`;
+            const href = d.paciente_id ? `/paciente/${encodeURIComponent(d.paciente_id)}?next=${encodeURIComponent(origemAtual)}` : '#';
             return `
             <a class="alerta-item" href="${href}">
                 <span class="alerta-data">${d.data}</span>

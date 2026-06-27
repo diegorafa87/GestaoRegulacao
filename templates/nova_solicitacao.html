@@ -7,6 +7,7 @@
     <div class="text-muted small">Registro de nova solicitação de consulta ou exame</div>
 </div>
 <form method="post" class="row g-3">
+    <input type="hidden" name="next" value="{{ origem_retorno }}">
     <div class="col-md-4">
         <label class="form-label">Paciente (CPF/SUS):</label>
         <input id="paciente_id" name="paciente_id" class="form-control" required list="pacientes-sugestoes" autocomplete="off" placeholder="Digite CPF, SUS ou nome" value="{{ form_data.paciente_id or '' }}">
@@ -113,7 +114,7 @@
     </div>
     <div class="col-12">
         <button type="submit" class="btn btn-success">Salvar</button>
-        <a href="/solicitacoes" class="btn btn-secondary">Voltar</a>
+        <a href="{{ origem_retorno }}" class="btn btn-secondary">Voltar</a>
     </div>
 </form>
 
