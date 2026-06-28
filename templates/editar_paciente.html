@@ -10,8 +10,12 @@
 <form method="post" class="row g-3">
     <input type="hidden" name="next" value="{{ origem_retorno }}">
     <div class="col-md-4">
-        <label class="form-label">CPF/Cartão SUS (não editável):</label>
+        <label class="form-label">CPF (não editável):</label>
         <input class="form-control" value="{{ paciente[0]|formatar_documento }}" readonly>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Cartão SUS:</label>
+        <input name="sus" id="sus" class="form-control" value="{{ paciente[5] or '' }}" maxlength="15" pattern="\d{0,15}" inputmode="numeric" placeholder="Somente números (até 15)">
     </div>
     <div class="col-md-4">
         <label class="form-label">Nascimento:</label>
@@ -47,6 +51,13 @@
 <script>
 (() => {
     const campoTelefone = document.getElementById('telefone');
+    const campoSus = document.getElementById('sus');
+
+    if (campoSus) {
+        campoSus.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/\D/g, '').slice(0, 15);
+        });
+    }
 
     if (campoTelefone) {
         campoTelefone.addEventListener('input', (e) => {
