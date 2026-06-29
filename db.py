@@ -94,9 +94,11 @@ def criar_tabelas():
         telefone TEXT,
         endereco TEXT,
         sus TEXT,
+        data_obito TEXT,
         oncologico BOOLEAN DEFAULT FALSE
     )''')
     c.execute('ALTER TABLE paciente ADD COLUMN IF NOT EXISTS sus TEXT')
+    c.execute('ALTER TABLE paciente ADD COLUMN IF NOT EXISTS data_obito TEXT')
     c.execute('ALTER TABLE paciente ADD COLUMN IF NOT EXISTS oncologico BOOLEAN DEFAULT FALSE')
     c.execute('''CREATE TABLE IF NOT EXISTS solicitacao (
         id SERIAL PRIMARY KEY,

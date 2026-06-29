@@ -27,7 +27,7 @@
             <td class="text-center">{{ {'SUS': 'SUS', 'CONVENIO': 'RECURSOS PROPRIOS'}.get(s[10], s[10] if s[10] else '-') }}</td>
             <td class="text-center">{{ s[11] if s[11] and s[11] > 1 else '' }}</td>
             {% set conclusao = s[9] if s[9] else '' %}
-            {% set conclusao_label = {'PRESENTE': 'Presente', 'AUSENTE': 'Ausente', 'CANCELADO': 'Cancelado', 'RETIRADO': 'Retirado', 'DUPLICADA': 'Duplicada'}.get(conclusao, conclusao) %}
+            {% set conclusao_label = {'PRESENTE': 'Presente', 'AUSENTE': 'Ausente', 'CANCELADO': 'Cancelado', 'RETIRADO': 'Retirado', 'DUPLICADA': 'Duplicada', 'OBITO': 'Óbito'}.get(conclusao, conclusao) %}
             <td class="text-center">
                 {% if conclusao == 'PRESENTE' %}
                     <span class="badge text-bg-success">{{ conclusao_label }}</span>
@@ -39,6 +39,8 @@
                     <span class="badge" style="background-color: #fd7e14;">{{ conclusao_label }}</span>
                 {% elif conclusao == 'DUPLICADA' %}
                     <span class="badge bg-secondary text-white">{{ conclusao_label }}</span>
+                {% elif conclusao == 'OBITO' %}
+                    <span class="badge bg-dark text-white">{{ conclusao_label }}</span>
                 {% else %}
                     -
                 {% endif %}
@@ -49,12 +51,16 @@
                 {% if conclusao == 'RETIRADO' %}
                     <a href="{{ url_for('termo_retirada_solicitacao', solicitacao_id=s[0]) }}" class="btn btn-sm btn-outline-danger mb-1">Termo de Retirada</a>
                 {% endif %}
-                {# Só exigir financiamento quando a conclusão NÃO for CANCELADO ou RETIRADO #}
-                {% set precisa_financiamento = not (conclusao in ['CANCELADO', 'RETIRADO']) %}
-                {% if not s[7] or not unidade|trim or not conclusao|trim or (precisa_financiamento and (not financiamento or financiamento|trim == '-')) %}
-                    <a href="{{ url_for('editar_solicitacao', solicitacao_id=s[0], paciente_id=paciente_id, next=request.full_path) }}" class="btn btn-sm btn-warning">Editar</a>
-                {% else %}
+                {% if conclusao == 'OBITO' %}
                     -
+                {% else %}
+                    {# Só exigir financiamento quando a conclusão NÃO for CANCELADO ou RETIRADO #}
+                    {% set precisa_financiamento = not (conclusao in ['CANCELADO', 'RETIRADO']) %}
+                    {% if not s[7] or not unidade|trim or not conclusao|trim or (precisa_financiamento and (not financiamento or financiamento|trim == '-')) %}
+                        <a href="{{ url_for('editar_solicitacao', solicitacao_id=s[0], paciente_id=paciente_id, next=request.full_path) }}" class="btn btn-sm btn-warning">Editar</a>
+                    {% else %}
+                        -
+                    {% endif %}
                 {% endif %}
             </td>
         </tr>

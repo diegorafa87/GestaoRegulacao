@@ -40,6 +40,7 @@
             <option value="CANCELADO" {% if solicitacao[10] == 'CANCELADO' %}selected{% endif %}>Cancelado</option>
             <option value="RETIRADO" {% if solicitacao[10] == 'RETIRADO' %}selected{% endif %}>Retirado</option>
             <option value="DUPLICADA" {% if solicitacao[10] == 'DUPLICADA' %}selected{% endif %}>Duplicada</option>
+            <option value="OBITO" {% if solicitacao[10] == 'OBITO' %}selected{% endif %}>Óbito</option>
         </select>
     </div>
 
@@ -103,7 +104,7 @@
         });
     }
 
-    // Lógica: quando a conclusão for CANCELADO ou RETIRADO, não exigir/mostrar financiamento
+    // Lógica: quando a conclusão for CANCELADO, RETIRADO ou OBITO, não exigir/mostrar financiamento
     const conclSelect = document.getElementById('conclusao_select');
     const financWrapper = document.getElementById('financiamento_wrapper');
     const financSelect = document.getElementById('financiamento_select');
@@ -111,7 +112,7 @@
     function atualizarFinanciamento() {
         if (!conclSelect || !financSelect || !financWrapper) return;
         const val = (conclSelect.value || '').toUpperCase();
-        if (val === 'CANCELADO' || val === 'RETIRADO') {
+        if (val === 'CANCELADO' || val === 'RETIRADO' || val === 'OBITO') {
             financWrapper.style.display = 'none';
             financSelect.disabled = true;
             financSelect.value = '';

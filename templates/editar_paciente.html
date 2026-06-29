@@ -22,6 +22,11 @@
         <input class="form-control" value="{{ paciente[2]|formatar_data }}" readonly>
     </div>
     <div class="col-md-4">
+        <label class="form-label">Data de Óbito:</label>
+        <input name="data_obito" id="data_obito" class="form-control" value="{{ paciente[6]|formatar_data if paciente[6] else '' }}" maxlength="10" placeholder="DD/MM/AAAA">
+        <div class="form-text">Ao preencher, as solicitações em espera deste paciente serão encerradas automaticamente como óbito.</div>
+    </div>
+    <div class="col-md-4">
         <label class="form-label">Telefone:</label>
         <input name="telefone" id="telefone" class="form-control" value="{{ paciente[3] or '' }}" maxlength="15" placeholder="(00) 00000-0000">
     </div>
@@ -50,8 +55,34 @@
 
 <script>
 (() => {
+    const campoObito = document.getElementById('data_obito');
     const campoTelefone = document.getElementById('telefone');
     const campoSus = document.getElementById('sus');
+
+    if (campoObito) {
+        campoObito.addEventListener('input', (e) => {
+            let valor = e.target.value.replace(/\D/g, '');
+            if (valor.length > 8) {
+                valor = valor.slice(0, 8);
+            }
+
+            let formatado = '';
+            for (let i = 0; i < valor.length; i++) {
+                if (i === 2 || i === 4) {
+                    formatado += '/';
+                }
+                formatado += valor[i];
+            }
+
+            e.target.value = formatado;
+        });
+
+        campoObito.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && e.target.value.endsWith('/')) {
+                e.target.value = e.target.value.slice(0, -1);
+            }
+        });
+    }
 
     if (campoSus) {
         campoSus.addEventListener('input', (e) => {

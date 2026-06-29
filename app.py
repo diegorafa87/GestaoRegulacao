@@ -791,7 +791,7 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                   AND translate(UPPER(COALESCE(sr.especialidade, '')),
                         'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
                         'AAAAAEEEEIIIIOOOOOUUUUC') LIKE '%RADIOGRAFIA%'
-                  AND UPPER(COALESCE(sr.conclusao, '')) <> 'CANCELADO'
+                  AND UPPER(COALESCE(sr.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
             ) AS tipos_radiografia
         '''
 
@@ -804,7 +804,7 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                     WHERE su.paciente_id = p.id
                       AND su.especialidade LIKE %s
                       AND UPPER(su.status) LIKE '%%URGENTE%%'
-                      AND UPPER(COALESCE(su.conclusao, '')) <> 'CANCELADO'
+                      AND UPPER(COALESCE(su.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
                 ),
                 MAX(s.data_entrada)
             ) AS ultima_data_entrada
@@ -821,7 +821,7 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                 SELECT s2.status
                 FROM solicitacao s2
                 WHERE s2.paciente_id = p.id
-                  AND UPPER(COALESCE(s2.conclusao, '')) <> 'CANCELADO'
+                  AND UPPER(COALESCE(s2.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
                 ORDER BY s2.data_entrada DESC, s2.status ASC
                 LIMIT 1
             ) AS status_atual,
@@ -831,11 +831,11 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                 WHERE sr.paciente_id = p.id
                   AND UPPER(COALESCE(sr.status, '')) = 'RETORNO'
                   AND TRIM(COALESCE(sr.data_retorno, '')) <> ''
-                  AND UPPER(COALESCE(sr.conclusao, '')) <> 'CANCELADO'
+                  AND UPPER(COALESCE(sr.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
             ) AS retorno_agendado_count,
             {tipos_radiografia_expr}
         FROM paciente p
-        LEFT JOIN solicitacao s ON s.paciente_id = p.id AND UPPER(COALESCE(s.conclusao, '')) <> 'CANCELADO'
+        LEFT JOIN solicitacao s ON s.paciente_id = p.id AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         WHERE 1=1
     '''
 
@@ -849,14 +849,14 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
     if filtros_id:
         query += ' AND (' + ' OR '.join(filtros_id) + ')'
     if especialidade:
-        query += " AND (p.nome ILIKE %s OR EXISTS (SELECT 1 FROM solicitacao sx WHERE sx.paciente_id = p.id AND sx.especialidade LIKE %s AND UPPER(COALESCE(sx.conclusao, '')) <> 'CANCELADO'))"
+        query += " AND (p.nome ILIKE %s OR EXISTS (SELECT 1 FROM solicitacao sx WHERE sx.paciente_id = p.id AND sx.especialidade LIKE %s AND UPPER(COALESCE(sx.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')))"
         params.append(f"%{especialidade}%")
         params.append(f"%{especialidade}%")
     if prioridade:
-        query += " AND EXISTS (SELECT 1 FROM solicitacao sx WHERE sx.paciente_id = p.id AND sx.prioridade LIKE %s AND UPPER(COALESCE(sx.conclusao, '')) <> 'CANCELADO')"
+        query += " AND EXISTS (SELECT 1 FROM solicitacao sx WHERE sx.paciente_id = p.id AND sx.prioridade LIKE %s AND UPPER(COALESCE(sx.conclusao, '')) NOT IN ('CANCELADO', 'OBITO'))"
         params.append(f"%{prioridade}%")
     if status:
-        query += " AND EXISTS (SELECT 1 FROM solicitacao sx WHERE sx.paciente_id = p.id AND sx.status LIKE %s AND UPPER(COALESCE(sx.conclusao, '')) <> 'CANCELADO')"
+        query += " AND EXISTS (SELECT 1 FROM solicitacao sx WHERE sx.paciente_id = p.id AND sx.status LIKE %s AND UPPER(COALESCE(sx.conclusao, '')) NOT IN ('CANCELADO', 'OBITO'))"
         params.append(f"%{status}%")
     query += ' GROUP BY p.id, p.nome ORDER BY p.nome ASC'
 
@@ -1564,6 +1564,7 @@ def editar_paciente(paciente_id):
         nome = request.form.get('nome', '').strip().upper()
         telefone = request.form.get('telefone', '').strip()
         sus = normalizar_documento(request.form.get('sus', '').strip())
+        data_obito = normalizar_data_para_iso(request.form.get('data_obito'))
         oncologico = request.form.get('oncologico') == 'on'
         endereco = request.form.get('endereco', '').strip().upper()
 
@@ -1573,9 +1574,22 @@ def editar_paciente(paciente_id):
             return redirect(url_for('editar_paciente', paciente_id=paciente_id_resolvido, next=origem_retorno))
 
         c.execute(
-            'UPDATE paciente SET nome = %s, telefone = %s, sus = %s, oncologico = %s, endereco = %s WHERE id = %s',
-            (nome, telefone, sus if sus else None, oncologico, endereco, paciente_id_resolvido)
+            'UPDATE paciente SET nome = %s, telefone = %s, sus = %s, data_obito = %s, oncologico = %s, endereco = %s WHERE id = %s',
+            (nome, telefone, sus if sus else None, data_obito, oncologico, endereco, paciente_id_resolvido)
         )
+
+        if data_obito:
+            c.execute(
+                '''
+                UPDATE solicitacao
+                SET conclusao = 'OBITO'
+                WHERE paciente_id = %s
+                                    AND TRIM(COALESCE(data_realizacao, '')) = ''
+                  AND TRIM(COALESCE(conclusao, '')) = ''
+                ''',
+                (paciente_id_resolvido,)
+            )
+
         conn.commit()
         conn.close()
 
@@ -1583,7 +1597,7 @@ def editar_paciente(paciente_id):
         return redirect(origem_retorno)
 
     c.execute(
-        'SELECT id, nome, nascimento, telefone, endereco, sus, oncologico FROM paciente WHERE id = %s',
+        'SELECT id, nome, nascimento, telefone, endereco, sus, data_obito, oncologico FROM paciente WHERE id = %s',
         (paciente_id_resolvido,)
     )
     paciente = c.fetchone()
@@ -1620,7 +1634,7 @@ def historico_paciente(paciente_id):
             unidade_realizadora,
             conclusao,
             financiamento,
-            COUNT(*) FILTER (WHERE UPPER(COALESCE(conclusao, '')) <> 'CANCELADO') AS quantidade_solicitacoes
+            COUNT(*) FILTER (WHERE UPPER(COALESCE(conclusao, '')) NOT IN ('CANCELADO', 'OBITO')) AS quantidade_solicitacoes
         FROM solicitacao
         WHERE paciente_id = %s
         GROUP BY data_solicitacao, data_entrada, tipo, especialidade, prioridade, status, data_realizacao, unidade_realizadora, conclusao, financiamento
@@ -1691,6 +1705,20 @@ def editar_solicitacao(solicitacao_id):
     c = conn.cursor()
     origem_retorno = normalizar_url_retorno(request.form.get('next') or request.args.get('next'), fallback=None)
 
+    c.execute(
+        '''
+        SELECT paciente_id, conclusao
+        FROM solicitacao
+        WHERE id = %s
+        ''',
+        (solicitacao_id,)
+    )
+    solicitacao_atual = c.fetchone()
+    if solicitacao_atual and (solicitacao_atual[1] or '').upper() == 'OBITO':
+        conn.close()
+        flash('Solicitações com conclusão de óbito não podem ser editadas.', 'warning')
+        return redirect(url_for('historico_paciente', paciente_id=solicitacao_atual[0]))
+
     if request.method == 'POST':
         paciente_id = request.form.get('paciente_id', '').strip()
         data_realizacao = normalizar_data_para_iso(request.form.get('data_realizacao'))
@@ -1698,13 +1726,13 @@ def editar_solicitacao(solicitacao_id):
         financiamento = request.form.get('financiamento', '').strip().upper()
         conclusao = request.form.get('conclusao', '').strip().upper()
 
-        opcoes_conclusao = {'PRESENTE', 'AUSENTE', 'CANCELADO', 'RETIRADO', 'DUPLICADA'}
+        opcoes_conclusao = {'PRESENTE', 'AUSENTE', 'CANCELADO', 'RETIRADO', 'DUPLICADA', 'OBITO'}
         conclusao = conclusao if conclusao in opcoes_conclusao else None
         opcoes_financiamento = {'SUS', 'CONVENIO'}
         financiamento = financiamento if financiamento in opcoes_financiamento else None
 
-        # Se a conclusão for CANCELADO ou RETIRADO, limpar o financiamento (não deve ser exigido)
-        if conclusao in ('CANCELADO', 'RETIRADO'):
+        # Se a conclusão for CANCELADO, RETIRADO ou OBITO, limpar o financiamento (não deve ser exigido)
+        if conclusao in ('CANCELADO', 'RETIRADO', 'OBITO'):
             financiamento = None
 
         # Buscar dados da solicitação original
@@ -1791,6 +1819,10 @@ def editar_solicitacao(solicitacao_id):
 
     if not solicitacao:
         return redirect(url_for('solicitacoes'))
+
+    if (solicitacao[10] or '').upper() == 'OBITO':
+        flash('Solicitações com conclusão de óbito não podem ser editadas.', 'warning')
+        return redirect(url_for('historico_paciente', paciente_id=solicitacao[1]))
 
     paciente_id = resolver_id_paciente(request.args.get('paciente_id', solicitacao[1])) or solicitacao[1]
     if not request.args.get('next'):
@@ -1901,7 +1933,7 @@ def relatorios():
                 COUNT(*) AS total_registros
             FROM solicitacao s
             WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
-              AND UPPER(COALESCE(s.conclusao, '')) <> 'CANCELADO'
+              AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
         params_resumo = []
 
@@ -1953,7 +1985,7 @@ def relatorios():
             FROM paciente p
             INNER JOIN solicitacao s ON s.paciente_id = p.id
             WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
-              AND UPPER(COALESCE(s.conclusao, '')) <> 'CANCELADO'
+              AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
         params_pacientes_top = []
 
@@ -1996,7 +2028,7 @@ def relatorios():
                 COUNT(*) AS total_registros
             FROM solicitacao s
             WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
-              AND UPPER(COALESCE(s.conclusao, '')) <> 'CANCELADO'
+              AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
         params_espera = []
 
@@ -2042,7 +2074,7 @@ def relatorios():
                 AVG(DATE(s.data_realizacao) - DATE(s.data_entrada))::numeric(10,1) AS tempo_medio_dias
             FROM solicitacao s
             WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
-              AND UPPER(COALESCE(s.conclusao, '')) <> 'CANCELADO'
+              AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
         params_tempo = []
 
@@ -2161,7 +2193,7 @@ def relatorios():
             FROM paciente p
             INNER JOIN solicitacao s ON s.paciente_id = p.id
             WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
-              AND UPPER(COALESCE(s.conclusao, '')) <> 'CANCELADO'
+              AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
               AND translate(UPPER(COALESCE(s.especialidade, '')),
                     'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
                     'AAAAAEEEEIIIIOOOOOUUUUC') LIKE %s
