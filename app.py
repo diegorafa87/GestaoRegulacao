@@ -562,6 +562,178 @@ def gerar_pdf_relatorio_resumo(resumo, tipo, especialidade, data_inicio, data_fi
 
     return pdf.getvalue()
 
+
+def gerar_pdf_relatorio_paciente(paciente_relatorio, relatorio_paciente):
+    largura_pagina = 842
+    altura_pagina = 595
+    margem_x = 42
+    margem_y = 36
+    largura_util = largura_pagina - margem_x * 2
+    rodape_y = margem_y
+    y_atual = altura_pagina - 110
+    data_geracao = datetime.now().strftime('%d/%m/%Y %H:%M')
+
+    paciente_nascimento = None
+    paciente_cpf = ''
+    paciente_sus = ''
+    if paciente_relatorio:
+        paciente_nascimento = paciente_relatorio[2] if len(paciente_relatorio) > 2 else None
+        paciente_sus = paciente_relatorio[3] if len(paciente_relatorio) > 3 else ''
+        if paciente_relatorio[0] and eh_cpf(paciente_relatorio[0]):
+            paciente_cpf = formatar_identificador_paciente(paciente_relatorio[0])
+
+    cor_primaria = (0.121, 0.466, 0.705)
+    cor_primaria_escura = (0.082, 0.247, 0.396)
+    cor_texto = (0.149, 0.164, 0.196)
+    cor_muted = (0.420, 0.451, 0.482)
+    cor_borda = (0.820, 0.843, 0.878)
+    cor_fundo_box = (0.953, 0.965, 0.980)
+    cor_linha_alternada = (0.976, 0.980, 0.988)
+    cor_branca = (1, 1, 1)
+
+    def adicionar(comando):
+        paginas[-1].append(comando)
+
+    def texto(x, y, conteudo, fonte='F1', tamanho=9, cor=cor_texto):
+        adicionar(comando_texto_pdf(x, y, str(conteudo) if conteudo is not None else '', fonte=fonte, tamanho=tamanho, cor=cor))
+
+    def nova_pagina(primeira=False):
+        paginas.append([])
+        topo_titulo = altura_pagina - 48
+        adicionar(comando_retangulo_pdf(margem_x, topo_titulo - 56, largura_util, 56, cor_fundo=cor_primaria, cor_borda=cor_primaria))
+        adicionar(comando_texto_centralizado_pdf(margem_x + largura_util / 2, topo_titulo - 20, 'Secretaria Municipal de Saude de Fernando Pedroza', largura_util - 40, fonte='F2', tamanho=11, cor=(0.910, 0.949, 0.984)))
+        adicionar(comando_texto_centralizado_pdf(margem_x + largura_util / 2, topo_titulo - 38, 'Relatorio do Paciente', largura_util - 40, fonte='F2', tamanho=16, cor=(0.910, 0.949, 0.984)))
+        if primeira:
+            altura_cabecalho = 98
+            adicionar(comando_retangulo_pdf(margem_x, topo_titulo - 170, largura_util, altura_cabecalho, cor_fundo=cor_fundo_box, cor_borda=cor_borda))
+            texto(margem_x + 12, topo_titulo - 66, f'Gerado em: {data_geracao}', tamanho=9, cor=cor_muted)
+            if paciente_relatorio:
+                col_width = (largura_util - 24) / 4
+                texto(margem_x + 12, topo_titulo - 86, f'Nome: {paciente_relatorio[1]}', tamanho=9, cor=cor_texto)
+                texto(margem_x + 12 + col_width, topo_titulo - 86, f'Nascimento: {formatar_data_br(paciente_nascimento) if paciente_nascimento else "-"}', tamanho=9, cor=cor_texto)
+                texto(margem_x + 12 + col_width * 2, topo_titulo - 86, f'CPF: {paciente_cpf if paciente_cpf else "-"}', tamanho=9, cor=cor_texto)
+                texto(margem_x + 12 + col_width * 3, topo_titulo - 86, f'Cartao SUS: {paciente_sus if paciente_sus else "-"}', tamanho=9, cor=cor_texto)
+            else:
+                texto(margem_x + 12, topo_titulo - 86, 'Paciente nao encontrado', tamanho=10, cor=cor_texto)
+        adicionar(comando_retangulo_pdf(margem_x, altura_pagina - 170, largura_util, 24, cor_fundo=cor_primaria_escura, cor_borda=cor_primaria_escura))
+        x = margem_x + 8
+        col_widths = [40, 60, 50, 40, 190, 50, 50, 120, 120]
+        headers = ['ID', 'Solicitacao', 'Entrada', 'Tipo', 'Especialidade', 'Status', 'Realizacao', 'Unidade', 'Financiamento']
+        for idx, header in enumerate(headers):
+            texto(x, altura_pagina - 156, header, fonte='F2', tamanho=8, cor=cor_branca)
+            x += col_widths[idx]
+        nonlocal y_atual
+        y_atual = altura_pagina - 182
+
+    def adicionar_linha_solicitacao(solicitacao, indice):
+        nonlocal y_atual
+        financiamento_exibicao = solicitacao[10] or ''
+        if financiamento_exibicao.upper() == 'CONVENIO':
+            financiamento_exibicao = 'RECURSOS PROPRIOS'
+
+        valores = [
+            str(solicitacao[0]),
+            formatar_data_br(solicitacao[1]) if solicitacao[1] else '',
+            formatar_data_br(solicitacao[2]) if solicitacao[2] else '',
+            solicitacao[3] or '',
+            solicitacao[4] or '',
+            solicitacao[6] or '',
+            formatar_data_br(solicitacao[7]) if solicitacao[7] else '',
+            solicitacao[8] or '',
+            financiamento_exibicao
+        ]
+        col_widths = [40, 60, 50, 40, 190, 50, 50, 120, 120]
+        limites = [8, 12, 10, 10, 32, 10, 10, 18, 18]
+        linhas_por_coluna = []
+
+        for idx, valor in enumerate(valores):
+            limite = limites[idx] if idx < len(limites) else 15
+            linhas_por_coluna.append(quebrar_linha_pdf(valor, limite=limite))
+
+        altura_linha = 14 * max(len(linhas) for linhas in linhas_por_coluna)
+        if altura_linha < 18:
+            altura_linha = 18
+
+        if y_atual - altura_linha < rodape_y + 40:
+            nova_pagina()
+
+        cor_fundo = cor_linha_alternada if indice % 2 == 0 else cor_branca
+        adicionar(comando_retangulo_pdf(margem_x, y_atual - altura_linha, largura_util, altura_linha, cor_fundo=cor_fundo, cor_borda=cor_borda))
+
+        x = margem_x + 8
+        for idx, linhas in enumerate(linhas_por_coluna):
+            for linha_idx, linha_texto in enumerate(linhas):
+                texto(x, y_atual - 12 - (linha_idx * 14), linha_texto, tamanho=8)
+            x += col_widths[idx]
+
+        y_atual -= altura_linha + 2
+
+    paginas = []
+    nova_pagina(primeira=True)
+
+    if relatorio_paciente:
+        for idx, solicitacao in enumerate(relatorio_paciente):
+            adicionar_linha_solicitacao(solicitacao, idx)
+    else:
+        texto(margem_x + 12, y_atual - 10, 'Nenhuma solicitacao encontrada para este paciente.', tamanho=11, cor=cor_muted)
+
+    total_paginas = len(paginas)
+    for pagina_idx, comandos in enumerate(paginas, start=1):
+        comandos.append(comando_linha_pdf(margem_x, rodape_y + 12, margem_x + largura_util, rodape_y + 12, cor=cor_borda, espessura=1))
+        comandos.append(comando_texto_pdf(margem_x, rodape_y - 2, f'Sistema de Regulacao - emitido em {data_geracao}', tamanho=9, cor=cor_muted))
+        comandos.append(comando_texto_pdf(margem_x + largura_util - 90, rodape_y - 2, f'Pagina {pagina_idx}/{total_paginas}', fonte='F2', tamanho=9, cor=cor_muted))
+
+    objetos = {
+        1: '<< /Type /Catalog /Pages 2 0 R >>',
+        3: '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+        4: '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
+        5: '<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>'
+    }
+    referencias_paginas = []
+    numero_objeto = 6
+
+    for comandos in paginas:
+        conteudo = '\n'.join(comandos)
+        conteudo_bytes = conteudo.encode('latin-1', errors='replace')
+        objeto_conteudo = numero_objeto
+        objeto_pagina = numero_objeto + 1
+        numero_objeto += 2
+        objetos[objeto_conteudo] = f'<< /Length {len(conteudo_bytes)} >>\nstream\n{conteudo}\nendstream'
+        objetos[objeto_pagina] = (
+            '<< /Type /Page /Parent 2 0 R '
+            f'/MediaBox [0 0 {largura_pagina} {altura_pagina}] '
+            '/Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> '
+            f'/Contents {objeto_conteudo} 0 R >>'
+        )
+        referencias_paginas.append(f'{objeto_pagina} 0 R')
+
+    objetos[2] = f'<< /Type /Pages /Kids [{' '.join(referencias_paginas)}] /Count {len(referencias_paginas)} >>'
+
+    pdf = io.BytesIO()
+    pdf.write(b'%PDF-1.4\n%\xe2\xe3\xcf\xd3\n')
+    offsets = {}
+    for numero in sorted(objetos):
+        offsets[numero] = pdf.tell()
+        pdf.write(f'{numero} 0 obj\n'.encode('latin-1'))
+        pdf.write(objetos[numero].encode('latin-1'))
+        pdf.write(b'\nendobj\n')
+
+    xref_inicio = pdf.tell()
+    total_objetos = max(objetos)
+    pdf.write(f'xref\n0 {total_objetos + 1}\n'.encode('latin-1'))
+    pdf.write(b'0000000000 65535 f \n')
+    for numero in range(1, total_objetos + 1):
+        offset = offsets.get(numero, 0)
+        pdf.write(f'{offset:010} 00000 n \n'.encode('latin-1'))
+    pdf.write(
+        (
+            f'trailer\n<< /Size {total_objetos + 1} /Root 1 0 R >>\n'
+            f'startxref\n{xref_inicio}\n%%EOF'
+        ).encode('latin-1')
+    )
+    return pdf.getvalue()
+
+
 def gerar_pdf_termo_retirada_solicitacao(paciente_nome, paciente_id, especialidade, data_entrada, data_retirada, solicitacao_id=None):
     largura_pagina = 595
     altura_pagina = 842
@@ -1887,16 +2059,20 @@ def pesquisar():
 def relatorios():
     tipo = request.args.get('tipo', '').strip().upper()
     especialidade = request.args.get('especialidade', '').strip()
+    paciente = request.args.get('paciente', '').strip()
     situacao = request.args.get('situacao', 'REALIZADOS').strip().upper()
     data_inicio_raw = request.args.get('data_inicio', '').strip()
     data_fim_raw = request.args.get('data_fim', '').strip()
     formato = request.args.get('formato', 'html').strip().lower()
     view = request.args.get('view', 'resumo').strip().lower()
+    acao = request.args.get('acao', '').strip().lower()
     ordenacao = request.args.get('ordenacao', 'nome_asc').strip().lower()
 
     if situacao not in ('REALIZADOS', 'EM_ESPERA'):
         situacao = 'REALIZADOS'
-    if view not in ('resumo', 'pacientes_mais_solicitacoes', 'especialidades_maior_espera', 'ia'):
+    if acao == 'paciente':
+        view = 'paciente'
+    if view not in ('resumo', 'pacientes_mais_solicitacoes', 'especialidades_maior_espera', 'ia', 'paciente'):
         view = 'resumo'
     if ordenacao not in ('nome_asc', 'nome_desc', 'data_asc', 'data_desc'):
         ordenacao = 'nome_asc'
@@ -1917,12 +2093,14 @@ def relatorios():
             resposta_ia = ia_utils.processar_pergunta_ia(pergunta_ia)
 
     filtros_aplicados = bool(
-        tipo or especialidade or data_inicio_raw or data_fim_raw or situacao == 'EM_ESPERA' or financiamento or tempo_espera or view != 'resumo' or pergunta_ia
+        tipo or especialidade or paciente or data_inicio_raw or data_fim_raw or situacao == 'EM_ESPERA' or financiamento or tempo_espera or view != 'resumo' or pergunta_ia
     )
 
     resumo = []
     pacientes_mais_solicitacoes = []
     especialidades_maior_espera = []
+    relatorio_paciente = []
+    paciente_relatorio = None
     tempo_medio_espera = []
     total_registros = 0
 
@@ -2078,6 +2256,48 @@ def relatorios():
         c.execute(query_espera, params_espera)
         especialidades_maior_espera = c.fetchall()
 
+    if view == 'paciente':
+        relatorio_paciente = []
+        paciente_relatorio = None
+        if paciente:
+            paciente_id_normalizado = normalizar_documento(paciente)
+            params_paciente = []
+            query_paciente = '''
+                SELECT id, nome, nascimento, sus
+                FROM paciente
+                WHERE regexp_replace(COALESCE(id, ''), '\\D', '', 'g') LIKE %s
+                   OR UPPER(nome) LIKE %s
+                LIMIT 1
+            '''
+            params_paciente.append(f"%{paciente_id_normalizado}%")
+            params_paciente.append(f"%{paciente.upper()}%")
+            c.execute(query_paciente, params_paciente)
+            paciente_relatorio = c.fetchone()
+
+            if paciente_relatorio:
+                c.execute(
+                    '''
+                    SELECT
+                        id,
+                        data_solicitacao,
+                        data_entrada,
+                        tipo,
+                        especialidade,
+                        prioridade,
+                        status,
+                        data_realizacao,
+                        unidade_realizadora,
+                        conclusao,
+                        financiamento
+                    FROM solicitacao
+                    WHERE paciente_id = %s
+                      AND UPPER(COALESCE(conclusao, '')) <> 'CANCELADO'
+                    ORDER BY data_solicitacao ASC NULLS LAST, data_entrada ASC NULLS LAST
+                    ''',
+                    (paciente_relatorio[0],)
+                )
+                relatorio_paciente = c.fetchall()
+
     if tempo_espera and view == 'resumo':
         query_tempo = '''
             SELECT
@@ -2157,6 +2377,61 @@ def relatorios():
             }
         )
 
+    if formato == 'csv' and view == 'paciente':
+        output = io.StringIO()
+        writer = csv.writer(output, delimiter=';')
+        writer.writerow([
+            'ID Solicitação',
+            'Data Solicitação',
+            'Data Entrada',
+            'Tipo',
+            'Especialidade',
+            'Prioridade',
+            'Status',
+            'Data Realização',
+            'Unidade Realizadora',
+            'Financiamento',
+            'Conclusão'
+        ])
+
+        for s in relatorio_paciente:
+            writer.writerow([
+                s[0],
+                s[1],
+                s[2],
+                s[3],
+                s[4],
+                s[5],
+                s[6],
+                s[7],
+                s[8],
+                s[10],
+                s[9]
+            ])
+
+        csv_content = output.getvalue()
+        output.close()
+
+        nome_arquivo = f"relatorio_paciente_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        return Response(
+            '\ufeff' + csv_content,
+            mimetype='text/csv; charset=utf-8',
+            headers={
+                'Content-Disposition': f'attachment; filename={nome_arquivo}'
+            }
+        )
+
+    if formato == 'pdf' and view == 'paciente':
+        pdf_content = gerar_pdf_relatorio_paciente(paciente_relatorio, relatorio_paciente)
+        nome_arquivo = f"relatorio_paciente_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        return Response(
+            pdf_content,
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': f'attachment; filename={nome_arquivo}'
+            }
+        )
+
     if formato == 'pdf' and view == 'resumo':
         total_registros = sum(item[1] for item in resumo) if resumo else 0
         pdf_content = gerar_pdf_relatorio_resumo(
@@ -2185,6 +2460,8 @@ def relatorios():
         total_registros = sum(item[2] for item in especialidades_maior_espera) if especialidades_maior_espera else 0
     elif view == 'ia':
         total_registros = ia_contexto.get('total_solicitacoes', 0) if ia_contexto else 0
+    elif view == 'paciente':
+        total_registros = len(relatorio_paciente) if 'relatorio_paciente' in locals() else 0
 
     pacientes_especialidade = []
     mostrar_tipos_radiografia_relatorio = 'RADIOGRAFIA' in normalizar_texto_busca(especialidade)
@@ -2269,6 +2546,9 @@ def relatorios():
         ia_contexto=ia_contexto,
         filtros_aplicados=filtros_aplicados,
         ordenacao=ordenacao,
+        paciente=paciente,
+        relatorio_paciente=relatorio_paciente,
+        paciente_relatorio=paciente_relatorio,
         resumo=resumo,
         total_registros=total_registros,
         pacientes_mais_solicitacoes=pacientes_mais_solicitacoes,
