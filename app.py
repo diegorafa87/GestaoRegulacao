@@ -1892,11 +1892,14 @@ def relatorios():
     data_fim_raw = request.args.get('data_fim', '').strip()
     formato = request.args.get('formato', 'html').strip().lower()
     view = request.args.get('view', 'resumo').strip().lower()
+    ordenacao = request.args.get('ordenacao', 'nome_asc').strip().lower()
 
     if situacao not in ('REALIZADOS', 'EM_ESPERA'):
         situacao = 'REALIZADOS'
     if view not in ('resumo', 'pacientes_mais_solicitacoes', 'especialidades_maior_espera', 'ia'):
         view = 'resumo'
+    if ordenacao not in ('nome_asc', 'nome_desc', 'data_asc', 'data_desc'):
+        ordenacao = 'nome_asc'
 
     data_inicio = normalizar_data_para_iso(data_inicio_raw) if data_inicio_raw else ''
     data_fim = normalizar_data_para_iso(data_fim_raw) if data_fim_raw else ''
@@ -1981,7 +1984,8 @@ def relatorios():
             SELECT
                 p.id,
                 p.nome,
-                COUNT(s.id) AS total_solicitacoes
+                COUNT(s.id) AS total_solicitacoes,
+                MIN(s.data_solicitacao) AS data_solicitacao
             FROM paciente p
             INNER JOIN solicitacao s ON s.paciente_id = p.id
             WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
@@ -2016,7 +2020,14 @@ def relatorios():
                 query_pacientes_top += ' AND s.data_realizacao <= %s'
             params_pacientes_top.append(data_fim)
 
-        query_pacientes_top += ' GROUP BY p.id, p.nome ORDER BY total_solicitacoes DESC, p.nome LIMIT 50'
+        if ordenacao == 'nome_asc':
+            query_pacientes_top += ' GROUP BY p.id, p.nome ORDER BY p.nome ASC LIMIT 50'
+        elif ordenacao == 'nome_desc':
+            query_pacientes_top += ' GROUP BY p.id, p.nome ORDER BY p.nome DESC LIMIT 50'
+        elif ordenacao == 'data_asc':
+            query_pacientes_top += ' GROUP BY p.id, p.nome ORDER BY MIN(s.data_solicitacao) ASC, p.nome ASC LIMIT 50'
+        else:
+            query_pacientes_top += ' GROUP BY p.id, p.nome ORDER BY MIN(s.data_solicitacao) DESC, p.nome ASC LIMIT 50'
         c.execute(query_pacientes_top, params_pacientes_top)
         pacientes_mais_solicitacoes = c.fetchall()
 
@@ -2189,6 +2200,7 @@ def relatorios():
                 p.id,
                 p.nome,
                 COUNT(s.id) AS total_solicitacoes,
+                MIN(s.data_solicitacao) AS data_solicitacao,
                 {tipos_radiografia_expr}
             FROM paciente p
             INNER JOIN solicitacao s ON s.paciente_id = p.id
@@ -2227,7 +2239,14 @@ def relatorios():
                 query_pacientes += ' AND s.data_realizacao <= %s'
             params_pacientes.append(data_fim)
 
-        query_pacientes += ' GROUP BY p.id, p.nome ORDER BY p.nome ASC'
+        if ordenacao == 'nome_asc':
+            query_pacientes += ' GROUP BY p.id, p.nome ORDER BY p.nome ASC'
+        elif ordenacao == 'nome_desc':
+            query_pacientes += ' GROUP BY p.id, p.nome ORDER BY p.nome DESC'
+        elif ordenacao == 'data_asc':
+            query_pacientes += ' GROUP BY p.id, p.nome ORDER BY MIN(s.data_solicitacao) ASC, p.nome ASC'
+        else:
+            query_pacientes += ' GROUP BY p.id, p.nome ORDER BY MIN(s.data_solicitacao) DESC, p.nome ASC'
 
         conn = conectar()
         c = conn.cursor()
@@ -2249,6 +2268,7 @@ def relatorios():
         resposta_ia=resposta_ia,
         ia_contexto=ia_contexto,
         filtros_aplicados=filtros_aplicados,
+        ordenacao=ordenacao,
         resumo=resumo,
         total_registros=total_registros,
         pacientes_mais_solicitacoes=pacientes_mais_solicitacoes,

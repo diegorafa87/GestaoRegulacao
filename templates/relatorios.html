@@ -57,6 +57,15 @@
                 <option value="ia" {% if view == 'ia' %}selected{% endif %}>Visão IA</option>
             </select>
         </div>
+        <div class="col-md-2">
+            <label class="form-label">Ordenar por</label>
+            <select name="ordenacao" class="form-control">
+                <option value="nome_asc" {% if ordenacao == 'nome_asc' %}selected{% endif %}>Nome A-Z</option>
+                <option value="nome_desc" {% if ordenacao == 'nome_desc' %}selected{% endif %}>Nome Z-A</option>
+                <option value="data_asc" {% if ordenacao == 'data_asc' %}selected{% endif %}>Data mais antiga</option>
+                <option value="data_desc" {% if ordenacao == 'data_desc' %}selected{% endif %}>Data mais recente</option>
+            </select>
+        </div>
         <div class="col-md-3">
             <label class="form-label">Especialidade</label>
             <input type="text" name="especialidade" class="form-control" value="{{ especialidade }}" placeholder="Ex.: Cardiologia">
@@ -206,6 +215,7 @@
                     <th class="text-center">ID (CPF/SUS)</th>
                     <th>Paciente</th>
                     <th class="text-center">Total de Solicitações</th>
+                    <th class="text-center">Data Solicitação</th>
                 </tr>
             </thead>
             <tbody>
@@ -215,6 +225,7 @@
                     <td class="text-center">{{ p[0]|formatar_documento }}</td>
                     <td>{{ p[1] }}</td>
                     <td class="text-center">{{ p[2] }}</td>
+                    <td class="text-center">{{ p[3]|formatar_data }}</td>
                 </tr>
                 {% endfor %}
             {% else %}
@@ -312,6 +323,7 @@
                     <th class="text-center">ID (CPF/SUS)</th>
                     <th>Paciente</th>
                     <th class="text-center">Total de Solicitações</th>
+                    <th class="text-center">Data Solicitação</th>
                     {% if mostrar_tipos_radiografia_relatorio %}
                     <th>Tipo de Radiografia</th>
                     {% endif %}
@@ -324,10 +336,11 @@
                     <td class="text-center">{{ p[0]|formatar_documento }}</td>
                     <td>{{ p[1] }}</td>
                     <td class="text-center">{{ p[2] }}</td>
+                    <td class="text-center">{{ p[3]|formatar_data }}</td>
                     {% if mostrar_tipos_radiografia_relatorio %}
                     <td>
-                        {% if p[3] %}
-                            {% for tipo_radiografia in p[3].split('||') %}
+                        {% if p[4] %}
+                            {% for tipo_radiografia in p[4].split('||') %}
                                 <div>{{ tipo_radiografia }}</div>
                             {% endfor %}
                         {% else %}
