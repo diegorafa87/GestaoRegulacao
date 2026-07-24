@@ -2846,6 +2846,46 @@ def api_buscar_paciente():
     resultado = [{'id': formatar_identificador_paciente(p[0]), 'nome': p[1]} for p in pacientes]
     return jsonify(resultado)
 
+
+@app.route('/api/alertas_urgentes')
+def api_alertas_urgentes():
+    """Retorna solicitações URGENTE que ainda não foram agendadas (sem unidade realizadora e sem data de realização)."""
+    if not usuario_logado():
+        return jsonify([])
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        '''
+        SELECT s.tipo, s.especialidade, s.data_solicitacao, p.nome, p.id
+        FROM solicitacao s
+        INNER JOIN paciente p ON p.id = s.paciente_id
+        WHERE UPPER(COALESCE(s.status, '')) = 'URGENTE'
+          AND (s.data_realizacao IS NULL OR TRIM(COALESCE(s.data_realizacao, '')) = '')
+          AND (s.unidade_realizadora IS NULL OR TRIM(COALESCE(s.unidade_realizadora, '')) = '')
+        ORDER BY s.data_solicitacao ASC NULLS LAST, s.data_entrada ASC NULLS LAST
+        LIMIT 30
+        '''
+    )
+    rows = c.fetchall()
+    conn.close()
+    resultado = []
+    for row in rows:
+        tipo, especialidade, data_sol, nome_paciente, paciente_id = row
+        data_fmt = ''
+        if data_sol:
+            try:
+                data_fmt = datetime.strptime(str(data_sol).strip(), '%Y-%m-%d').strftime('%d/%m/%Y')
+            except Exception:
+                data_fmt = str(data_sol)
+        rotulo = tipo.capitalize() if tipo else 'Solicitação'
+        resultado.append({
+            'texto': f'{rotulo} em {especialidade} — {data_fmt}',
+            'paciente': nome_paciente or '',
+            'data': data_fmt,
+            'paciente_id': paciente_id or '',
+        })
+    return jsonify(resultado)
+
 @app.route('/api/verificar_paciente_existente')
 def api_verificar_paciente_existente():
     cpf = normalizar_documento(request.args.get('cpf', '').strip())

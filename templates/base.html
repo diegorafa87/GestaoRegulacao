@@ -54,55 +54,109 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
 {% if session.get('usuario_id') %}
-<!-- Widget: Alertas de solicitações antigas -->
-<div id="alertasTicker" style="
+<!-- Container com ambos widgets (mesmo visual/tamanho) -->
+<div id="alertasContainer" style="
     position: fixed;
     left: 10px;
     top: 80px;
     width: 200px;
-    max-height: calc(100vh - 100px);
+    height: calc(100vh - 100px);
     overflow: hidden;
     z-index: 900;
     display: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 ">
-    <div style="
-        background: rgba(13,110,253,0.08);
-        border: 1px solid rgba(13,110,253,0.25);
-        border-radius: 10px;
-        padding: 8px 0 4px;
-        height: 100%;
+    <!-- Widget: Alertas de solicitações antigas -->
+    <div id="alertasTicker" style="
+        width: 100%;
+        flex: 1;
         display: flex;
         flex-direction: column;
     ">
         <div style="
-            font-size: 0.65rem;
-            font-weight: 700;
-            color: #0d6efd;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            text-align: center;
-            padding: 0 8px 6px;
-            border-bottom: 1px solid rgba(13,110,253,0.15);
-            margin-bottom: 4px;
-            flex-shrink: 0;
-        ">⏰ Mais antigos</div>
-        <div id="alertasViewport" style="
-            flex: 1;
-            overflow: hidden;
-            position: relative;
-            min-height: 400px;
+            background: rgba(13,110,253,0.08);
+            border: 1px solid rgba(13,110,253,0.25);
+            border-radius: 10px;
+            padding: 8px 0 4px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
         ">
-            <div id="alertasTrack" style="
-                position: absolute;
-                width: 100%;
-                will-change: transform;
-            "></div>
+            <div class="alertas-header" style="
+                font-size: 0.65rem;
+                font-weight: 700;
+                color: #0d6efd;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                text-align: center;
+                padding: 0 8px 6px;
+                border-bottom: 1px solid rgba(13,110,253,0.15);
+                margin-bottom: 4px;
+                flex-shrink: 0;
+            ">⏰ Mais antigos</div>
+            <div id="alertasViewport" style="
+                flex: 1;
+                overflow: hidden;
+                position: relative;
+                min-height: calc((100vh - 100px) / 2);
+            ">
+                <div id="alertasTrack" style="
+                    position: absolute;
+                    width: 100%;
+                    will-change: transform;
+                "></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Widget: Urgentes não agendadas (mesmo estilo/tamanho) -->
+    <div id="alertasUrgentesTicker" style="
+        width: 100%;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    ">
+        <div style="
+            background: rgba(13,110,253,0.08);
+            border: 1px solid rgba(13,110,253,0.25);
+            border-radius: 10px;
+            padding: 8px 0 4px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        ">
+            <div class="alertas-header" style="
+                font-size: 0.65rem;
+                font-weight: 700;
+                color: #0d6efd;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                text-align: center;
+                padding: 0 8px 6px;
+                border-bottom: 1px solid rgba(13,110,253,0.15);
+                margin-bottom: 4px;
+                flex-shrink: 0;
+            ">❗ Urgentes não agendadas</div>
+            <div id="alertasUrgentesViewport" style="
+                flex: 1;
+                overflow: hidden;
+                position: relative;
+                min-height: calc((100vh - 100px) / 2);
+            ">
+                <div id="alertasUrgentesTrack" style="
+                    position: absolute;
+                    width: 100%;
+                    will-change: transform;
+                "></div>
+            </div>
         </div>
     </div>
 </div>
 
 <style>
-#alertasTrack .alerta-item {
+#alertasContainer .alerta-item {
     display: block;
     padding: 6px 10px;
     border-bottom: 1px solid rgba(13,110,253,0.08);
@@ -112,28 +166,45 @@
     text-decoration: none;
     cursor: pointer;
 }
-#alertasTrack .alerta-item:hover {
+#alertasContainer .alerta-item:hover {
     background: rgba(13,110,253,0.10);
     color: #0a3878;
 }
-#alertasTrack .alerta-item:last-child { border-bottom: none; }
-#alertasTrack .alerta-item .alerta-data {
+#alertasContainer .alerta-item:last-child { border-bottom: none; }
+#alertasContainer .alerta-item .alerta-data {
     display: inline-block;
     font-size: 0.65rem;
     font-weight: 700;
     color: #dc3545;
     margin-bottom: 1px;
 }
-#alertasTrack .alerta-item .alerta-texto {
+#alertasContainer .alerta-item .alerta-texto {
     display: block;
     white-space: normal;
     word-break: break-word;
 }
+
+/* header clicável para colapsar */
+.alertas-header { cursor: pointer; }
+.alertas-header::after { content: '\25B2'; float: right; font-size: 0.7rem; opacity: 0.6; transform: translateY(-1px); }
+.collapsed .alertas-header::after { content: '\25BC'; }
+.collapsed { flex: 0 0 auto; }
+.collapsed .alerta-texto, .collapsed .alerta-data { display: none !important; }
+
+/* reduz altura visual do ticker quando colapsado */
+#alertasContainer > .collapsed { flex: 0 0 auto; height: auto; max-height: none; }
+#alertasContainer > .collapsed > div { height: auto; min-height: 0; padding-bottom: 4px; }
+/* esconder as viewports internas (são elementos com id) */
+#alertasContainer > .collapsed #alertasViewport,
+#alertasContainer > .collapsed #alertasUrgentesViewport {
+    display: none !important;
+}
+/* urgent widget usa mesmo estilo do widget superior */
 </style>
 
 <script>
 (() => {
-    const ticker = document.getElementById('alertasTicker');
+    const ticker = document.getElementById('alertasContainer');
     const track = document.getElementById('alertasTrack');
     const viewport = document.getElementById('alertasViewport');
     const mainContainer = document.getElementById('mainContainer');
@@ -168,8 +239,33 @@
         animFrame = requestAnimationFrame(animar);
     }
 
+    // Ao entrar com o mouse, pausa a animação para permitir interação.
     viewport.addEventListener('mouseenter', () => { pausado = true; });
     viewport.addEventListener('mouseleave', () => { pausado = false; });
+
+    // Permitir rolar com a roda do mouse dentro do widget (subir/ descer itens).
+    // Prevemos o comportamento nativo da página quando o cursor está sobre o widget.
+    viewport.addEventListener('wheel', (e) => {
+        // Se não houver itens renderizados, nada a fazer
+        if (!track || track.scrollHeight === 0) return;
+        e.preventDefault();
+        pausado = true; // pausar animação durante a rolagem manual
+
+        const delta = e.deltaY; // positivo = roda para baixo
+        // Ajusta posY conforme o delta: manter mesma direção da animação automática
+        posY -= delta;
+
+        const metade = track.scrollHeight / 2;
+        // Normaliza posY para que fique dentro do intervalo [-metade, 0)
+        // Usamos loop enquanto para tratar grandes saltos de delta.
+        while (posY <= -metade) posY += metade;
+        while (posY > 0) posY -= metade;
+
+        track.style.transform = `translateY(${posY}px)`;
+        // pequenos timeout para reiniciar a animação depois que o usuário parar
+        clearTimeout(viewport._resumeTimeout);
+        viewport._resumeTimeout = setTimeout(() => { pausado = false; }, 1200);
+    }, { passive: false });
 
     async function carregarAlertas() {
         try {
@@ -190,6 +286,101 @@
     carregarAlertas();
     // Recarrega a cada 3 minutos
     setInterval(carregarAlertas, 3 * 60 * 1000);
+})();
+
+// Widget: urgentes não agendadas
+(() => {
+    const ticker = document.getElementById('alertasContainer');
+    const track = document.getElementById('alertasUrgentesTrack');
+    const viewport = document.getElementById('alertasUrgentesViewport');
+    const mainContainer = document.getElementById('mainContainer');
+
+    let itens = [];
+    let posY = 0;
+    let animFrame = null;
+    let pausado = false;
+    const VELOCIDADE = 0.6; // px por frame, um pouco mais rápido
+
+    function renderizarItens(dados) {
+        const html = (dados || []).map(d => {
+            const origemAtual = `${window.location.pathname}${window.location.search}`;
+            const href = d.paciente_id ? `/paciente/${encodeURIComponent(d.paciente_id)}?next=${encodeURIComponent(origemAtual)}` : '#';
+            return `
+            <a class="alerta-item" href="${href}">
+                <span class="alerta-data">${d.data}</span>
+                <span class="alerta-texto">${d.paciente} — ${d.texto}</span>
+            </a>`;
+        }).join('');
+        // Duplica para loop contínuo
+        track.innerHTML = html + html;
+    }
+
+    function animar() {
+        if (!pausado) {
+            posY -= VELOCIDADE;
+            const metade = track.scrollHeight / 2;
+            if (Math.abs(posY) >= metade) posY = 0;
+            track.style.transform = `translateY(${posY}px)`;
+        }
+        animFrame = requestAnimationFrame(animar);
+    }
+
+    viewport.addEventListener('mouseenter', () => { pausado = true; });
+    viewport.addEventListener('mouseleave', () => { pausado = false; });
+
+    viewport.addEventListener('wheel', (e) => {
+        if (!track || track.scrollHeight === 0) return;
+        e.preventDefault();
+        pausado = true;
+        const delta = e.deltaY;
+        posY -= delta;
+        const metade = track.scrollHeight / 2;
+        while (posY <= -metade) posY += metade;
+        while (posY > 0) posY -= metade;
+        track.style.transform = `translateY(${posY}px)`;
+        clearTimeout(viewport._resumeTimeout);
+        viewport._resumeTimeout = setTimeout(() => { pausado = false; }, 1200);
+    }, { passive: false });
+
+    async function carregar() {
+        try {
+            const resp = await fetch('/api/alertas_urgentes');
+            if (!resp.ok) return;
+            const dados = await resp.json();
+            if (!dados || dados.length === 0) return;
+            itens = dados;
+            renderizarItens(itens);
+            ticker.style.display = 'block';
+            // Se o widget antigo estiver visível, mantém margem já aplicada
+            if (document.getElementById('alertasContainer') && document.getElementById('alertasContainer').style.display === 'block') {
+                if (mainContainer) mainContainer.style.marginLeft = '220px';
+            } else {
+                if (mainContainer) mainContainer.style.marginLeft = '220px';
+            }
+            posY = 0;
+            if (animFrame) cancelAnimationFrame(animFrame);
+            animar();
+        } catch (_) {}
+    }
+
+    carregar();
+    setInterval(carregar, 3 * 60 * 1000);
+})();
+
+// Toggle colapsar/expandir ao clicar no header
+(function() {
+    function toggleHandler(e) {
+        const header = e.currentTarget;
+        const ticker = header.closest('[id$="Ticker"]');
+        if (!ticker) return;
+        ticker.classList.toggle('collapsed');
+    }
+
+    // delegação: aguarda DOM
+    document.addEventListener('DOMContentLoaded', () => {
+        const headers = document.querySelectorAll('#alertasContainer .alertas-header');
+        headers.forEach(h => h.addEventListener('click', toggleHandler));
+    });
 })();
 </script>
 {% endif %}
