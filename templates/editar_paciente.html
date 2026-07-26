@@ -21,19 +21,26 @@
         <label class="form-label">Nascimento:</label>
         <input class="form-control" value="{{ paciente[2]|formatar_data }}" readonly>
     </div>
-    <div class="col-md-4">
-        <label class="form-label">Data de Óbito:</label>
-        <input name="data_obito" id="data_obito" class="form-control" value="{{ paciente[6]|formatar_data if paciente[6] else '' }}" maxlength="10" placeholder="DD/MM/AAAA">
-        <div class="form-text">Ao preencher, as solicitações em espera deste paciente serão encerradas automaticamente como óbito.</div>
+    <div class="col-md-6">
+        <label class="form-label">Nome:</label>
+        <input name="nome" class="form-control" value="{{ paciente[1] }}" required>
     </div>
     <div class="col-md-4">
         <label class="form-label">Telefone:</label>
         <input name="telefone" id="telefone" class="form-control" value="{{ paciente[3] or '' }}" maxlength="15" placeholder="(00) 00000-0000">
     </div>
-
+    <div class="col-md-4">
+        <label class="form-label">Telefone 2:</label>
+        <input name="telefone2" id="telefone2" class="form-control" value="{{ paciente[9] or '' }}" maxlength="15" placeholder="(00) 00000-0000">
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Data de Óbito:</label>
+        <input name="data_obito" id="data_obito" class="form-control" value="{{ paciente[6]|formatar_data if paciente[6] else '' }}" maxlength="10" placeholder="DD/MM/AAAA">
+        <div class="form-text">Ao preencher, as solicitações em espera deste paciente serão encerradas automaticamente como óbito.</div>
+    </div>
     <div class="col-md-6">
-        <label class="form-label">Nome:</label>
-        <input name="nome" class="form-control" value="{{ paciente[1] }}" required>
+        <label class="form-label">Nome da mãe:</label>
+        <input name="nome_mae" class="form-control" value="{{ paciente[8] or '' }}">
     </div>
     <div class="col-md-6">
         <label class="form-label">Endereço:</label>
@@ -57,6 +64,7 @@
 (() => {
     const campoObito = document.getElementById('data_obito');
     const campoTelefone = document.getElementById('telefone');
+    const campoTelefone2 = document.getElementById('telefone2');
     const campoSus = document.getElementById('sus');
 
     if (campoObito) {
@@ -90,27 +98,33 @@
         });
     }
 
+    const aplicarMascaraTelefone = (e) => {
+        let valor = e.target.value.replace(/\D/g, '');
+
+        if (valor.length > 11) {
+            valor = valor.slice(0, 11);
+        }
+
+        let formatado = '';
+        if (valor.length > 0) {
+            formatado = '(' + valor.slice(0, 2);
+        }
+        if (valor.length > 2) {
+            formatado += ') ' + valor.slice(2, 7);
+        }
+        if (valor.length > 7) {
+            formatado += '-' + valor.slice(7, 11);
+        }
+
+        e.target.value = formatado;
+    };
+
     if (campoTelefone) {
-        campoTelefone.addEventListener('input', (e) => {
-            let valor = e.target.value.replace(/\D/g, '');
+        campoTelefone.addEventListener('input', aplicarMascaraTelefone);
+    }
 
-            if (valor.length > 11) {
-                valor = valor.slice(0, 11);
-            }
-
-            let formatado = '';
-            if (valor.length > 0) {
-                formatado = '(' + valor.slice(0, 2);
-            }
-            if (valor.length > 2) {
-                formatado += ') ' + valor.slice(2, 7);
-            }
-            if (valor.length > 7) {
-                formatado += '-' + valor.slice(7, 11);
-            }
-
-            e.target.value = formatado;
-        });
+    if (campoTelefone2) {
+        campoTelefone2.addEventListener('input', aplicarMascaraTelefone);
     }
 })();
 </script>

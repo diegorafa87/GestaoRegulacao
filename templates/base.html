@@ -10,6 +10,14 @@
       textarea:not(.preservar-caso) {
             text-transform: uppercase;
         }
+
+      h1, h2, h3, h4, h5, h6 {
+            font-weight: 700 !important;
+        }
+
+      .form-label {
+            font-weight: 700 !important;
+        }
     </style>
 </head>
 <body class="bg-light">
@@ -369,17 +377,48 @@
 
 // Toggle colapsar/expandir ao clicar no header
 (function() {
+    const STORAGE_KEY = 'alertasWidgetsState';
+
+    function lerEstado(widgetId) {
+        try {
+            const estado = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+            return estado[widgetId] === true;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function salvarEstado(widgetId, collapsed) {
+        try {
+            const estado = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+            estado[widgetId] = collapsed;
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
+        } catch (_) {}
+    }
+
     function toggleHandler(e) {
         const header = e.currentTarget;
         const ticker = header.closest('[id$="Ticker"]');
         if (!ticker) return;
+
         ticker.classList.toggle('collapsed');
+        salvarEstado(ticker.id, ticker.classList.contains('collapsed'));
     }
 
-    // delegação: aguarda DOM
     document.addEventListener('DOMContentLoaded', () => {
         const headers = document.querySelectorAll('#alertasContainer .alertas-header');
-        headers.forEach(h => h.addEventListener('click', toggleHandler));
+        headers.forEach(h => {
+            const ticker = h.closest('[id$="Ticker"]');
+            if (!ticker) return;
+
+            if (lerEstado(ticker.id)) {
+                ticker.classList.add('collapsed');
+            } else {
+                ticker.classList.remove('collapsed');
+            }
+
+            h.addEventListener('click', toggleHandler);
+        });
     });
 })();
 </script>

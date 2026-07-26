@@ -27,10 +27,12 @@ import os
 import psycopg
 import re
 import unicodedata
+import json
+import urllib.request
 from datetime import datetime
 import csv
 import io
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
@@ -114,6 +116,98 @@ def formatar_data_br(data_str):
 def normalizar_documento(valor):
     valor = '' if valor is None else str(valor)
     return re.sub(r'\D', '', valor)
+
+
+def mapear_dados_cadsus(payload):
+    if isinstance(payload, list):
+        payload = payload[0] if payload else {}
+    if isinstance(payload, dict) and 'dados' in payload and isinstance(payload['dados'], (dict, list)):
+        payload = payload['dados']
+    if isinstance(payload, list):
+        payload = payload[0] if payload else {}
+    if not isinstance(payload, dict):
+        return {}
+
+    def extrair(*chaves):
+        for chave in chaves:
+            if chave in payload and payload[chave] not in (None, ''):
+                return payload[chave]
+        return ''
+
+    nome = str(extrair('nomeCompleto', 'nome', 'nomePaciente', 'nome_completo', 'fullName') or '').strip().upper()
+    sus = str(extrair('sus', 'cartaoSus', 'cartao_sus', 'numeroSus', 'susPaciente') or '').strip()
+    nome_mae = str(extrair('nomeMae', 'nome_mae', 'mae', 'nomeDaMae', 'motherName') or '').strip().upper()
+    nascimento = str(extrair('dataNascimento', 'nascimento', 'birthDate') or '').strip()
+
+    endereco_payload = payload.get('endereco') or payload.get('enderecoPessoa') or payload.get('address') or {}
+    endereco = ''
+    if isinstance(endereco_payload, dict):
+        partes = []
+        for chave in ('logradouro', 'rua', 'street', 'logradouroNome'):
+            valor = endereco_payload.get(chave)
+            if valor:
+                partes.append(str(valor).strip().upper())
+        numero = endereco_payload.get('numero') or endereco_payload.get('number') or ''
+        if numero:
+            partes.append(f'Nº {str(numero).strip()}')
+        bairro = endereco_payload.get('bairro') or endereco_payload.get('district') or ''
+        if bairro:
+            partes.append(f'Bairro {str(bairro).strip().upper()}')
+        endereco = ', '.join(partes).strip().upper()
+    else:
+        endereco = str(endereco_payload or '').strip().upper()
+
+    if not endereco:
+        endereco = str(extrair('endereco', 'enderecoCompleto', 'address') or '').strip().upper()
+
+    return {
+        'nome': nome,
+        'sus': sus,
+        'nome_mae': nome_mae,
+        'nascimento': nascimento,
+        'endereco': endereco,
+    }
+
+
+def consultar_cadsus_por_cpf(cpf):
+    cpf = normalizar_documento(cpf)
+    if not cpf:
+        return None
+
+    url_api = os.environ.get('CADSUS_API_URL', '').strip()
+    if not url_api:
+        return None
+
+    if '{cpf}' in url_api:
+        endpoint = url_api.replace('{cpf}', cpf)
+    else:
+        parsed = urlparse(url_api)
+        params = parse_qsl(parsed.query, keep_blank_values=True)
+        params.append(('cpf', cpf))
+        endpoint = urlunparse(parsed._replace(query=urlencode(params)))
+
+    headers = {'Accept': 'application/json'}
+    token = os.environ.get('CADSUS_API_TOKEN', '').strip()
+    if token:
+        headers['Authorization'] = f'Bearer {token}'
+
+    request = urllib.request.Request(endpoint, headers=headers, method='GET')
+    try:
+        with urllib.request.urlopen(request, timeout=10) as resposta:
+            conteudo = resposta.read().decode('utf-8')
+    except Exception:
+        return None
+
+    if not conteudo:
+        return None
+
+    try:
+        payload = json.loads(conteudo)
+    except json.JSONDecodeError:
+        return None
+
+    return mapear_dados_cadsus(payload)
+
 
 def normalizar_texto_busca(valor):
     valor = '' if valor is None else str(valor)
@@ -1388,6 +1482,25 @@ def pacientes():
         paginas_visiveis=montar_paginas_visiveis(pagina, total_paginas),
     )
 
+@app.route('/api/consultar_cadsus')
+def api_consultar_cadsus():
+    if not usuario_logado():
+        return jsonify({'sucesso': False, 'mensagem': 'Não autenticado'}), 401
+
+    cpf = normalizar_documento(request.args.get('cpf', ''))
+    if not cpf:
+        return jsonify({'sucesso': False, 'mensagem': 'Informe um CPF válido.'}), 400
+
+    dados = consultar_cadsus_por_cpf(cpf)
+    if not dados:
+        return jsonify({
+            'sucesso': False,
+            'mensagem': 'Não foi possível consultar o Cadsus. Configure CADSUS_API_URL e, se necessário, CADSUS_API_TOKEN.'
+        }), 404
+
+    return jsonify({'sucesso': True, 'dados': dados})
+
+
 @app.route('/novo_paciente', methods=['GET', 'POST'])
 def novo_paciente():
     origem_retorno = normalizar_url_retorno(
@@ -1399,8 +1512,9 @@ def novo_paciente():
         sus_input = request.form.get('sus', '').strip()
         cpf = normalizar_documento(cpf_input)
         sus = normalizar_documento(sus_input)
-        nome = request.form['nome'].strip().upper()
-        nascimento_raw = request.form['nascimento']
+        nome = request.form.get('nome', '').strip().upper()
+        nome_mae = request.form.get('nome_mae', '').strip().upper()
+        nascimento_raw = request.form.get('nascimento', '')
         nascimento = normalizar_data_para_iso(nascimento_raw)
         telefone = request.form.get('telefone', '').strip()
         oncologico = request.form.get('oncologico') == 'on'
@@ -1408,8 +1522,9 @@ def novo_paciente():
         rua = request.form.get('rua', '').strip().upper()
         numero = request.form.get('numero', '').strip()
         bairro = request.form.get('bairro', '').strip().upper()
+        endereco = request.form.get('endereco', '').strip().upper()
 
-        if rua or numero or bairro:
+        if not endereco and (rua or numero or bairro):
             partes_endereco = []
             if rua:
                 partes_endereco.append(rua)
@@ -1418,19 +1533,19 @@ def novo_paciente():
             if bairro:
                 partes_endereco.append(f'Bairro {bairro}')
             endereco = ', '.join(partes_endereco)
-        else:
-            endereco = request.form.get('endereco', '').strip()
 
         form_data = {
             'cpf': cpf_input,
             'sus': sus_input,
             'nome': nome,
+            'nome_mae': nome_mae,
             'nascimento': nascimento_raw,
             'telefone': telefone,
             'oncologico': oncologico,
             'rua': rua,
             'numero': numero,
             'bairro': bairro,
+            'endereco': endereco,
         }
 
         ruas_catalogo = listar_sugestoes_endereco('rua')
@@ -1462,8 +1577,10 @@ def novo_paciente():
         c = conn.cursor()
 
         try:
-            c.execute("INSERT INTO paciente (id, nome, nascimento, telefone, endereco, sus, oncologico) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                      (id, nome, nascimento, telefone, endereco, sus if sus else None, oncologico))
+            c.execute(
+                "INSERT INTO paciente (id, nome, nascimento, telefone, endereco, sus, oncologico, nome_mae) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (id, nome, nascimento, telefone, endereco, sus if sus else None, oncologico, nome_mae or None)
+            )
             # Salva rua e bairro como sugestões para futuros cadastros (somente admin)
             if apenas_admin() and rua and rua not in ruas_catalogo:
                 c.execute(
@@ -1734,7 +1851,9 @@ def editar_paciente(paciente_id):
 
     if request.method == 'POST':
         nome = request.form.get('nome', '').strip().upper()
+        nome_mae = request.form.get('nome_mae', '').strip().upper()
         telefone = request.form.get('telefone', '').strip()
+        telefone2 = request.form.get('telefone2', '').strip()
         sus = normalizar_documento(request.form.get('sus', '').strip())
         data_obito = normalizar_data_para_iso(request.form.get('data_obito'))
         oncologico = request.form.get('oncologico') == 'on'
@@ -1746,8 +1865,8 @@ def editar_paciente(paciente_id):
             return redirect(url_for('editar_paciente', paciente_id=paciente_id_resolvido, next=origem_retorno))
 
         c.execute(
-            'UPDATE paciente SET nome = %s, telefone = %s, sus = %s, data_obito = %s, oncologico = %s, endereco = %s WHERE id = %s',
-            (nome, telefone, sus if sus else None, data_obito, oncologico, endereco, paciente_id_resolvido)
+            'UPDATE paciente SET nome = %s, nome_mae = %s, telefone = %s, telefone2 = %s, sus = %s, data_obito = %s, oncologico = %s, endereco = %s WHERE id = %s',
+            (nome, nome_mae or None, telefone, telefone2 or None, sus if sus else None, data_obito, oncologico, endereco, paciente_id_resolvido)
         )
 
         if data_obito:
@@ -1769,7 +1888,7 @@ def editar_paciente(paciente_id):
         return redirect(origem_retorno)
 
     c.execute(
-        'SELECT id, nome, nascimento, telefone, endereco, sus, data_obito, oncologico FROM paciente WHERE id = %s',
+        'SELECT id, nome, nascimento, telefone, endereco, sus, data_obito, oncologico, nome_mae, telefone2 FROM paciente WHERE id = %s',
         (paciente_id_resolvido,)
     )
     paciente = c.fetchone()
