@@ -113,6 +113,28 @@ def formatar_data_br(data_str):
         pass
     return data_str
 
+
+def calcular_idade(data_nascimento):
+    if not data_nascimento:
+        return ''
+
+    try:
+        if isinstance(data_nascimento, str):
+            data_nascimento = data_nascimento.strip()
+            if '/' in data_nascimento:
+                data_nascimento = datetime.strptime(data_nascimento, '%d/%m/%Y').date()
+            else:
+                data_nascimento = datetime.strptime(data_nascimento, '%Y-%m-%d').date()
+        elif isinstance(data_nascimento, datetime):
+            data_nascimento = data_nascimento.date()
+    except ValueError:
+        return ''
+
+    hoje = datetime.now().date()
+    idade = hoje.year - data_nascimento.year - ((hoje.month, hoje.day) < (data_nascimento.month, data_nascimento.day))
+    return f'{idade} anos'
+
+
 def normalizar_documento(valor):
     valor = '' if valor is None else str(valor)
     return re.sub(r'\D', '', valor)
@@ -670,9 +692,11 @@ def gerar_pdf_relatorio_paciente(paciente_relatorio, relatorio_paciente):
     paciente_nascimento = None
     paciente_cpf = ''
     paciente_sus = ''
+    idade_paciente = ''
     if paciente_relatorio:
         paciente_nascimento = paciente_relatorio[2] if len(paciente_relatorio) > 2 else None
         paciente_sus = paciente_relatorio[3] if len(paciente_relatorio) > 3 else ''
+        idade_paciente = calcular_idade(paciente_nascimento)
         if paciente_relatorio[0] and eh_cpf(paciente_relatorio[0]):
             paciente_cpf = formatar_identificador_paciente(paciente_relatorio[0])
 
@@ -705,14 +729,14 @@ def gerar_pdf_relatorio_paciente(paciente_relatorio, relatorio_paciente):
                 col_width = (largura_util - 24) / 4
                 texto(margem_x + 12, topo_titulo - 86, f'Nome: {paciente_relatorio[1]}', tamanho=9, cor=cor_texto)
                 texto(margem_x + 12 + col_width, topo_titulo - 86, f'Nascimento: {formatar_data_br(paciente_nascimento) if paciente_nascimento else "-"}', tamanho=9, cor=cor_texto)
-                texto(margem_x + 12 + col_width * 2, topo_titulo - 86, f'CPF: {paciente_cpf if paciente_cpf else "-"}', tamanho=9, cor=cor_texto)
-                texto(margem_x + 12 + col_width * 3, topo_titulo - 86, f'Cartao SUS: {paciente_sus if paciente_sus else "-"}', tamanho=9, cor=cor_texto)
+                texto(margem_x + 12 + col_width * 2, topo_titulo - 86, f'Idade: {idade_paciente if idade_paciente else "-"}', tamanho=9, cor=cor_texto)
+                texto(margem_x + 12 + col_width * 3, topo_titulo - 86, f'CPF: {paciente_cpf if paciente_cpf else "-"}', tamanho=9, cor=cor_texto)
             else:
                 texto(margem_x + 12, topo_titulo - 86, 'Paciente nao encontrado', tamanho=10, cor=cor_texto)
         adicionar(comando_retangulo_pdf(margem_x, altura_pagina - 170, largura_util, 24, cor_fundo=cor_primaria_escura, cor_borda=cor_primaria_escura))
         x = margem_x + 8
-        col_widths = [40, 60, 50, 40, 190, 50, 50, 120, 120]
-        headers = ['ID', 'Solicitacao', 'Entrada', 'Tipo', 'Especialidade', 'Status', 'Realizacao', 'Unidade', 'Financiamento']
+        col_widths = [40, 60, 50, 40, 45, 170, 50, 50, 120, 120]
+        headers = ['ID', 'Solicitacao', 'Entrada', 'Tipo', 'Idade', 'Especialidade', 'Status', 'Realizacao', 'Unidade', 'Financiamento']
         for idx, header in enumerate(headers):
             texto(x, altura_pagina - 156, header, fonte='F2', tamanho=8, cor=cor_branca)
             x += col_widths[idx]
@@ -730,14 +754,15 @@ def gerar_pdf_relatorio_paciente(paciente_relatorio, relatorio_paciente):
             formatar_data_br(solicitacao[1]) if solicitacao[1] else '',
             formatar_data_br(solicitacao[2]) if solicitacao[2] else '',
             solicitacao[3] or '',
+            idade_paciente,
             solicitacao[4] or '',
             solicitacao[6] or '',
             formatar_data_br(solicitacao[7]) if solicitacao[7] else '',
             solicitacao[8] or '',
             financiamento_exibicao
         ]
-        col_widths = [40, 60, 50, 40, 190, 50, 50, 120, 120]
-        limites = [8, 12, 10, 10, 32, 10, 10, 18, 18]
+        col_widths = [40, 60, 50, 40, 45, 170, 50, 50, 120, 120]
+        limites = [8, 12, 10, 10, 8, 32, 10, 10, 18, 18]
         linhas_por_coluna = []
 
         for idx, valor in enumerate(valores):
@@ -1909,7 +1934,7 @@ def historico_paciente(paciente_id):
 
     conn = conectar()
     c = conn.cursor()
-    c.execute('SELECT id, nome FROM paciente WHERE id = %s', (paciente_id_resolvido,))
+    c.execute('SELECT id, nome, nascimento FROM paciente WHERE id = %s', (paciente_id_resolvido,))
     paciente = c.fetchone()
     c.execute(
         '''
@@ -1936,12 +1961,15 @@ def historico_paciente(paciente_id):
     historico = c.fetchall()
     conn.close()
     origem_retorno = normalizar_url_retorno(request.args.get('next'), fallback=url_for('solicitacoes'))
+    idade_paciente = calcular_idade(paciente[2] if paciente and len(paciente) > 2 else None)
+
     return render_template(
         'historico_paciente.html',
         paciente_id=paciente_id_resolvido,
         paciente=paciente,
         historico=historico,
         origem_retorno=origem_retorno,
+        idade_paciente=idade_paciente,
     )
 
 @app.route('/solicitacao/<int:solicitacao_id>/termo-retirada')
@@ -2193,7 +2221,7 @@ def relatorios():
         view = 'paciente'
     if view not in ('resumo', 'pacientes_mais_solicitacoes', 'especialidades_maior_espera', 'ia', 'paciente'):
         view = 'resumo'
-    if ordenacao not in ('nome_asc', 'nome_desc', 'data_asc', 'data_desc'):
+    if ordenacao not in ('nome_asc', 'nome_desc', 'data_asc', 'data_desc', 'idade_desc', 'idade_asc'):
         ordenacao = 'nome_asc'
 
     data_inicio = normalizar_data_para_iso(data_inicio_raw) if data_inicio_raw else ''
@@ -2220,6 +2248,7 @@ def relatorios():
     especialidades_maior_espera = []
     relatorio_paciente = []
     paciente_relatorio = None
+    idade_paciente = ''
     tempo_medio_espera = []
     total_registros = 0
 
@@ -2417,6 +2446,8 @@ def relatorios():
                 )
                 relatorio_paciente = c.fetchall()
 
+        idade_paciente = calcular_idade(paciente_relatorio[2] if paciente_relatorio and len(paciente_relatorio) > 2 else None) if paciente_relatorio else ''
+
     if tempo_espera and view == 'resumo':
         query_tempo = '''
             SELECT
@@ -2504,6 +2535,7 @@ def relatorios():
             'Data Solicitação',
             'Data Entrada',
             'Tipo',
+            'Idade',
             'Especialidade',
             'Prioridade',
             'Status',
@@ -2519,6 +2551,7 @@ def relatorios():
                 s[1],
                 s[2],
                 s[3],
+                idade_paciente,
                 s[4],
                 s[5],
                 s[6],
@@ -2597,6 +2630,7 @@ def relatorios():
                 p.nome,
                 COUNT(s.id) AS total_solicitacoes,
                 MIN(s.data_solicitacao) AS data_solicitacao,
+                p.nascimento AS nascimento_paciente,
                 {tipos_radiografia_expr}
             FROM paciente p
             INNER JOIN solicitacao s ON s.paciente_id = p.id
@@ -2641,13 +2675,28 @@ def relatorios():
             query_pacientes += ' GROUP BY p.id, p.nome ORDER BY p.nome DESC'
         elif ordenacao == 'data_asc':
             query_pacientes += ' GROUP BY p.id, p.nome ORDER BY MIN(s.data_solicitacao) ASC, p.nome ASC'
-        else:
+        elif ordenacao == 'data_desc':
             query_pacientes += ' GROUP BY p.id, p.nome ORDER BY MIN(s.data_solicitacao) DESC, p.nome ASC'
+        elif ordenacao == 'idade_desc':
+            query_pacientes += ' GROUP BY p.id, p.nome ORDER BY p.nascimento DESC NULLS LAST, p.nome ASC'
+        else:
+            query_pacientes += ' GROUP BY p.id, p.nome ORDER BY p.nascimento ASC NULLS LAST, p.nome ASC'
 
         conn = conectar()
         c = conn.cursor()
         c.execute(query_pacientes, params_pacientes)
-        pacientes_especialidade = c.fetchall()
+        pacientes_raw = c.fetchall()
+        pacientes_especialidade = []
+        for paciente_row in pacientes_raw:
+            idade = calcular_idade(paciente_row[4])
+            pacientes_especialidade.append((
+                paciente_row[0],
+                paciente_row[1],
+                paciente_row[2],
+                paciente_row[3],
+                idade,
+                paciente_row[5] if len(paciente_row) > 5 else None,
+            ))
         conn.close()
 
     return render_template(
@@ -2668,6 +2717,7 @@ def relatorios():
         paciente=paciente,
         relatorio_paciente=relatorio_paciente,
         paciente_relatorio=paciente_relatorio,
+        idade_paciente=idade_paciente,
         resumo=resumo,
         total_registros=total_registros,
         pacientes_mais_solicitacoes=pacientes_mais_solicitacoes,

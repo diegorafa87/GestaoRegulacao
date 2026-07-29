@@ -65,6 +65,8 @@
                 <option value="nome_desc" {% if ordenacao == 'nome_desc' %}selected{% endif %}>Nome Z-A</option>
                 <option value="data_asc" {% if ordenacao == 'data_asc' %}selected{% endif %}>Data mais antiga</option>
                 <option value="data_desc" {% if ordenacao == 'data_desc' %}selected{% endif %}>Data mais recente</option>
+                <option value="idade_desc" {% if ordenacao == 'idade_desc' %}selected{% endif %}>Maior Idade</option>
+                <option value="idade_asc" {% if ordenacao == 'idade_asc' %}selected{% endif %}>Menor Idade</option>
             </select>
         </div>
         <div class="col-md-3">
@@ -252,7 +254,8 @@
         {% if paciente_relatorio %}
             <div class="mb-3">
                 <strong>Paciente:</strong> {{ paciente_relatorio[1] }}<br>
-                <strong>ID:</strong> {{ paciente_relatorio[0]|formatar_documento }}
+                <strong>ID:</strong> {{ paciente_relatorio[0]|formatar_documento }}<br>
+                <strong>Idade:</strong> {{ idade_paciente or '-' }}
             </div>
             <div class="table-responsive">
                 <table class="table table-striped table-bordered mb-0">
@@ -262,6 +265,7 @@
                             <th>Data Solicitação</th>
                             <th>Data Entrada</th>
                             <th class="text-center">Tipo</th>
+                            <th class="text-center">Idade</th>
                             <th>Especialidade</th>
                             <th class="text-center">Prioridade</th>
                             <th>Status</th>
@@ -279,6 +283,7 @@
                             <td>{{ s[1]|formatar_data }}</td>
                             <td>{{ s[2]|formatar_data }}</td>
                             <td class="text-center">{{ s[3] }}</td>
+                            <td class="text-center">{{ idade_paciente or '-' }}</td>
                             <td>{{ s[4] }}</td>
                             <td class="text-center">{{ s[5] }}</td>
                             <td>{{ s[6] }}</td>
@@ -308,7 +313,7 @@
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="11" class="text-center text-muted">Nenhuma solicitação encontrada para este paciente.</td>
+                            <td colspan="12" class="text-center text-muted">Nenhuma solicitação encontrada para este paciente.</td>
                         </tr>
                     {% endif %}
                     </tbody>
@@ -404,6 +409,7 @@
                 <tr>
                     <th class="text-center">ID (CPF/SUS)</th>
                     <th>Paciente</th>
+                    <th class="text-center">Idade</th>
                     <th class="text-center">Total de Solicitações</th>
                     <th class="text-center">Data Solicitação</th>
                     {% if mostrar_tipos_radiografia_relatorio %}
@@ -417,12 +423,13 @@
                 <tr>
                     <td class="text-center">{{ p[0]|formatar_documento }}</td>
                     <td>{{ p[1] }}</td>
+                    <td class="text-center">{{ p[4] if p[4] else '-' }}</td>
                     <td class="text-center">{{ p[2] }}</td>
                     <td class="text-center">{{ p[3]|formatar_data }}</td>
                     {% if mostrar_tipos_radiografia_relatorio %}
                     <td>
-                        {% if p[4] %}
-                            {% for tipo_radiografia in p[4].split('||') %}
+                        {% if p[5] %}
+                            {% for tipo_radiografia in p[5].split('||') %}
                                 <div>{{ tipo_radiografia }}</div>
                             {% endfor %}
                         {% else %}
