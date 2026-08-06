@@ -1576,8 +1576,21 @@ def novo_paciente():
         ruas_catalogo = listar_sugestoes_endereco('rua')
         bairros_catalogo = listar_sugestoes_endereco('bairro')
 
-        if not cpf and not sus:
-            flash('Informe CPF ou Cartão SUS para cadastrar o paciente.', 'warning')
+        campos_obrigatorios = {
+            'cpf': cpf,
+            'sus': sus,
+            'nome': nome,
+            'nome_mae': nome_mae,
+            'nascimento': nascimento,
+            'telefone': telefone,
+            'rua': rua,
+            'numero': numero,
+            'bairro': bairro,
+        }
+
+        campos_vazios = [campo for campo, valor in campos_obrigatorios.items() if not valor]
+        if campos_vazios:
+            flash('Preencha todos os campos obrigatórios antes de salvar o paciente.', 'warning')
             return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo, origem_retorno=origem_retorno)
 
         if rua and rua not in ruas_catalogo and not apenas_admin():

@@ -9,12 +9,12 @@
 <form method="post" class="row g-3" id="formNovoPaciente">
     <input type="hidden" name="next" value="{{ origem_retorno }}">
     <div class="col-md-3">
-        <label class="form-label">CPF:</label>
-        <input id="cpf" name="cpf" class="form-control" maxlength="14" placeholder="000.000.000-00" value="{{ form_data.cpf if form_data else '' }}">
+        <label class="form-label">CPF: <span class="text-danger">*</span></label>
+        <input id="cpf" name="cpf" class="form-control" maxlength="14" placeholder="000.000.000-00" value="{{ form_data.cpf if form_data else '' }}" required>
     </div>
     <div class="col-md-3">
-        <label class="form-label">Cartão SUS:</label>
-        <input id="sus" name="sus" class="form-control" maxlength="15" pattern="\d{0,15}" inputmode="numeric" placeholder="Somente números (até 15)" value="{{ form_data.sus if form_data else '' }}" oninput="this.value=this.value.replace(/\D/g,'').slice(0,15)">
+        <label class="form-label">Cartão SUS: <span class="text-danger">*</span></label>
+        <input id="sus" name="sus" class="form-control" maxlength="15" pattern="\d{0,15}" inputmode="numeric" placeholder="Somente números (até 15)" value="{{ form_data.sus if form_data else '' }}" oninput="this.value=this.value.replace(/\D/g,'').slice(0,15)" required>
     </div>
     <div class="col-md-3 d-flex align-items-center">
         <div class="form-check mt-4 pt-1">
@@ -24,28 +24,28 @@
     </div>
     <div class="col-12 d-none" id="avisoDuplicidadePaciente"></div>
     <div class="col-md-6">
-        <label class="form-label">Nome:</label>
+        <label class="form-label">Nome: <span class="text-danger">*</span></label>
         <input id="nome" name="nome" class="form-control" required value="{{ form_data.nome if form_data else '' }}">
     </div>
     <div class="col-md-4">
-        <label class="form-label">Nascimento:</label>
+        <label class="form-label">Nascimento: <span class="text-danger">*</span></label>
         <input id="nascimento" name="nascimento" class="form-control" required placeholder="DD/MM/AAAA" maxlength="10" value="{{ form_data.nascimento if form_data else '' }}">
     </div>
     <div class="col-md-4">
-        <label class="form-label">Telefone:</label>
-        <input id="telefone" name="telefone" class="form-control" maxlength="15" placeholder="(00) 00000-0000" value="{{ form_data.telefone if form_data else '' }}">
+        <label class="form-label">Telefone: <span class="text-danger">*</span></label>
+        <input id="telefone" name="telefone" class="form-control" maxlength="15" placeholder="(00) 00000-0000" value="{{ form_data.telefone if form_data else '' }}" required>
     </div>
     <div class="col-md-4">
         <label class="form-label">Telefone 2 (opcional):</label>
         <input id="telefone2" name="telefone2" class="form-control" maxlength="15" placeholder="(00) 00000-0000" value="{{ form_data.telefone2 if form_data else '' }}">
     </div>
     <div class="col-md-6">
-        <label class="form-label">Nome da mãe:</label>
-        <input id="nomeMae" name="nome_mae" class="form-control" value="{{ form_data.nome_mae if form_data else '' }}">
+        <label class="form-label">Nome da mãe: <span class="text-danger">*</span></label>
+        <input id="nomeMae" name="nome_mae" class="form-control" value="{{ form_data.nome_mae if form_data else '' }}" required>
     </div>
     <div class="col-md-6">
-        <label class="form-label">Rua:</label>
-        <input id="rua" name="rua" class="form-control" autocomplete="off" list="ruas-sugestoes" placeholder="Digite as primeiras letras da rua" value="{{ form_data.rua if form_data else '' }}"{% if session.get('usuario_perfil') != 'ADMIN' %} data-restrict-to-list="true"{% endif %}>
+        <label class="form-label">Rua: <span class="text-danger">*</span></label>
+        <input id="rua" name="rua" class="form-control" autocomplete="off" list="ruas-sugestoes" placeholder="Digite as primeiras letras da rua" value="{{ form_data.rua if form_data else '' }}" required{% if session.get('usuario_perfil') != 'ADMIN' %} data-restrict-to-list="true"{% endif %}>
         <datalist id="ruas-sugestoes">
             {% for item in ruas %}
             <option value="{{ item }}"></option>
@@ -53,12 +53,12 @@
         </datalist>
     </div>
     <div class="col-md-2">
-        <label class="form-label">Número:</label>
-        <input id="numero" name="numero" class="form-control" autocomplete="off" inputmode="numeric" placeholder="Ex: 123" value="{{ form_data.numero if form_data else '' }}">
+        <label class="form-label">Número: <span class="text-danger">*</span></label>
+        <input id="numero" name="numero" class="form-control" autocomplete="off" inputmode="numeric" placeholder="Ex: 123" value="{{ form_data.numero if form_data else '' }}" required>
     </div>
     <div class="col-md-4">
-        <label class="form-label">Bairro:</label>
-        <select id="bairro" name="bairro" class="form-control" autocomplete="off">
+        <label class="form-label">Bairro: <span class="text-danger">*</span></label>
+        <select id="bairro" name="bairro" class="form-control" autocomplete="off" required>
             <option value="">▼ Selecione um bairro já cadastrado</option>
             {% for item in bairros %}
             <option value="{{ item }}" {% if form_data and form_data.bairro == item %}selected{% endif %}>{{ item }}</option>
