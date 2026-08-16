@@ -4,7 +4,7 @@ from datetime import date
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app import mapear_dados_cadsus, calcular_idade
+from app import mapear_dados_cadsus, calcular_idade, separar_endereco_em_campos
 
 
 def test_mapear_dados_cadsus_extrai_campos_basicos():
@@ -25,6 +25,16 @@ def test_mapear_dados_cadsus_extrai_campos_basicos():
     assert resultado['sus'] == '123456789012345'
     assert resultado['nome_mae'] == 'JOANA SILVA'
     assert resultado['endereco'] == 'RUA DAS FLORES, Nº 100, BAIRRO CENTRO'
+
+
+def test_separar_endereco_em_campos_reconhece_rua_numero_e_bairro():
+    resultado = separar_endereco_em_campos('RUA DAS FLORES, Nº 100, BAIRRO CENTRO')
+
+    assert resultado == {
+        'rua': 'RUA DAS FLORES',
+        'numero': '100',
+        'bairro': 'CENTRO',
+    }
 
 
 def test_calcular_idade_para_datas_validas():

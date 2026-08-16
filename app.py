@@ -147,6 +147,57 @@ def normalizar_documento(valor):
     return re.sub(r'\D', '', valor)
 
 
+def separar_endereco_em_campos(endereco):
+    endereco = '' if endereco is None else str(endereco).strip()
+    if not endereco:
+        return {'rua': '', 'numero': '', 'bairro': ''}
+
+    texto = re.sub(r'\s+', ' ', endereco).strip().upper()
+
+    match = re.match(
+        r'^(?P<rua>.+?)\s*(?:,\s*)?(?:N[º°]?\s*|NO\.?)\s*(?P<numero>\d+[A-Z0-9/-]*)\s*(?:,\s*)?(?:BAIRRO\s+)?(?P<bairro>.+)$',
+        texto,
+        re.IGNORECASE,
+    )
+    if match:
+        rua = match.group('rua').strip().rstrip(',').strip()
+        numero = match.group('numero').strip().upper()
+        bairro = match.group('bairro').strip().upper()
+        if bairro.startswith('BAIRRO '):
+            bairro = bairro[len('BAIRRO '):].strip()
+        return {'rua': rua, 'numero': numero, 'bairro': bairro}
+
+    partes = [parte.strip() for parte in re.split(r'\s*,\s*', texto) if parte.strip()]
+    if len(partes) >= 3:
+        rua = partes[0].strip().rstrip(',').strip()
+        numero = re.sub(r'^(?:N[º°]?\s*|NO\.?)', '', partes[1]).strip().upper()
+        bairro = re.sub(r'^BAIRRO\s+', '', partes[2]).strip().upper()
+        return {'rua': rua, 'numero': numero, 'bairro': bairro}
+
+    if len(partes) == 2:
+        if re.search(r'\d', partes[1]):
+            rua = partes[0].strip().rstrip(',').strip()
+            numero = re.sub(r'^(?:N[º°]?\s*|NO\.?)', '', partes[1]).strip().upper()
+            return {'rua': rua, 'numero': numero, 'bairro': ''}
+        return {'rua': partes[0], 'numero': '', 'bairro': re.sub(r'^BAIRRO\s+', '', partes[1]).strip().upper()}
+
+    return {'rua': texto, 'numero': '', 'bairro': ''}
+
+
+def montar_endereco(rua='', numero='', bairro=''):
+    partes = []
+    rua = (rua or '').strip().upper()
+    numero = (numero or '').strip().upper()
+    bairro = (bairro or '').strip().upper()
+    if rua:
+        partes.append(rua)
+    if numero:
+        partes.append(f'Nº {numero}')
+    if bairro:
+        partes.append(f'BAIRRO {bairro}')
+    return ', '.join(partes)
+
+
 def _normalizar_nome_campo(nome):
     if nome is None:
         return ''
@@ -2089,7 +2140,10 @@ def editar_paciente(paciente_id):
         sus = normalizar_documento(request.form.get('sus', '').strip())
         data_obito = normalizar_data_para_iso(request.form.get('data_obito'))
         oncologico = request.form.get('oncologico') == 'on'
-        endereco = request.form.get('endereco', '').strip().upper()
+        rua = request.form.get('rua', '').strip().upper()
+        numero = request.form.get('numero', '').strip().upper()
+        bairro = request.form.get('bairro', '').strip().upper()
+        endereco = montar_endereco(rua, numero, bairro)
 
         if not nome:
             conn.close()
@@ -2130,7 +2184,8 @@ def editar_paciente(paciente_id):
         flash('Paciente não encontrado.', 'warning')
         return redirect(origem_retorno)
 
-    return render_template('editar_paciente.html', paciente=paciente, origem_retorno=origem_retorno)
+    endereco_campos = separar_endereco_em_campos(paciente[4])
+    return render_template('editar_paciente.html', paciente=paciente, endereco_campos=endereco_campos, origem_retorno=origem_retorno)
 
 @app.route('/paciente/<paciente_id>')
 def historico_paciente(paciente_id):
