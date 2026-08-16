@@ -26,7 +26,8 @@
     </form>
 </div>
 
-<table class="table table-striped table-bordered">
+<div class="table-responsive">
+<table class="table table-striped table-bordered align-middle" style="min-width: 1080px;">
     <thead class="table-dark">
         {% if modo_urgencia_em_espera %}
         <tr>
@@ -42,14 +43,14 @@
     {% for s in solicitacoes %}
         {% if modo_urgencia_em_espera %}
         <tr>
-            <td class="text-center">{{ s[0]|formatar_documento }}</td>
-            <td>{{ s[1] }}</td>
-            <td>{{ s[2] if s[2] else '-' }}</td>
-            <td>{{ s[3] if s[3] else '-' }}</td>
-            <td>{{ s[4] if s[4] else '-' }}</td>
-            <td>{{ s[5]|formatar_data }}</td>
-            <td>{{ s[6]|formatar_data }}</td>
-            <td>
+            <td class="text-center fw-bold small" style="white-space: nowrap;">{{ s[0]|formatar_documento }}</td>
+            <td class="fw-bold small">{{ s[1] }}</td>
+            <td class="fw-bold small">{{ s[2] if s[2] else '-' }}</td>
+            <td class="fw-bold small">{{ s[3] if s[3] else '-' }}</td>
+            <td class="fw-bold small">{{ s[4] if s[4] else '-' }}</td>
+            <td class="fw-bold small" style="white-space: nowrap;">{{ s[5]|formatar_data }}</td>
+            <td class="fw-bold small" style="white-space: nowrap;">{{ s[6]|formatar_data }}</td>
+            <td class="text-nowrap fw-bold small">
                 <a href="{{ url_for('historico_paciente', paciente_id=s[0], next=request.full_path) }}" class="btn btn-sm btn-info">Ver Histórico</a>
                 {% if s[4] == 'RETIRADO' or s[10] == 'RETIRADO' %}
                     <a href="{{ url_for('termo_retirada_solicitacao', solicitacao_id=s[0]) }}" class="btn btn-sm btn-warning ms-1" title="Baixar termo de retirada" target="_blank">
@@ -60,18 +61,18 @@
         </tr>
         {% else %}
         <tr>
-            <td class="text-center">{{ s[0]|formatar_documento }}</td>
-            <td>{{ s[1] }}</td>
-            <td class="text-center">{{ s[2] }}</td>
-            <td class="text-center">{{ s[3]|formatar_data }}</td>
-            <td class="text-center">
+            <td class="text-center fw-bold small" style="white-space: nowrap;">{{ s[0]|formatar_documento }}</td>
+            <td class="fw-bold small">{{ s[1] }}</td>
+            <td class="text-center fw-bold small">{{ s[2] }}</td>
+            <td class="text-center fw-bold small" style="white-space: nowrap;">{{ s[3]|formatar_data }}</td>
+            <td class="text-center fw-bold small">
                 {{ s[4] if s[4] else '-' }}
                 {% if s[5] and s[5] > 0 %}
                     <span class="badge bg-warning text-dark ms-1">Retorno agendado</span>
                 {% endif %}
             </td>
             {% if mostrar_tipos_radiografia %}
-            <td>
+            <td class="fw-bold small">
                 {% if s[6] %}
                     {% for tipo_radiografia in s[6].split('||') %}
                         <div>{{ tipo_radiografia }}</div>
@@ -81,7 +82,7 @@
                 {% endif %}
             </td>
             {% endif %}
-            <td class="text-center">
+            <td class="text-center fw-bold small">
                 <a href="{{ url_for('historico_paciente', paciente_id=s[0], next=request.full_path) }}" class="btn btn-sm btn-info">Ver Histórico</a>
                 {% if s[4] == 'RETIRADO' %}
                     <a href="{{ url_for('termo_retirada_solicitacao', solicitacao_id=s[0]) }}" class="btn btn-sm btn-warning ms-1" title="Baixar termo de retirada" target="_blank">
@@ -98,6 +99,7 @@
     {% endfor %}
     </tbody>
 </table>
+</div>
 
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
     <div class="text-muted small">
