@@ -153,36 +153,35 @@ def separar_endereco_em_campos(endereco):
         return {'rua': '', 'numero': '', 'bairro': '', 'sem_numero': False}
 
     texto = re.sub(r'\s+', ' ', endereco).strip().upper()
-    sem_numero = 'S/N' in texto.upper() or 'SEM NUMERO' in texto.upper()
-
-    match = re.match(
-        r'^(?P<rua>.+?)\s*(?:,\s*)?(?:N[º°]?\s*|NO\.?|S/N)\s*(?P<numero>\d+[A-Z0-9/-]*)?\s*(?:,\s*)?(?:BAIRRO\s+)?(?P<bairro>.+)$',
-        texto,
-        re.IGNORECASE,
-    )
-    if match:
-        rua = match.group('rua').strip().rstrip(',').strip()
-        numero = (match.group('numero') or '').strip().upper()
-        bairro = match.group('bairro').strip().upper()
-        if bairro.startswith('BAIRRO '):
-            bairro = bairro[len('BAIRRO '):].strip()
-        return {'rua': rua, 'numero': numero, 'bairro': bairro, 'sem_numero': sem_numero}
+    sem_numero = 'S/N' in texto or 'SEM NUMERO' in texto
 
     partes = [parte.strip() for parte in re.split(r'\s*,\s*', texto) if parte.strip()]
-    if len(partes) >= 3:
-        rua = partes[0].strip().rstrip(',').strip()
-        numero = re.sub(r'^(?:N[º°]?\s*|NO\.?|S/N)\s*', '', partes[1]).strip().upper()
-        bairro = re.sub(r'^BAIRRO\s+', '', partes[2]).strip().upper()
-        return {'rua': rua, 'numero': numero, 'bairro': bairro, 'sem_numero': sem_numero}
+    if not partes:
+        return {'rua': '', 'numero': '', 'bairro': '', 'sem_numero': sem_numero}
 
-    if len(partes) == 2:
-        if re.search(r'\d', partes[1]) or 'S/N' in partes[1].upper():
-            rua = partes[0].strip().rstrip(',').strip()
-            numero = re.sub(r'^(?:N[º°]?\s*|NO\.?|S/N)\s*', '', partes[1]).strip().upper()
-            return {'rua': rua, 'numero': numero, 'bairro': '', 'sem_numero': sem_numero}
-        return {'rua': partes[0], 'numero': '', 'bairro': re.sub(r'^BAIRRO\s+', '', partes[1]).strip().upper(), 'sem_numero': sem_numero}
+    rua = partes[0].strip().rstrip(',').strip()
+    numero = ''
+    bairro_partes = []
 
-    return {'rua': texto, 'numero': '', 'bairro': '', 'sem_numero': sem_numero}
+    for parte in partes[1:]:
+        parte_limpa = parte.strip()
+        if not parte_limpa:
+            continue
+        if parte_limpa in {'S/N', 'SEM NUMERO'}:
+            sem_numero = True
+            continue
+        if re.match(r'^(?:N[º°]?\s*|NO\.?|S/N)\s*', parte_limpa) or re.fullmatch(r'\d+[A-Z0-9/-]*', parte_limpa):
+            numero = re.sub(r'^(?:N[º°]?\s*|NO\.?|S/N)\s*', '', parte_limpa).strip().upper()
+            continue
+        bairro_partes.append(re.sub(r'^BAIRRO\s+', '', parte_limpa).strip())
+
+    bairro = ', '.join(bairro_partes).strip().rstrip(',').strip()
+    if not bairro and len(partes) > 1:
+        ultimo = re.sub(r'^BAIRRO\s+', '', partes[-1]).strip()
+        if ultimo and ultimo != rua:
+            bairro = ultimo
+
+    return {'rua': rua, 'numero': numero, 'bairro': bairro, 'sem_numero': sem_numero}
 
 
 def montar_endereco(rua='', numero='', bairro='', sem_numero=False):
@@ -749,8 +748,12 @@ def formatar_endereco_lista(endereco):
         parte_upper = parte.strip().upper()
         if parte_upper in {'S/N', 'SEM NUMERO'}:
             partes_formatadas.append('S/N')
-        elif re.match(r'^(?:N[º°]?\s*|NO\.?)(?:\d|\w)', parte_upper):
-            continue
+        elif re.match(r'^(?:N[º°]?\s*|NO\.?)', parte_upper):
+            numero = re.sub(r'^(?:N[º°]?\s*|NO\.?)', '', parte_upper).strip()
+            if numero:
+                partes_formatadas.append(numero)
+            else:
+                partes_formatadas.append('S/N')
         elif parte_upper.startswith('BAIRRO '):
             partes_formatadas.append(parte_upper[len('BAIRRO '):].strip())
         else:
