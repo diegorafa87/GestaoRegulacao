@@ -12,7 +12,7 @@
         <label class="form-label">Paciente (CPF/SUS):</label>
         <input id="paciente_id" name="paciente_id" class="form-control" required list="pacientes-sugestoes" autocomplete="off" placeholder="Digite CPF, SUS ou nome" value="{{ form_data.paciente_id or '' }}">
         <datalist id="pacientes-sugestoes"></datalist>
-        <small id="paciente-info" class="text-muted"></small>
+        <small id="paciente-info" class="form-text text-muted"></small>
     </div>
     <div class="col-md-4">
         <label class="form-label">Data Solicitação:</label>
@@ -63,6 +63,17 @@
         </div>
         <small class="text-muted">Digite para buscar e adicione cada especialidade. Você pode escolher mais de uma.</small>
     </div>
+    <div class="col-md-8">
+        <label class="form-label">Resumo Clínico:</label>
+        <textarea
+            id="resumo_clinico"
+            name="resumo_clinico"
+            class="form-control"
+            rows="3"
+            placeholder="Descreva o resumo clínico da requisição"
+        >{{ form_data.resumo_clinico or '' }}</textarea>
+        <small class="text-muted">Descreva o que o médico escreveu na requisição.</small>
+    </div>
     <div class="col-md-4">
         <label class="form-label">Prioridade:</label>
         <select name="prioridade" class="form-control" required>
@@ -83,19 +94,6 @@
     <div id="campo_data_retorno_container" class="col-md-3 d-none">
         <label class="form-label">Previsão de Retorno:</label>
         <input id="data_retorno" name="data_retorno" class="form-control" placeholder="DD/MM/AAAA" maxlength="10" value="{{ form_data.data_retorno or '' }}">
-    </div>
-    <div class="col-md-3">
-        <label class="form-label">Sistema de Inserção:</label>
-        <select id="sistema_insercao_select" name="sistema_insercao" class="form-control" required>
-            <option value="">▼ Selecione um sistema já cadastrado</option>
-            {% for item in sistemas_insercao %}
-            <option value="{{ item }}" {% if form_data.sistema_insercao == item %}selected{% endif %}>{{ item }}</option>
-            {% endfor %}
-        </select>
-    </div>
-    <div class="col-md-3">
-        <label class="form-label">Data de Inserção:</label>
-        <input id="data_insercao" name="data_insercao" class="form-control" placeholder="DD/MM/AAAA" maxlength="10" value="{{ form_data.data_insercao or '' }}">
     </div>
     <div class="col-md-3">
         <label class="form-label">Quantidade de Solicitações:</label>
@@ -333,6 +331,7 @@
             if (termo.length < 3) {
                 listaSugestoes.innerHTML = '';
                 infoPaciente.textContent = '';
+                infoPaciente.className = 'form-text text-muted';
                 return;
             }
 
@@ -348,6 +347,7 @@
 
                 if (pacientes.length === 0) {
                     infoPaciente.textContent = 'Nenhum paciente encontrado.';
+                    infoPaciente.className = 'form-text fw-semibold text-danger';
                     return;
                 }
 
@@ -361,9 +361,11 @@
                 const termoNormalizado = somenteDigitos(termo);
                 const matchExato = pacientes.find((p) => p.id === termo || (termoNormalizado && somenteDigitos(p.id) === termoNormalizado));
                 if (matchExato) {
-                    infoPaciente.textContent = `Paciente: ${matchExato.nome}`;
+                    infoPaciente.textContent = `Paciente selecionado: ${matchExato.nome}`;
+                    infoPaciente.className = 'form-text fw-semibold text-success';
                 } else {
                     infoPaciente.textContent = `${pacientes.length} paciente(s) encontrado(s) por CPF/SUS ou nome.`;
+                    infoPaciente.className = 'form-text text-muted';
                 }
             } catch (e) {
                 infoPaciente.textContent = 'Erro ao buscar paciente.';

@@ -32,12 +32,17 @@ import urllib.request
 from datetime import datetime
 import csv
 import io
+import zipfile
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 from db import conectar, criar_tabelas
 import ia_utils
+try:
+    import icd10
+except ImportError:  # pragma: no cover
+    icd10 = None
 
 load_dotenv()
 
@@ -67,6 +72,8 @@ def login_required_admin(func):
 def exigir_login_global():
     endpoint = request.endpoint or ''
     if endpoint in PUBLIC_ENDPOINTS or endpoint.startswith('static'):
+        return
+    if endpoint == 'cid_sugestoes':
         return
     if not usuario_logado():
         return redirect(url_for('login'))
@@ -138,6 +145,374 @@ def calcular_idade(data_nascimento):
 def normalizar_documento(valor):
     valor = '' if valor is None else str(valor)
     return re.sub(r'\D', '', valor)
+
+
+def _normalizar_nome_campo(nome):
+    if nome is None:
+        return ''
+    return re.sub(r'[^a-z0-9]+', '', str(nome).strip().lower())
+
+
+def _extrair_valor_do_row(row, aliases):
+    if not isinstance(row, dict):
+        return None
+    for alias in aliases:
+        for chave, valor in row.items():
+            if _normalizar_nome_campo(chave) == _normalizar_nome_campo(alias):
+                return valor
+    return None
+
+
+def _normalizar_item_catalogo(item):
+    if not isinstance(item, (list, tuple)) or len(item) < 2:
+        return None
+
+    codigo = item[0]
+    valor = item[1]
+
+    if isinstance(valor, (list, tuple)):
+        if len(valor) >= 2:
+            for candidato in reversed(valor):
+                if isinstance(candidato, str) and candidato.strip():
+                    descricao = candidato
+                    break
+            else:
+                descricao = valor[-1]
+        else:
+            descricao = valor[0]
+    else:
+        descricao = valor
+
+    codigo_limpo = str(codigo).strip().upper() if codigo is not None else ''
+    descricao_limpa = str(descricao).strip() if descricao is not None else ''
+    if not codigo_limpo or not descricao_limpa:
+        return None
+    return (codigo_limpo, descricao_limpa)
+
+
+def _ler_catalogo_csv_de_handle(handle, origem):
+    amostra = handle.read(4096)
+    handle.seek(0)
+    delimitador = ';' if ';' in amostra else ',' if ',' in amostra else ','
+    reader = csv.DictReader(handle, delimiter=delimitador)
+    if reader.fieldnames is None:
+        return []
+
+    catalogo = []
+    for row in reader:
+        codigo = _extrair_valor_do_row(row, ['codigo', 'cid', 'code', 'id', 'subcat', 'cat', 'catinic', 'catfim'])
+        descricao = _extrair_valor_do_row(row, ['descricao', 'desc', 'description', 'nome', 'denominacao'])
+        if codigo is None or descricao is None:
+            continue
+        codigo_limpo = str(codigo).strip().upper()
+        descricao_limpa = str(descricao).strip()
+        if codigo_limpo and descricao_limpa:
+            catalogo.append((codigo_limpo, descricao_limpa))
+    return catalogo
+
+
+def carregar_catalogo_cid10():
+    caminhos_possiveis = []
+    for nome_variavel in ('CID10_CSV_PATH', 'CID10_ZIP_PATH'):
+        valor = os.environ.get(nome_variavel, '').strip()
+        if valor:
+            caminhos_possiveis.append(valor)
+
+    if not caminhos_possiveis:
+        for nome_arquivo in ('cid10.zip', 'cid10.csv', 'cid.csv', 'cids.zip', 'cids.csv'):
+            caminho = os.path.join(app.root_path, nome_arquivo)
+            if os.path.exists(caminho):
+                caminhos_possiveis.append(caminho)
+
+    for caminho in caminhos_possiveis:
+        if not caminho or not os.path.exists(caminho):
+            continue
+        try:
+            if caminho.lower().endswith('.zip'):
+                with zipfile.ZipFile(caminho) as arquivo_zip:
+                    arquivos_csv = [nome for nome in arquivo_zip.namelist() if nome.lower().endswith(('.csv', '.txt', '.tsv'))]
+                    catalogo_total = []
+                    for nome_arquivo in arquivos_csv:
+                        with arquivo_zip.open(nome_arquivo) as raw_handle:
+                            with io.TextIOWrapper(raw_handle, encoding='utf-8-sig', newline='') as handle:
+                                catalogo_total.extend(_ler_catalogo_csv_de_handle(handle, nome_arquivo))
+                    if catalogo_total:
+                        return catalogo_total
+            else:
+                with open(caminho, encoding='utf-8-sig', newline='') as handle:
+                    catalogo = _ler_catalogo_csv_de_handle(handle, caminho)
+                    if catalogo:
+                        return catalogo
+        except (OSError, UnicodeError, csv.Error, zipfile.BadZipFile):
+            continue
+
+    if icd10 is not None and hasattr(icd10, 'codes'):
+        try:
+            itens = []
+            for item in icd10.codes.items():
+                normalizado = _normalizar_item_catalogo(item)
+                if normalizado is not None:
+                    itens.append(normalizado)
+            return itens
+        except Exception:
+            return []
+
+    return []
+
+
+def traduzir_descricao_cid(texto):
+    if not texto:
+        return ''
+
+    mapa = {
+        'abnormalities of heart beat': 'anormalidades do batimento cardíaco',
+        'tachycardia, unspecified': 'taquicardia, não especificada',
+        'bradycardia, unspecified': 'bradicardia, não especificada',
+        'palpitations': 'palpitações',
+        'other abnormalities of heart beat': 'outras anormalidades do batimento cardíaco',
+        'unspecified abnormalities of heart beat': 'anormalidades do batimento cardíaco, não especificadas',
+        'cardiac murmurs and other cardiac sounds': 'sopros cardíacos e outros sons cardíacos',
+        'benign and innocent cardiac murmurs': 'sopros cardíacos benignos e inocentes',
+        'cardiac murmur, unspecified': 'sopro cardíaco, não especificado',
+        'other cardiac sounds': 'outros sons cardíacos',
+        'abnormal blood-pressure reading, without diagnosis': 'leitura anormal da pressão arterial sem diagnóstico',
+        'elevated blood-pressure reading, without diagnosis of hypertension': 'pressão arterial elevada sem diagnóstico de hipertensão',
+        'cholera': 'cólera',
+        'cholera due to vibrio cholerae 01, biovar cholerae': 'cólera devido a vibrio cholerae 01, biovar cólera',
+        'cholera due to vibrio cholerae 01, biovar eltor': 'cólera devido a vibrio cholerae 01, biovar eltor',
+        'acute rheumatic fever': 'febre reumática aguda',
+        'rheumatic fever, unspecified': 'febre reumática, não especificada',
+        'hypertension, essential': 'hipertensão essencial',
+        'diabetes mellitus, without mention of complication': 'diabetes mellitus sem menção de complicação',
+        'acute upper respiratory infections of multiple and unspecified sites': 'infecções agudas das vias respiratórias superiores de múltiplos e sítios não especificados',
+        'acute pharyngitis': 'faringite aguda',
+        'acute tonsillitis': 'tonsilite aguda',
+        'acute laryngitis and tracheitis': 'laringite e traqueíte agudas',
+        'sinusitis': 'sinusite',
+        'acute bronchitis': 'bronquite aguda',
+        'pain, unspecified': 'dor, não especificada',
+        'acute pain': 'dor aguda',
+        'chronic pain': 'dor crônica',
+        'abdominal pain': 'dor abdominal',
+        'fever, unspecified': 'febre, não especificada',
+        'low back pain': 'dor lombar',
+        'medical advice, not otherwise specified': 'orientação médica, não especificada',
+        'acute': 'agudo',
+        'chronic': 'crônico',
+        'unspecified': 'não especificado',
+        'without diagnosis': 'sem diagnóstico',
+        'without mention of complication': 'sem menção de complicação',
+        'acute respiratory infections': 'infecções respiratórias agudas',
+        'disease': 'doença',
+        'disorder': 'distúrbio',
+        'syndrome': 'síndrome',
+        'infection': 'infecção',
+        'inflammation': 'inflamação',
+        'injury': 'lesão',
+        'poisoning': 'intoxicação',
+        'injury, poisoning and certain other consequences of external causes': 'lesão, intoxicação e outras consequências de causas externas',
+        'factors influencing health status and contact with health services': 'fatores que influenciam o estado de saúde e o contato com os serviços de saúde',
+        'external causes of morbidity and mortality': 'causas externas de morbidade e mortalidade',
+        'other specified': 'outro especificado',
+        'other': 'outro',
+        'unspecified site': 'sítio não especificado',
+        'multiple and unspecified sites': 'múltiplos e sítios não especificados',
+        'due to': 'devido a',
+        'and': 'e',
+        'of': 'de',
+        'the': 'o',
+        'for': 'para',
+        'with': 'com',
+        'in': 'em',
+        'to': 'para',
+        'a': 'um',
+        'an': 'um',
+        'not': 'não',
+        'specified': 'especificado',
+        'other specified': 'outro especificado',
+        'severe': 'grave',
+        'mild': 'leve',
+        'generalized': 'generalizado',
+        'localized': 'localizado',
+        'major': 'maior',
+        'minor': 'menor',
+        'infectious': 'infeccioso',
+        'parasitic': 'parasítico',
+        'bacterial': 'bacteriano',
+        'viral': 'viral',
+        'fungal': 'fúngico',
+        'allergic': 'alérgico',
+        'asthma': 'asma',
+        'bronchitis': 'bronquite',
+        'pneumonia': 'pneumonia',
+        'conjunctivitis': 'conjuntivite',
+        'otitis': 'otite',
+        'diarrhoea': 'diarreia',
+        'diarrhea': 'diarreia',
+        'vomiting': 'vômito',
+        'nausea': 'náusea',
+        'headache': 'dor de cabeça',
+        'cough': 'tosse',
+        'fever': 'febre',
+        'pain': 'dor',
+        'back': 'costas',
+        'abdominal': 'abdominal',
+        'chest': 'torácico',
+        'muscle': 'muscular',
+        'stress': 'estresse',
+        'sudden': 'repentino',
+        'persistent': 'persistente',
+        'recurrent': 'recorrente',
+        'failure': 'falha',
+        'deficiency': 'deficiência',
+        'insufficiency': 'insuficiência',
+        'hemorrhage': 'hemorragia',
+        'ulcer': 'úlcera',
+        'cancer': 'câncer',
+        'tumor': 'tumor',
+    }
+
+    texto_normalizado = texto.strip().lower()
+    if texto_normalizado in mapa:
+        return mapa[texto_normalizado]
+
+    traduzido = texto
+    for chave, valor in mapa.items():
+        traduzido = re.sub(rf'\b{re.escape(chave)}\b', valor, traduzido)
+
+    return traduzido if traduzido != texto else texto
+
+
+def listar_cids_sugestoes(query='', limit=40):
+    catalogo = carregar_catalogo_cid10()
+    if not catalogo:
+        return [
+            ('R52.0', 'DOR AGUDA'),
+            ('R52.1', 'DOR CRÔNICA'),
+            ('R10.0', 'DOR ABDOMINAL'),
+            ('R50.9', 'FEBRE, NÃO ESPECIFICADA'),
+            ('J00', 'RINITE AGUDA'),
+            ('I10', 'HIPERTENSÃO ESSENCIAL'),
+            ('E11.9', 'DIABETES MELLITUS SEM COMPLICAÇÃO'),
+            ('M54.5', 'DOR LOMBAR'),
+            ('Z71.9', 'CONSELHO MÉDICO, NÃO ESPECIFICADO'),
+            ('A00', 'COLERA'),
+            ('B00', 'HERPES VÍRUS HUMANO 1'),
+            ('C50.9', 'NEOPLASIA MALIGNA DA MAMA, NÃO ESPECIFICADA'),
+            ('D50.9', 'ANEMIA, NÃO ESPECIFICADA'),
+        ]
+
+    termo = (query or '').strip().upper()
+    sugestoes = []
+    limit = max(1, min(80, int(limit or 40)))
+
+    def normalizar_codigo(codigo):
+        if not codigo:
+            return ''
+        codigo = str(codigo).strip().upper()
+        if not codigo:
+            return ''
+        return codigo
+
+    def preparar_sugestao(codigo, descricao):
+        codigo_formatado = normalizar_codigo(codigo)
+        descricao_formatada = traduzir_descricao_cid(descricao).upper() if descricao else ''
+        texto = f'{codigo_formatado} {descricao_formatada}'
+        if termo:
+            termo_limpo = termo.strip().upper()
+            codigo_sem_ponto = codigo_formatado.replace('.', '')
+            termo_sem_ponto = termo_limpo.replace('.', '')
+            termo_uma_letra = len(termo_limpo) == 1
+            prefixo_codigo = codigo_formatado[:1] if codigo_formatado else ''
+            prefixo_codigo_sem_ponto = codigo_sem_ponto[:1] if codigo_sem_ponto else ''
+            pode_match = (
+                codigo_formatado.startswith(termo_limpo)
+                or codigo_sem_ponto.startswith(termo_sem_ponto)
+                or termo_limpo in codigo_formatado
+                or termo_sem_ponto in codigo_sem_ponto
+                or termo_limpo in texto
+                or termo_limpo in (descricao_formatada or '')
+                or termo_sem_ponto in (descricao_formatada or '').replace(' ', '')
+            )
+            if termo_uma_letra:
+                pode_match = pode_match and (
+                    prefixo_codigo == termo_limpo
+                    or prefixo_codigo_sem_ponto == termo_sem_ponto
+                    or termo_limpo in prefixo_codigo
+                    or termo_sem_ponto in prefixo_codigo_sem_ponto
+                )
+            if not pode_match:
+                return None
+        if not descricao_formatada:
+            return None
+        return (codigo_formatado, descricao_formatada)
+
+    def extrair_descricao(item):
+        if not isinstance(item, (list, tuple)) or len(item) < 2:
+            return ''
+        codigo, valor = item
+        if isinstance(valor, (list, tuple)):
+            if len(valor) > 1:
+                return valor[-1]
+            return valor[0]
+        return valor
+
+    if termo:
+        for item in catalogo:
+            codigo = item[0]
+            descricao = extrair_descricao(item)
+            sugestao = preparar_sugestao(codigo, descricao)
+            if sugestao is not None:
+                sugestoes.append(sugestao)
+            if len(sugestoes) >= limit:
+                break
+        return sugestoes
+
+    prefixos_prioritarios = ['A', 'B', 'C', 'R', 'S']
+    prefixos_restantes = ['D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z']
+    por_prefixo = {prefixo: [] for prefixo in prefixos_prioritarios + prefixos_restantes}
+
+    for item in catalogo:
+        codigo = item[0]
+        descricao = extrair_descricao(item)
+        sugestao = preparar_sugestao(codigo, descricao)
+        if sugestao is None:
+            continue
+        prefixo = sugestao[0][:1].upper() if sugestao[0] else ''
+        if prefixo in por_prefixo:
+            por_prefixo[prefixo].append(sugestao)
+
+    if not termo:
+        ordem_prefixos = prefixos_prioritarios + prefixos_restantes
+        indice = 0
+        while len(sugestoes) < limit:
+            adicionou = False
+            for _ in range(len(ordem_prefixos)):
+                prefixo = ordem_prefixos[indice % len(ordem_prefixos)]
+                indice += 1
+                if not por_prefixo[prefixo]:
+                    continue
+                sugestoes.append(por_prefixo[prefixo].pop(0))
+                adicionou = True
+                if len(sugestoes) >= limit:
+                    break
+            if not adicionou:
+                break
+        return sugestoes
+
+    while len(sugestoes) < limit:
+        adicionou = False
+        for prefixo in prefixos_prioritarios + prefixos_restantes:
+            if not por_prefixo[prefixo]:
+                continue
+            sugestoes.append(por_prefixo[prefixo].pop(0))
+            adicionou = True
+            if len(sugestoes) >= limit:
+                break
+        if not adicionou:
+            break
+
+    return sugestoes
 
 
 def mapear_dados_cadsus(payload):
@@ -416,267 +791,86 @@ def formatar_periodo_relatorio(data_inicio, data_fim):
         return f'Ate {data_fim}'
     return 'Todos os periodos'
 
-def gerar_pdf_relatorio_resumo(resumo, tipo, especialidade, data_inicio, data_fim, total_registros):
-    largura_pagina = 595
-    altura_pagina = 842
-    margem_x = 42
-    rodape_y = 36
-    largura_util = largura_pagina - (margem_x * 2)
-    coluna_especialidade = 385
-    coluna_quantidade = largura_util - coluna_especialidade
-    topo_tabela = None
-    y_atual = 0
-    paginas = []
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.enums import TA_LEFT
+
+
+def gerar_pdf_relatorio_resumo(resumo, tipo, especialidade, data_inicio, data_fim, total_registros, pacientes_por_especialidade=None):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=0.6 * inch, leftMargin=0.6 * inch, topMargin=0.7 * inch, bottomMargin=0.7 * inch)
+    styles = getSampleStyleSheet()
+    style_title = styles['Title']
+    style_title.fontName = 'Helvetica-Bold'
+    style_title.fontSize = 14
+    style_title.leading = 16
+    style_normal = styles['BodyText']
+    style_normal.fontName = 'Helvetica'
+    style_normal.fontSize = 9
+    style_small = styles['BodyText']
+    style_small.fontName = 'Helvetica'
+    style_small.fontSize = 8
+    style_heading = styles['Heading2']
+    style_heading.fontName = 'Helvetica-Bold'
+    style_heading.fontSize = 11
+
     data_geracao = datetime.now().strftime('%d/%m/%Y %H:%M')
     periodo = formatar_periodo_relatorio(data_inicio, data_fim)
 
-    cor_primaria = (0.121, 0.466, 0.705)
-    cor_primaria_escura = (0.082, 0.247, 0.396)
-    cor_texto = (0.149, 0.164, 0.196)
-    cor_muted = (0.420, 0.451, 0.482)
-    cor_borda = (0.820, 0.843, 0.878)
-    cor_fundo_box = (0.953, 0.965, 0.980)
-    cor_linha_alternada = (0.976, 0.980, 0.988)
-    cor_branca = (1, 1, 1)
-
-    def adicionar_comando(comando):
-        paginas[-1].append(comando)
-
-    def adicionar_texto(x, y, texto, fonte='F1', tamanho=11, cor=cor_texto):
-        adicionar_comando(comando_texto_pdf(x, y, texto, fonte=fonte, tamanho=tamanho, cor=cor))
-
-    def desenhar_cabecalho(primeira_pagina=False):
-        nonlocal y_atual
-        centro_x = margem_x + (largura_util / 2)
-        topo_box = altura_pagina - 48
-        altura_box = 82
-        base_box = topo_box - altura_box
-
-        adicionar_comando(
-            comando_retangulo_pdf(
-                margem_x,
-                base_box,
-                largura_util,
-                altura_box,
-                cor_fundo=cor_primaria,
-                cor_borda=cor_primaria,
-                espessura=1,
-            )
-        )
-        adicionar_comando(
-            comando_linha_pdf(
-                margem_x + 28,
-                base_box + 48,
-                margem_x + largura_util - 28,
-                base_box + 48,
-                cor=(0.749, 0.827, 0.902),
-                espessura=1,
-            )
-        )
-        adicionar_comando(
-            comando_texto_centralizado_pdf(
-                centro_x,
-                topo_box - 18,
-                'Secretaria Municipal de Saude de Fernando Pedroza',
-                largura_util - 40,
-                fonte='F2',
-                tamanho=13,
-                cor=(0.910, 0.949, 0.984),
-            )
-        )
-        adicionar_comando(
-            comando_texto_centralizado_pdf(
-                centro_x,
-                topo_box - 42,
-                'Relatorio de Especialidades Realizadas',
-                largura_util - 40,
-                fonte='F2',
-                tamanho=20,
-                cor=cor_branca,
-            )
-        )
-        adicionar_comando(
-            comando_texto_centralizado_pdf(
-                centro_x,
-                topo_box - 61,
-                'Procedimentos concluídos agrupados por especialidade',
-                largura_util - 40,
-                tamanho=10,
-                cor=(0.910, 0.949, 0.984),
-            )
-        )
-
-        y_atual = base_box - 22
-
-        if primeira_pagina:
-            altura_box = 88
-            base_box = y_atual - altura_box
-            adicionar_comando(
-                comando_retangulo_pdf(
-                    margem_x,
-                    base_box,
-                    largura_util,
-                    altura_box,
-                    cor_fundo=cor_fundo_box,
-                    cor_borda=cor_borda,
-                    espessura=1,
-                )
-            )
-            adicionar_texto(margem_x + 14, y_atual - 20, f'Gerado em: {data_geracao}', fonte='F2', tamanho=11)
-            adicionar_texto(margem_x + 14, y_atual - 40, f'Tipo: {tipo.title() if tipo else "Todos"}', tamanho=10, cor=cor_muted)
-            adicionar_texto(margem_x + 14, y_atual - 58, f'Especialidade: {especialidade if especialidade else "Todas"}', tamanho=10, cor=cor_muted)
-            adicionar_texto(margem_x + 275, y_atual - 20, f'Periodo: {periodo}', tamanho=10, cor=cor_muted)
-            adicionar_texto(margem_x + 275, y_atual - 40, f'Total realizado: {total_registros}', fonte='F2', tamanho=12, cor=cor_primaria_escura)
-            adicionar_texto(margem_x + 275, y_atual - 58, f'Registros no resumo: {len(resumo)}', tamanho=10, cor=cor_muted)
-            y_atual = base_box - 24
-        else:
-            y_atual -= 10
-
-    def desenhar_cabecalho_tabela():
-        nonlocal y_atual, topo_tabela
-        topo = y_atual
-        base = topo - 28
-        topo_tabela = topo
-
-        adicionar_comando(
-            comando_retangulo_pdf(
-                margem_x,
-                base,
-                largura_util,
-                28,
-                cor_fundo=cor_primaria_escura,
-                cor_borda=cor_primaria_escura,
-            )
-        )
-        adicionar_comando(comando_linha_pdf(margem_x + coluna_especialidade, base, margem_x + coluna_especialidade, topo, cor=(0.749, 0.827, 0.902), espessura=1))
-        adicionar_texto(margem_x + 12, topo - 18, 'Especialidade', fonte='F2', tamanho=11, cor=cor_branca)
-        adicionar_texto(margem_x + coluna_especialidade + 12, topo - 18, 'Quantidade', fonte='F2', tamanho=11, cor=cor_branca)
-        y_atual = base - 6
-
-    def nova_pagina(primeira_pagina=False):
-        paginas.append([])
-        desenhar_cabecalho(primeira_pagina=primeira_pagina)
-        desenhar_cabecalho_tabela()
-
-    nova_pagina(primeira_pagina=True)
+    story = []
+    story.append(Paragraph('Secretaria Municipal de Saúde de Fernando Pedroza', styles['Heading1']))
+    story.append(Paragraph('Relatório de Especialidades Realizadas', style_title))
+    story.append(Paragraph('Procedimentos concluídos agrupados por especialidade', style_normal))
+    story.append(Spacer(1, 0.1 * inch))
+    story.append(Paragraph(f'Gerado em: {data_geracao}', style_normal))
+    story.append(Paragraph(f'Tipo: {tipo.title() if tipo else "Todos"}', style_normal))
+    story.append(Paragraph(f'Especialidade: {especialidade if especialidade else "Todas"}', style_normal))
+    story.append(Paragraph(f'Período: {periodo}', style_normal))
+    story.append(Paragraph(f'Total realizado: {total_registros}', style_normal))
+    story.append(Spacer(1, 0.15 * inch))
+    story.append(Paragraph('Resumo por especialidade', style_heading))
+    story.append(Spacer(1, 0.05 * inch))
 
     if resumo:
-        for indice, (especialidade_item, quantidade) in enumerate(resumo):
+        rows = [['Especialidade', 'Quantidade', 'Resumo']]
+        for especialidade_item, quantidade in resumo:
             descricao = especialidade_item if especialidade_item else 'Sem especialidade informada'
-            linhas = quebrar_linha_pdf(descricao, limite=52)
-            altura_linhas = len(linhas) * 14
-            altura_linha = max(28, altura_linhas + 12)
+            resumo_texto = descricao
+            if pacientes_por_especialidade:
+                pacientes = pacientes_por_especialidade.get(especialidade_item) or []
+                if pacientes:
+                    nomes = ', '.join(str(p[1]) for p in pacientes[:4])
+                    if len(pacientes) > 4:
+                        nomes += '...'
+                    resumo_texto = nomes
+            rows.append([descricao, str(quantidade), resumo_texto])
 
-            if y_atual - altura_linha < rodape_y + 22:
-                nova_pagina(primeira_pagina=False)
-
-            topo = y_atual
-            base = topo - altura_linha
-            cor_fundo = cor_linha_alternada if indice % 2 == 0 else cor_branca
-
-            adicionar_comando(
-                comando_retangulo_pdf(
-                    margem_x,
-                    base,
-                    largura_util,
-                    altura_linha,
-                    cor_fundo=cor_fundo,
-                    cor_borda=cor_borda,
-                    espessura=1,
-                )
-            )
-            adicionar_comando(comando_linha_pdf(margem_x + coluna_especialidade, base, margem_x + coluna_especialidade, topo, cor=cor_borda, espessura=1))
-
-            for posicao, linha in enumerate(linhas):
-                adicionar_texto(margem_x + 12, topo - 18 - (posicao * 14), linha, tamanho=10)
-
-            quantidade_y = base + (altura_linha / 2) - 3
-            adicionar_texto(margem_x + coluna_especialidade + 12, quantidade_y, str(quantidade), fonte='F2', tamanho=11, cor=cor_primaria_escura)
-            y_atual = base - 4
+        table = Table(rows, repeatRows=1, colWidths=[2.2 * inch, 0.9 * inch, 3.2 * inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0d6efd')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d0d7de')),
+            ('ALIGN', (1, 1), (1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.white]),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        story.append(table)
     else:
-        altura_box = 42
-        if y_atual - altura_box < rodape_y + 22:
-            nova_pagina(primeira_pagina=False)
+        story.append(Paragraph('Nenhum registro encontrado para os filtros informados.', style_normal))
 
-        topo = y_atual
-        base = topo - altura_box
-        adicionar_comando(
-            comando_retangulo_pdf(
-                margem_x,
-                base,
-                largura_util,
-                altura_box,
-                cor_fundo=cor_fundo_box,
-                cor_borda=cor_borda,
-                espessura=1,
-            )
-        )
-        adicionar_texto(margem_x + 12, topo - 24, 'Nenhum registro encontrado para os filtros informados.', fonte='F2', tamanho=11, cor=cor_muted)
-
-    total_paginas = len(paginas)
-    for indice_pagina, comandos in enumerate(paginas, start=1):
-        comandos.append(comando_linha_pdf(margem_x, rodape_y + 10, margem_x + largura_util, rodape_y + 10, cor=cor_borda, espessura=1))
-        comandos.append(comando_texto_pdf(margem_x, rodape_y - 2, f'Sistema de Regulacao - emitido em {data_geracao}', tamanho=9, cor=cor_muted))
-        comandos.append(comando_texto_pdf(margem_x + largura_util - 76, rodape_y - 2, f'Pagina {indice_pagina}/{total_paginas}', fonte='F2', tamanho=9, cor=cor_muted))
-
-    objetos = {
-        1: '<< /Type /Catalog /Pages 2 0 R >>',
-        3: '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-        4: '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
-        5: '<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>'
-    }
-
-    referencias_paginas = []
-    numero_objeto = 6
-
-    for comandos in paginas:
-        conteudo = '\n'.join(comandos)
-        conteudo_bytes = conteudo.encode('latin-1', errors='replace')
-        objeto_conteudo = numero_objeto
-        objeto_pagina = numero_objeto + 1
-        numero_objeto += 2
-
-        objetos[objeto_conteudo] = (
-            f'<< /Length {len(conteudo_bytes)} >>\n'
-            f'stream\n{conteudo}\nendstream'
-        )
-        objetos[objeto_pagina] = (
-            '<< /Type /Page /Parent 2 0 R '
-            f'/MediaBox [0 0 {largura_pagina} {altura_pagina}] '
-            '/Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> '
-            f'/Contents {objeto_conteudo} 0 R >>'
-        )
-        referencias_paginas.append(f'{objeto_pagina} 0 R')
-
-    objetos[2] = f'<< /Type /Pages /Kids [{" ".join(referencias_paginas)}] /Count {len(referencias_paginas)} >>'
-
-    pdf = io.BytesIO()
-    pdf.write(b'%PDF-1.4\n%\xe2\xe3\xcf\xd3\n')
-
-    offsets = {}
-    for numero in sorted(objetos):
-        offsets[numero] = pdf.tell()
-        pdf.write(f'{numero} 0 obj\n'.encode('latin-1'))
-        pdf.write(objetos[numero].encode('latin-1'))
-        pdf.write(b'\nendobj\n')
-
-    xref_inicio = pdf.tell()
-    total_objetos = max(objetos)
-    pdf.write(f'xref\n0 {total_objetos + 1}\n'.encode('latin-1'))
-    pdf.write(b'0000000000 65535 f \n')
-
-    for numero in range(1, total_objetos + 1):
-        offset = offsets.get(numero, 0)
-        pdf.write(f'{offset:010} 00000 n \n'.encode('latin-1'))
-
-    pdf.write(
-        (
-            f'trailer\n<< /Size {total_objetos + 1} /Root 1 0 R >>\n'
-            f'startxref\n{xref_inicio}\n%%EOF'
-        ).encode('latin-1')
-    )
-
-    return pdf.getvalue()
+    doc.build(story)
+    return buffer.getvalue()
 
 
 def gerar_pdf_relatorio_paciente(paciente_relatorio, relatorio_paciente):
@@ -2599,13 +2793,40 @@ def relatorios():
 
     if formato == 'pdf' and view == 'resumo':
         total_registros = sum(item[1] for item in resumo) if resumo else 0
+        pacientes_por_especialidade = {}
+        if resumo:
+            conn_pacientes = conectar()
+            cursor_pacientes = conn_pacientes.cursor()
+            try:
+                for especialidade_item, _ in resumo:
+                    if not especialidade_item:
+                        continue
+                    cursor_pacientes.execute(
+                        '''
+                        SELECT p.id, p.nome
+                        FROM paciente p
+                        INNER JOIN solicitacao s ON s.paciente_id = p.id
+                        WHERE UPPER(COALESCE(s.especialidade, '')) = UPPER(%s)
+                          AND UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
+                          AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
+                        GROUP BY p.id, p.nome
+                        ORDER BY p.nome ASC
+                        LIMIT 10
+                        ''',
+                        (especialidade_item,)
+                    )
+                    pacientes_por_especialidade[especialidade_item] = cursor_pacientes.fetchall()
+            finally:
+                conn_pacientes.close()
+
         pdf_content = gerar_pdf_relatorio_resumo(
             resumo,
             tipo,
             especialidade,
             data_inicio_raw,
             data_fim_raw,
-            total_registros
+            total_registros,
+            pacientes_por_especialidade=pacientes_por_especialidade,
         )
         prefixo_arquivo = 'relatorio_em_espera' if situacao == 'EM_ESPERA' else 'relatorio_realizados'
         nome_arquivo = f"{prefixo_arquivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
@@ -2758,6 +2979,8 @@ def nova_solicitacao():
         'sistema_insercao': request.form.get('sistema_insercao', '').strip(),
         'quantidade_solicitacoes': request.form.get('quantidade_solicitacoes', '1').strip(),
         'data_insercao': request.form.get('data_insercao', '').strip(),
+        'cid': request.form.get('cid', '').strip(),
+        'resumo_clinico': request.form.get('resumo_clinico', '').strip(),
         'data_retorno': request.form.get('data_retorno', '').strip(),
     }
 
@@ -2789,6 +3012,8 @@ def nova_solicitacao():
         encaminhamento = request.form.get('encaminhamento', '').upper() if request.form.get('encaminhamento') else None
         status = request.form['status']
         sistema_insercao = request.form.get('sistema_insercao', '').strip().upper() or None
+        cid = request.form.get('cid', '').strip().upper() or None
+        resumo_clinico = request.form.get('resumo_clinico', '').strip() or None
         quantidade_raw = request.form.get('quantidade_solicitacoes', '1').strip()
         try:
             quantidade_solicitacoes = int(quantidade_raw)
@@ -2850,8 +3075,7 @@ def nova_solicitacao():
             return render_nova_solicitacao_page()
 
         if not sistema_insercao:
-            flash('Informe o sistema de inserção.', 'warning')
-            return render_nova_solicitacao_page()
+            sistema_insercao = 'COPIRN'
 
         especialidades_catalogo = listar_especialidades()
         especialidades_invalidas = [esp for esp in especialidades if esp not in especialidades_catalogo]
@@ -2878,7 +3102,7 @@ def nova_solicitacao():
             repeticoes = quantidade_solicitacoes if replicar else 1
             for _ in range(repeticoes):
                 c.execute(
-                    "INSERT INTO solicitacao (paciente_id, data_solicitacao, data_entrada, data_insercao, data_realizacao, data_retorno, unidade_realizadora, tipo, especialidade, descricao, prioridade, encaminhamento, status, sistema_insercao) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    "INSERT INTO solicitacao (paciente_id, data_solicitacao, data_entrada, data_insercao, data_realizacao, data_retorno, unidade_realizadora, tipo, especialidade, descricao, prioridade, encaminhamento, status, sistema_insercao, cid, resumo_clinico) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                     (
                         paciente_id_resolvido,
                         data_solicitacao,
@@ -2894,6 +3118,8 @@ def nova_solicitacao():
                         encaminhamento,
                         status,
                         sistema_insercao,
+                        cid,
+                        resumo_clinico,
                     )
                 )
                 solicitacoes_criadas += 1
@@ -2926,6 +3152,16 @@ def nova_solicitacao():
             flash('Solicitação criada com sucesso.', 'success')
         return redirect(url_for('nova_solicitacao', next=origem_retorno))
     return render_nova_solicitacao_page()
+
+@app.route('/cid_sugestoes')
+def cid_sugestoes():
+    query = request.args.get('query', '').strip()
+    limit = request.args.get('limit', '40').strip()
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 40
+    return jsonify(listar_cids_sugestoes(query=query, limit=limit))
 
 @app.route('/admin/especialidades', methods=['POST'])
 @login_required_admin
