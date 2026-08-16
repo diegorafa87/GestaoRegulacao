@@ -33,21 +33,26 @@
     </div>
     <div id="especialidade_unica_container" class="col-md-4">
         <label class="form-label">Especialidade/Descrição:</label>
-        {% if session.get('usuario_perfil') == 'ADMIN' %}
-        <input id="especialidade_input" name="especialidade" class="form-control" required list="especialidades-sugestoes" autocomplete="off" placeholder="Digite para sugerir especialidade" value="{{ form_data.especialidade or '' }}">
-        <datalist id="especialidades-sugestoes">
-            {% for item in especialidades %}
-            <option value="{{ item }}"></option>
-            {% endfor %}
-        </datalist>
-        {% else %}
-        <select id="especialidade_input" name="especialidade" class="form-control" required>
-            <option value="">Selecione uma especialidade</option>
-            {% for item in especialidades %}
-            <option value="{{ item }}" {% if form_data.especialidade == item %}selected{% endif %}>{{ item }}</option>
-            {% endfor %}
-        </select>
-        {% endif %}
+        <div class="d-flex flex-column gap-1">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                {% if session.get('usuario_perfil') == 'ADMIN' %}
+                <input id="especialidade_input" name="especialidade" class="form-control flex-grow-1" required list="especialidades-sugestoes" autocomplete="off" placeholder="Digite para sugerir especialidade" value="{{ form_data.especialidade or '' }}">
+                <datalist id="especialidades-sugestoes">
+                    {% for item in especialidades %}
+                    <option value="{{ item }}"></option>
+                    {% endfor %}
+                </datalist>
+                {% else %}
+                <select id="especialidade_input" name="especialidade" class="form-control flex-grow-1" required>
+                    <option value="">Selecione uma especialidade</option>
+                    {% for item in especialidades %}
+                    <option value="{{ item }}" {% if form_data.especialidade == item %}selected{% endif %}>{{ item }}</option>
+                    {% endfor %}
+                </select>
+                {% endif %}
+                <span id="especialidade-info" class="especialidade-info-message fw-semibold text-success small" style="display:none;"></span>
+            </div>
+        </div>
     </div>
     <div id="especialidades_multiplas_container" class="col-md-4 d-none">
         <label class="form-label">Especialidades/Exames (EXAME):</label>
@@ -56,6 +61,7 @@
             <button id="btnAdicionarEspecialidade" type="button" class="btn btn-outline-primary">Adicionar</button>
         </div>
         <div id="especialidades_selecionadas" class="d-flex flex-wrap gap-2 mb-2"></div>
+        <span class="especialidade-info-message fw-semibold text-success small" style="display:none;"></span>
         <div id="especialidades_hidden_inputs">
             {% for item in form_data.especialidades_multiplas %}
             <input type="hidden" name="especialidades_multiplas" value="{{ item }}">
@@ -128,6 +134,8 @@
     const listaSugestoes = document.getElementById('pacientes-sugestoes');
     const infoPaciente = document.getElementById('paciente-info');
     const campoEspecialidade = document.getElementById('especialidade_input');
+    const infoEspecialidade = document.getElementById('especialidade-info');
+    const infosEspecialidade = Array.from(document.querySelectorAll('.especialidade-info-message'));
     const campoEspecialidadeBusca = document.getElementById('especialidade_busca');
     const btnAdicionarEspecialidade = document.getElementById('btnAdicionarEspecialidade');
     const especialidadesSelecionadasContainer = document.getElementById('especialidades_selecionadas');
@@ -199,6 +207,53 @@
         }
     }
 
+    function obterValorEspecialidadeParaMensagem() {
+        if (campoEspecialidade && !campoEspecialidade.disabled) {
+            const valor = (campoEspecialidade.value || '').trim();
+            if (valor) return valor;
+        }
+
+        if (campoEspecialidadeBusca && !campoEspecialidadeBusca.disabled) {
+            const valor = (campoEspecialidadeBusca.value || '').trim();
+            if (valor) return valor;
+        }
+
+        if (especialidadesSelecionadas && especialidadesSelecionadas.size) {
+            return Array.from(especialidadesSelecionadas).join(', ');
+        }
+
+        return '';
+    }
+
+    function atualizarMensagemEspecialidade() {
+        const valor = obterValorEspecialidadeParaMensagem();
+        const tipoSelecionado = (seletorTipo ? seletorTipo.value : '').trim().toUpperCase();
+
+        infosEspecialidade.forEach((elemento) => {
+            if (!elemento) return;
+
+            if (!valor) {
+                elemento.textContent = '';
+                elemento.style.display = 'none';
+                return;
+            }
+
+            const valores = valor.split(',').map((item) => item.trim()).filter(Boolean);
+            const textoResumo = valores.length > 1 ? valores.join(', ') : valores[0];
+
+            if (tipoSelecionado === 'EXAME') {
+                elemento.textContent = valores.length > 1 ? `Exames selecionados: ${textoResumo}` : `Exame selecionado: ${textoResumo}`;
+            } else if (tipoSelecionado === 'CONSULTA') {
+                elemento.textContent = valores.length > 1 ? `Especialidades selecionadas: ${textoResumo}` : `Especialidade selecionada: ${textoResumo}`;
+            } else {
+                elemento.textContent = `Seleção: ${textoResumo}`;
+            }
+
+            elemento.className = 'especialidade-info-message fw-bold text-success small';
+            elemento.style.display = 'inline-flex';
+        });
+    }
+
     function atualizaModoEspecialidade() {
         if (!seletorTipo || !containerEspecialidadeUnica || !containerEspecialidadesMultiplas) return;
 
@@ -218,6 +273,8 @@
         if (!ehExame && especialidadesSelecionadasContainer) {
             especialidadesSelecionadasContainer.innerHTML = '';
         }
+
+        atualizarMensagemEspecialidade();
     }
 
     function filtrarEspecialidadesPorTipo(tipo) {
@@ -242,6 +299,7 @@
                 select.appendChild(option);
             }
         });
+        atualizarMensagemEspecialidade();
     }
 
     const especialidadesSelecionadas = new Set();
@@ -263,7 +321,10 @@
         especialidadesSelecionadas.forEach((especialidade) => {
             const badge = document.createElement('span');
             badge.className = 'badge bg-secondary d-inline-flex align-items-center me-1 mb-1';
-            badge.textContent = especialidade;
+            const badgeText = document.createElement('span');
+            badgeText.className = 'fw-bold';
+            badgeText.textContent = especialidade;
+            badge.appendChild(badgeText);
 
             const remover = document.createElement('button');
             remover.type = 'button';
@@ -294,6 +355,7 @@
         if (especialidadesSelecionadas.has(especialidade)) return;
         especialidadesSelecionadas.add(especialidade);
         renderEspecialidadesSelecionadas();
+        atualizarMensagemEspecialidade();
     }
 
     function removerEspecialidade(especialidade) {
@@ -382,6 +444,7 @@
         });
 
         campoEspecialidadeBusca.addEventListener('input', () => {
+            atualizarMensagemEspecialidade();
             const termo = campoEspecialidadeBusca.value.trim();
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(async () => {
@@ -411,6 +474,7 @@
     if (btnAdicionarEspecialidade) {
         btnAdicionarEspecialidade.addEventListener('click', () => {
             adicionarEspecialidade(campoEspecialidadeBusca ? campoEspecialidadeBusca.value : '');
+            atualizarMensagemEspecialidade();
         });
     }
 
@@ -526,6 +590,7 @@
         let timer;
         campoEspecialidade.addEventListener('input', () => {
             atualizaCampoQuantidadeSolicitacoes();
+            atualizarMensagemEspecialidade();
             const termo = campoEspecialidade.value.trim();
             clearTimeout(timer);
 
@@ -561,6 +626,11 @@
         atualizaModoEspecialidade();
         filtrarEspecialidadesPorTipo(seletorTipo.value);
         atualizaCampoQuantidadeSolicitacoes();
+    }
+
+    if (campoEspecialidade) {
+        campoEspecialidade.addEventListener('change', atualizarMensagemEspecialidade);
+        campoEspecialidade.addEventListener('input', atualizarMensagemEspecialidade);
     }
 
     if (campoQuantidadeSolicitacoes) {
@@ -600,6 +670,7 @@
             camposEntrada.value = dataAtual;
         }
         atualizaCampoQuantidadeSolicitacoes();
+        atualizarMensagemEspecialidade();
     });
 
     // Verificar duplicatas antes de submeter
