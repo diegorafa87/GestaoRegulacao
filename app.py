@@ -150,48 +150,51 @@ def normalizar_documento(valor):
 def separar_endereco_em_campos(endereco):
     endereco = '' if endereco is None else str(endereco).strip()
     if not endereco:
-        return {'rua': '', 'numero': '', 'bairro': ''}
+        return {'rua': '', 'numero': '', 'bairro': '', 'sem_numero': False}
 
     texto = re.sub(r'\s+', ' ', endereco).strip().upper()
+    sem_numero = 'S/N' in texto.upper() or 'SEM NUMERO' in texto.upper()
 
     match = re.match(
-        r'^(?P<rua>.+?)\s*(?:,\s*)?(?:N[º°]?\s*|NO\.?)\s*(?P<numero>\d+[A-Z0-9/-]*)\s*(?:,\s*)?(?:BAIRRO\s+)?(?P<bairro>.+)$',
+        r'^(?P<rua>.+?)\s*(?:,\s*)?(?:N[º°]?\s*|NO\.?|S/N)\s*(?P<numero>\d+[A-Z0-9/-]*)?\s*(?:,\s*)?(?:BAIRRO\s+)?(?P<bairro>.+)$',
         texto,
         re.IGNORECASE,
     )
     if match:
         rua = match.group('rua').strip().rstrip(',').strip()
-        numero = match.group('numero').strip().upper()
+        numero = (match.group('numero') or '').strip().upper()
         bairro = match.group('bairro').strip().upper()
         if bairro.startswith('BAIRRO '):
             bairro = bairro[len('BAIRRO '):].strip()
-        return {'rua': rua, 'numero': numero, 'bairro': bairro}
+        return {'rua': rua, 'numero': numero, 'bairro': bairro, 'sem_numero': sem_numero}
 
     partes = [parte.strip() for parte in re.split(r'\s*,\s*', texto) if parte.strip()]
     if len(partes) >= 3:
         rua = partes[0].strip().rstrip(',').strip()
-        numero = re.sub(r'^(?:N[º°]?\s*|NO\.?)', '', partes[1]).strip().upper()
+        numero = re.sub(r'^(?:N[º°]?\s*|NO\.?|S/N)\s*', '', partes[1]).strip().upper()
         bairro = re.sub(r'^BAIRRO\s+', '', partes[2]).strip().upper()
-        return {'rua': rua, 'numero': numero, 'bairro': bairro}
+        return {'rua': rua, 'numero': numero, 'bairro': bairro, 'sem_numero': sem_numero}
 
     if len(partes) == 2:
-        if re.search(r'\d', partes[1]):
+        if re.search(r'\d', partes[1]) or 'S/N' in partes[1].upper():
             rua = partes[0].strip().rstrip(',').strip()
-            numero = re.sub(r'^(?:N[º°]?\s*|NO\.?)', '', partes[1]).strip().upper()
-            return {'rua': rua, 'numero': numero, 'bairro': ''}
-        return {'rua': partes[0], 'numero': '', 'bairro': re.sub(r'^BAIRRO\s+', '', partes[1]).strip().upper()}
+            numero = re.sub(r'^(?:N[º°]?\s*|NO\.?|S/N)\s*', '', partes[1]).strip().upper()
+            return {'rua': rua, 'numero': numero, 'bairro': '', 'sem_numero': sem_numero}
+        return {'rua': partes[0], 'numero': '', 'bairro': re.sub(r'^BAIRRO\s+', '', partes[1]).strip().upper(), 'sem_numero': sem_numero}
 
-    return {'rua': texto, 'numero': '', 'bairro': ''}
+    return {'rua': texto, 'numero': '', 'bairro': '', 'sem_numero': sem_numero}
 
 
-def montar_endereco(rua='', numero='', bairro=''):
+def montar_endereco(rua='', numero='', bairro='', sem_numero=False):
     partes = []
     rua = (rua or '').strip().upper()
     numero = (numero or '').strip().upper()
     bairro = (bairro or '').strip().upper()
     if rua:
         partes.append(rua)
-    if numero:
+    if sem_numero:
+        partes.append('S/N')
+    elif numero:
         partes.append(f'Nº {numero}')
     if bairro:
         partes.append(f'BAIRRO {bairro}')
@@ -740,18 +743,28 @@ def formatar_endereco_lista(endereco):
     if not endereco:
         return ''
 
-    # Remove prefixos "Nº " e "Bairro " gerados pelo formulário de cadastro
-    endereco = re.sub(r'\bN[º°]?\s+', '', endereco)
-    endereco = re.sub(r'\bBairro\s+', '', endereco, flags=re.IGNORECASE)
-    endereco = endereco.strip().strip(',').strip()
+    partes = [parte.strip() for parte in re.split(r'\s*,\s*', endereco) if parte.strip()]
+    partes_formatadas = []
+    for parte in partes:
+        parte_upper = parte.strip().upper()
+        if parte_upper in {'S/N', 'SEM NUMERO'}:
+            partes_formatadas.append('S/N')
+        elif re.match(r'^(?:N[º°]?\s*|NO\.?)(?:\d|\w)', parte_upper):
+            continue
+        elif parte_upper.startswith('BAIRRO '):
+            partes_formatadas.append(parte_upper[len('BAIRRO '):].strip())
+        else:
+            partes_formatadas.append(parte_upper)
+
+    endereco_formatado = ', '.join(partes_formatadas).strip().strip(',').strip()
 
     sufixo = 'FERNANDO PEDROZA, RN.'
-    endereco_normalizado = endereco.upper().replace('.', '')
+    endereco_normalizado = endereco_formatado.upper().replace('.', '')
     if 'FERNANDO PEDROZA' in endereco_normalizado and 'RN' in endereco_normalizado:
-        return endereco
+        return endereco_formatado
 
-    separador = ', ' if not endereco.endswith(',') else ' '
-    return f'{endereco}{separador}{sufixo}'
+    separador = ', ' if not endereco_formatado.endswith(',') else ' '
+    return f'{endereco_formatado}{separador}{sufixo}'
 
 def escapar_texto_pdf(texto):
     texto = '' if texto is None else str(texto)
@@ -2142,8 +2155,9 @@ def editar_paciente(paciente_id):
         oncologico = request.form.get('oncologico') == 'on'
         rua = request.form.get('rua', '').strip().upper()
         numero = request.form.get('numero', '').strip().upper()
-        bairro = request.form.get('bairro', '').strip().upper()
-        endereco = montar_endereco(rua, numero, bairro)
+        bairro = request.form.get('bairro', '').strip().strip().upper()
+        sem_numero = request.form.get('sem_numero') == 'on'
+        endereco = montar_endereco(rua, numero, bairro, sem_numero=sem_numero)
 
         if not nome:
             conn.close()
