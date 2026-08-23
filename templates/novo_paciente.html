@@ -36,7 +36,7 @@
         <input id="telefone" name="telefone" class="form-control" maxlength="15" placeholder="(00) 00000-0000" value="{{ form_data.telefone if form_data else '' }}" required>
     </div>
     <div class="col-md-4">
-        <label class="form-label">Telefone 2 (opcional):</label>
+        <label class="form-label">Telefone 2:</label>
         <input id="telefone2" name="telefone2" class="form-control" maxlength="15" placeholder="(00) 00000-0000" value="{{ form_data.telefone2 if form_data else '' }}">
     </div>
     <div class="col-md-6">
@@ -55,6 +55,10 @@
     <div class="col-md-2">
         <label class="form-label">Número: <span class="text-danger">*</span></label>
         <input id="numero" name="numero" class="form-control" autocomplete="off" inputmode="numeric" placeholder="Ex: 123" value="{{ form_data.numero if form_data else '' }}" required>
+        <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="sem_numero" name="sem_numero" {% if form_data and form_data.sem_numero %}checked{% endif %}>
+            <label class="form-check-label" for="sem_numero">Sem número</label>
+        </div>
     </div>
     <div class="col-md-4">
         <label class="form-label">Bairro: <span class="text-danger">*</span></label>
@@ -86,6 +90,20 @@
     const campoNomeMae = document.getElementById('nomeMae');
     const campoRua = document.getElementById('rua');
     const campoBairro = document.getElementById('bairro');
+    const campoNumero = document.getElementById('numero');
+    const campoSemNumero = document.getElementById('sem_numero');
+
+    if (campoSemNumero && campoNumero) {
+        const atualizarCampoNumero = () => {
+            campoNumero.disabled = campoSemNumero.checked;
+            if (campoSemNumero.checked) {
+                campoNumero.value = '';
+            }
+        };
+
+        campoSemNumero.addEventListener('change', atualizarCampoNumero);
+        atualizarCampoNumero();
+    }
 
     if (campoRua && campoRua.dataset.restrictToList) {
         campoRua.addEventListener('input', () => campoRua.setCustomValidity(''));
@@ -163,6 +181,31 @@
         }
     }
 
+    function validarCamposObrigatorios() {
+        const camposObrigatorios = [
+            campoCpf,
+            campoSus,
+            document.getElementById('nome'),
+            document.getElementById('nascimento'),
+            campoTelefone,
+            document.getElementById('nomeMae'),
+            campoRua,
+            campoBairro,
+        ];
+
+        if (!campoSemNumero || !campoSemNumero.checked) {
+            camposObrigatorios.push(campoNumero);
+        }
+
+        return camposObrigatorios.every((campo) => {
+            if (!campo) return true;
+            if (campo.tagName === 'SELECT') {
+                return Boolean((campo.value || '').trim());
+            }
+            return Boolean((campo.value || '').trim());
+        });
+    }
+
     function configurarVerificacaoDuplicidadeEmTempoReal() {
         if (!campoCpf || !campoSus) return;
 
@@ -176,6 +219,13 @@
 
         if (formNovoPaciente) {
             formNovoPaciente.addEventListener('submit', async (event) => {
+                const camposValidos = validarCamposObrigatorios();
+                if (!camposValidos) {
+                    event.preventDefault();
+                    alert('Preencha todos os campos obrigatórios antes de salvar.');
+                    return;
+                }
+
                 // Valida rua restrita ao catálogo para não-admins
                 if (campoRua && campoRua.dataset.restrictToList) {
                     const valorRua = campoRua.value.trim().toUpperCase();

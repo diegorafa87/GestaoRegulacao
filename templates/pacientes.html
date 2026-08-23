@@ -40,12 +40,12 @@
         <tbody>
     {% for p in pacientes %}
         <tr>
-            <td class="fw-bold small" style="white-space: nowrap;">{{ p[0]|formatar_documento }}</td>
-            <td class="fw-bold small">{{ p[1] }}</td>
-            <td class="fw-bold small" style="white-space: nowrap;">{{ p[2]|formatar_data }}</td>
-            <td class="fw-bold small" style="white-space: nowrap;">{{ p[3] }}</td>
-            <td class="fw-bold small">{{ p[4]|formatar_endereco_lista }}</td>
-            <td class="text-nowrap fw-bold small" style="white-space: nowrap;">
+            <td class="small" style="white-space: nowrap;">{{ p[0]|formatar_documento }}</td>
+            <td class="small">{{ p[1] }}</td>
+            <td class="small" style="white-space: nowrap;">{{ p[2]|formatar_data }}</td>
+            <td class="small" style="white-space: nowrap;">{{ p[3] }}</td>
+            <td class="small">{{ p[4]|formatar_endereco_lista }}</td>
+            <td class="text-nowrap small" style="white-space: nowrap;">
                 <a href="{{ url_for('editar_paciente', paciente_id=p[0], next=request.full_path) }}" class="btn btn-sm btn-outline-primary">Editar</a>
             </td>
         </tr>

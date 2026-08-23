@@ -1808,17 +1808,11 @@ def novo_paciente():
         rua = request.form.get('rua', '').strip().upper()
         numero = request.form.get('numero', '').strip()
         bairro = request.form.get('bairro', '').strip().upper()
+        sem_numero = request.form.get('sem_numero') == 'on'
         endereco = request.form.get('endereco', '').strip().upper()
 
-        if not endereco and (rua or numero or bairro):
-            partes_endereco = []
-            if rua:
-                partes_endereco.append(rua)
-            if numero:
-                partes_endereco.append(f'Nº {numero}')
-            if bairro:
-                partes_endereco.append(f'Bairro {bairro}')
-            endereco = ', '.join(partes_endereco)
+        if not endereco and (rua or numero or bairro or sem_numero):
+            endereco = montar_endereco(rua, numero, bairro, sem_numero=sem_numero)
 
         form_data = {
             'cpf': cpf_input,
@@ -1831,6 +1825,7 @@ def novo_paciente():
             'rua': rua,
             'numero': numero,
             'bairro': bairro,
+            'sem_numero': sem_numero,
             'endereco': endereco,
         }
 
@@ -1845,7 +1840,7 @@ def novo_paciente():
             'nascimento': nascimento,
             'telefone': telefone,
             'rua': rua,
-            'numero': numero,
+            'numero': numero if not sem_numero else 'S/N',
             'bairro': bairro,
         }
 
