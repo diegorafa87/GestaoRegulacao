@@ -1,16 +1,23 @@
 import os
 import json
-import google.generativeai as genai
 from db import conectar
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+
+try:
+    import google.generativeai as genai
+except Exception as exc:
+    genai = None
+    GEMINI_IMPORT_ERROR = exc
+else:
+    GEMINI_IMPORT_ERROR = None
 
 load_dotenv()
 
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 USE_MOCK_IA = os.environ.get('USE_MOCK_IA', 'false').lower() == 'true'
 
-if GEMINI_API_KEY and not USE_MOCK_IA:
+if GEMINI_API_KEY and not USE_MOCK_IA and genai is not None:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
         model = genai.GenerativeModel('gemini-2.0-flash')
@@ -20,6 +27,8 @@ if GEMINI_API_KEY and not USE_MOCK_IA:
         USE_MOCK_IA = True
 else:
     model = None
+    if GEMINI_IMPORT_ERROR is not None:
+        print(f"Gemini indisponível no ambiente: {GEMINI_IMPORT_ERROR}")
     USE_MOCK_IA = True
 
 def obter_contexto_dados():
