@@ -33,7 +33,9 @@ from datetime import datetime
 import csv
 import io
 import zipfile
+import zlib
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from PIL import Image
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
@@ -681,6 +683,22 @@ def formatar_identificador_paciente(valor):
         return formatar_cpf(valor)
     return valor
 
+
+def formatar_conclusao_relatorio(conclusao):
+    if not conclusao:
+        return '-'
+
+    mapa = {
+        'PRESENTE': 'Presente',
+        'AUSENTE': 'Ausente',
+        'CANCELADO': 'Cancelado',
+        'RETIRADO': 'Retirado',
+        'DUPLICADA': 'Duplicada',
+        'OBITO': 'Óbito',
+    }
+    return mapa.get(str(conclusao).strip().upper(), str(conclusao).strip())
+
+
 def resolver_id_paciente(identificador):
     identificador = '' if identificador is None else str(identificador).strip()
     if not identificador:
@@ -849,6 +867,15 @@ def comando_retangulo_pdf(x, y, largura, altura, cor_borda=None, cor_fundo=None,
     comandos.append('Q')
     return '\n'.join(comandos)
 
+
+def comando_imagem_pdf(x, y, largura, altura):
+    return (
+        'q\n'
+        f'{largura} 0 0 {altura} {x} {y} cm\n'
+        '/Im1 Do\n'
+        'Q'
+    )
+
 def formatar_periodo_relatorio(data_inicio, data_fim):
     if data_inicio and data_fim:
         return f'{data_inicio} a {data_fim}'
@@ -940,6 +967,35 @@ def gerar_pdf_relatorio_resumo(resumo, tipo, especialidade, data_inicio, data_fi
     return buffer.getvalue()
 
 
+def _carregar_imagem_pdf(caminho_imagem, largura=None, altura=None):
+    if not caminho_imagem or not os.path.exists(caminho_imagem):
+        return None
+
+    try:
+        with Image.open(caminho_imagem) as img:
+            img = img.convert('RGB')
+            if largura is not None and altura is not None:
+                img = img.resize((int(largura), int(altura)))
+            elif largura is not None:
+                largura_original = img.width
+                altura_original = img.height
+                if largura_original > 0:
+                    proporcao = altura_original / largura_original
+                    img = img.resize((int(largura), int(largura * proporcao)))
+            elif altura is not None:
+                largura_original = img.width
+                altura_original = img.height
+                if altura_original > 0:
+                    proporcao = largura_original / altura_original
+                    img = img.resize((int(altura * proporcao), int(altura)))
+
+            dados = img.tobytes()
+            dados_comprimidos = zlib.compress(dados)
+            return dados_comprimidos, img.width, img.height
+    except Exception:
+        return None
+
+
 def gerar_pdf_relatorio_paciente(paciente_relatorio, relatorio_paciente):
     largura_pagina = 842
     altura_pagina = 595
@@ -969,6 +1025,11 @@ def gerar_pdf_relatorio_paciente(paciente_relatorio, relatorio_paciente):
     cor_fundo_box = (0.953, 0.965, 0.980)
     cor_linha_alternada = (0.976, 0.980, 0.988)
     cor_branca = (1, 1, 1)
+    imagem_logo = None
+    try:
+        imagem_logo = _carregar_imagem_pdf(os.path.join(app.root_path, 'static', 'image_7426c3df.png'), largura=40, altura=40)
+    except Exception:
+        imagem_logo = None
 
     def adicionar(comando):
         paginas[-1].append(comando)
@@ -977,32 +1038,43 @@ def gerar_pdf_relatorio_paciente(paciente_relatorio, relatorio_paciente):
         adicionar(comando_texto_pdf(x, y, str(conteudo) if conteudo is not None else '', fonte=fonte, tamanho=tamanho, cor=cor))
 
     def nova_pagina(primeira=False):
+        nonlocal y_atual
         paginas.append([])
         topo_titulo = altura_pagina - 48
         adicionar(comando_retangulo_pdf(margem_x, topo_titulo - 56, largura_util, 56, cor_fundo=cor_primaria, cor_borda=cor_primaria))
-        adicionar(comando_texto_centralizado_pdf(margem_x + largura_util / 2, topo_titulo - 20, 'Secretaria Municipal de Saude de Fernando Pedroza', largura_util - 40, fonte='F2', tamanho=11, cor=(0.910, 0.949, 0.984)))
-        adicionar(comando_texto_centralizado_pdf(margem_x + largura_util / 2, topo_titulo - 38, 'Relatorio do Paciente', largura_util - 40, fonte='F2', tamanho=16, cor=(0.910, 0.949, 0.984)))
+        if imagem_logo:
+            adicionar(comando_imagem_pdf(margem_x + 18, topo_titulo - 48, 40, 40))
+        adicionar(comando_texto_centralizado_pdf(margem_x + largura_util / 2 + 28, topo_titulo - 20, 'Secretaria Municipal de Saude de Fernando Pedroza', largura_util - 100, fonte='F2', tamanho=11, cor=(0.910, 0.949, 0.984)))
+        adicionar(comando_texto_centralizado_pdf(margem_x + largura_util / 2 + 28, topo_titulo - 38, 'Relatorio do Paciente', largura_util - 100, fonte='F2', tamanho=16, cor=(0.910, 0.949, 0.984)))
         if primeira:
-            altura_cabecalho = 98
-            adicionar(comando_retangulo_pdf(margem_x, topo_titulo - 170, largura_util, altura_cabecalho, cor_fundo=cor_fundo_box, cor_borda=cor_borda))
-            texto(margem_x + 12, topo_titulo - 66, f'Gerado em: {data_geracao}', tamanho=9, cor=cor_muted)
+            altura_cabecalho = 60
+            adicionar(comando_retangulo_pdf(margem_x, topo_titulo - 150, largura_util, altura_cabecalho, cor_fundo=cor_fundo_box, cor_borda=cor_borda))
+            texto(margem_x + 12, topo_titulo - 82, f'Gerado em: {data_geracao}', tamanho=9, cor=cor_muted)
             if paciente_relatorio:
-                col_width = (largura_util - 24) / 4
-                texto(margem_x + 12, topo_titulo - 86, f'Nome: {paciente_relatorio[1]}', tamanho=9, cor=cor_texto)
-                texto(margem_x + 12 + col_width, topo_titulo - 86, f'Nascimento: {formatar_data_br(paciente_nascimento) if paciente_nascimento else "-"}', tamanho=9, cor=cor_texto)
-                texto(margem_x + 12 + col_width * 2, topo_titulo - 86, f'Idade: {idade_paciente if idade_paciente else "-"}', tamanho=9, cor=cor_texto)
-                texto(margem_x + 12 + col_width * 3, topo_titulo - 86, f'CPF: {paciente_cpf if paciente_cpf else "-"}', tamanho=9, cor=cor_texto)
+                col_width = (largura_util - 24) / 2
+                nome_texto = f'Nome: {paciente_relatorio[1]}' if paciente_relatorio[1] else 'Nome: -'
+                cpf_texto = f'CPF: {paciente_cpf if paciente_cpf else "-"}'
+                nascimento_texto = f'Nascimento: {formatar_data_br(paciente_nascimento) if paciente_nascimento else "-"}'
+                idade_texto = f'Idade: {idade_paciente if idade_paciente else "-"}'
+                texto(margem_x + 12, topo_titulo - 100, nome_texto, tamanho=9, cor=cor_texto)
+                texto(margem_x + 12, topo_titulo - 114, cpf_texto, tamanho=9, cor=cor_texto)
+                texto(margem_x + 12 + col_width, topo_titulo - 100, nascimento_texto, tamanho=9, cor=cor_texto)
+                texto(margem_x + 12 + col_width, topo_titulo - 114, idade_texto, tamanho=9, cor=cor_texto)
             else:
                 texto(margem_x + 12, topo_titulo - 86, 'Paciente nao encontrado', tamanho=10, cor=cor_texto)
-        adicionar(comando_retangulo_pdf(margem_x, altura_pagina - 170, largura_util, 24, cor_fundo=cor_primaria_escura, cor_borda=cor_primaria_escura))
+            y_header = altura_pagina - 238
+            y_atual = altura_pagina - 258
+        else:
+            y_header = altura_pagina - 132
+            y_atual = altura_pagina - 152
+        adicionar(comando_retangulo_pdf(margem_x, y_header - 14, largura_util, 24, cor_fundo=cor_primaria_escura, cor_borda=cor_primaria_escura))
         x = margem_x + 8
-        col_widths = [40, 60, 50, 40, 45, 170, 50, 50, 120, 120]
-        headers = ['ID', 'Solicitacao', 'Entrada', 'Tipo', 'Idade', 'Especialidade', 'Status', 'Realizacao', 'Unidade', 'Financiamento']
+        col_widths = [40, 60, 50, 50, 50, 140, 50, 50, 120, 80, 90]
+        headers = ['ID', 'Solicitacao', 'Entrada', 'Tipo', 'Idade', 'Especialidade', 'Status', 'Realizacao', 'Unidade', 'Financiamento', 'Conclusão']
         for idx, header in enumerate(headers):
-            texto(x, altura_pagina - 156, header, fonte='F2', tamanho=8, cor=cor_branca)
-            x += col_widths[idx]
-        nonlocal y_atual
-        y_atual = altura_pagina - 182
+            largura_celula = col_widths[idx]
+            texto(x + 2, y_header - 2, header, fonte='F2', tamanho=8, cor=cor_branca)
+            x += largura_celula
 
     def adicionar_linha_solicitacao(solicitacao, indice):
         nonlocal y_atual
@@ -1020,10 +1092,11 @@ def gerar_pdf_relatorio_paciente(paciente_relatorio, relatorio_paciente):
             solicitacao[6] or '',
             formatar_data_br(solicitacao[7]) if solicitacao[7] else '',
             solicitacao[8] or '',
-            financiamento_exibicao
+            financiamento_exibicao,
+            formatar_conclusao_relatorio(solicitacao[9] if len(solicitacao) > 9 else '')
         ]
-        col_widths = [40, 60, 50, 40, 45, 170, 50, 50, 120, 120]
-        limites = [8, 12, 10, 10, 8, 32, 10, 10, 18, 18]
+        col_widths = [40, 60, 50, 50, 50, 140, 50, 50, 120, 80, 90]
+        limites = [8, 12, 10, 10, 8, 24, 10, 10, 18, 12, 12]
         linhas_por_coluna = []
 
         for idx, valor in enumerate(valores):
@@ -1042,9 +1115,10 @@ def gerar_pdf_relatorio_paciente(paciente_relatorio, relatorio_paciente):
 
         x = margem_x + 8
         for idx, linhas in enumerate(linhas_por_coluna):
+            largura_celula = col_widths[idx]
             for linha_idx, linha_texto in enumerate(linhas):
-                texto(x, y_atual - 12 - (linha_idx * 14), linha_texto, tamanho=8)
-            x += col_widths[idx]
+                texto(x + 2, y_atual - 12 - (linha_idx * 14), linha_texto, tamanho=8)
+            x += largura_celula
 
         y_atual -= altura_linha + 2
 
@@ -1071,6 +1145,19 @@ def gerar_pdf_relatorio_paciente(paciente_relatorio, relatorio_paciente):
     }
     referencias_paginas = []
     numero_objeto = 6
+    imagem_objeto = None
+    if imagem_logo:
+        imagem_bytes, imagem_largura, imagem_altura = imagem_logo
+        imagem_objeto = numero_objeto
+        numero_objeto += 1
+        objetos[imagem_objeto] = {
+            'header': (
+                f'<< /Type /XObject /Subtype /Image /Width {imagem_largura} /Height {imagem_altura} '
+                f'/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length {len(imagem_bytes)} >>\nstream\n'
+            ),
+            'stream': imagem_bytes,
+            'footer': '\nendstream'
+        }
 
     for comandos in paginas:
         conteudo = '\n'.join(comandos)
@@ -1079,10 +1166,14 @@ def gerar_pdf_relatorio_paciente(paciente_relatorio, relatorio_paciente):
         objeto_pagina = numero_objeto + 1
         numero_objeto += 2
         objetos[objeto_conteudo] = f'<< /Length {len(conteudo_bytes)} >>\nstream\n{conteudo}\nendstream'
+        recursos = '/Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >>'
+        if imagem_objeto is not None:
+            recursos += f' /XObject << /Im1 {imagem_objeto} 0 R >>'
+        recursos += ' >> '
         objetos[objeto_pagina] = (
             '<< /Type /Page /Parent 2 0 R '
             f'/MediaBox [0 0 {largura_pagina} {altura_pagina}] '
-            '/Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> '
+            f'{recursos}'
             f'/Contents {objeto_conteudo} 0 R >>'
         )
         referencias_paginas.append(f'{objeto_pagina} 0 R')
@@ -1095,7 +1186,13 @@ def gerar_pdf_relatorio_paciente(paciente_relatorio, relatorio_paciente):
     for numero in sorted(objetos):
         offsets[numero] = pdf.tell()
         pdf.write(f'{numero} 0 obj\n'.encode('latin-1'))
-        pdf.write(objetos[numero].encode('latin-1'))
+        valor = objetos[numero]
+        if isinstance(valor, dict):
+            pdf.write(valor['header'].encode('latin-1'))
+            pdf.write(valor['stream'])
+            pdf.write(valor['footer'].encode('latin-1'))
+        else:
+            pdf.write(valor.encode('latin-1'))
         pdf.write(b'\nendobj\n')
 
     xref_inicio = pdf.tell()
@@ -2832,7 +2929,7 @@ def relatorios():
                 s[7],
                 s[8],
                 s[10],
-                s[9]
+                formatar_conclusao_relatorio(s[9] if len(s) > 9 else '')
             ])
 
         csv_content = output.getvalue()
