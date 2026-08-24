@@ -23,6 +23,12 @@ def test_nova_solicitacao_template_has_resumo_clinico_field():
     assert 'placeholder="Descreva o resumo clínico da requisição"' in template
 
 
+def test_nova_solicitacao_template_has_specialty_feedback_in_both_modes():
+    template = Path('templates/nova_solicitacao.html').read_text(encoding='utf-8')
+
+    assert template.count('class="especialidade-info-message') == 2
+
+
 def test_nova_solicitacao_page_does_not_load_full_cid_catalog():
     client = flask_app.test_client()
     with client.session_transaction() as sess:

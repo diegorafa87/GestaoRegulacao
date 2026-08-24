@@ -43,7 +43,11 @@
     </div>
     <div class="col-md-2">
         <label class="form-label">N°:</label>
-        <input name="numero" class="form-control fw-bold" value="{{ endereco_campos.numero if endereco_campos else '' }}">
+        <input name="numero" id="numero_endereco" class="form-control fw-bold" value="{{ endereco_campos.numero if endereco_campos else '' }}" {% if endereco_campos and endereco_campos.sem_numero %}disabled{% endif %}>
+        <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="sem_numero" name="sem_numero" {% if endereco_campos and endereco_campos.sem_numero %}checked{% endif %}>
+            <label class="form-check-label" for="sem_numero">Sem número</label>
+        </div>
     </div>
     <div class="col-md-4">
         <label class="form-label">Bairro:</label>
@@ -74,6 +78,8 @@
     const campoTelefone = document.getElementById('telefone');
     const campoTelefone2 = document.getElementById('telefone2');
     const campoSus = document.getElementById('sus');
+    const campoNumeroEndereco = document.getElementById('numero_endereco');
+    const campoSemNumero = document.getElementById('sem_numero');
 
     if (campoObito) {
         campoObito.addEventListener('input', (e) => {
@@ -104,6 +110,18 @@
         campoSus.addEventListener('input', (e) => {
             e.target.value = e.target.value.replace(/\D/g, '').slice(0, 15);
         });
+    }
+
+    if (campoSemNumero && campoNumeroEndereco) {
+        const atualizarCampoNumero = () => {
+            campoNumeroEndereco.disabled = campoSemNumero.checked;
+            if (campoSemNumero.checked) {
+                campoNumeroEndereco.value = '';
+            }
+        };
+
+        campoSemNumero.addEventListener('change', atualizarCampoNumero);
+        atualizarCampoNumero();
     }
 
     const aplicarMascaraTelefone = (e) => {

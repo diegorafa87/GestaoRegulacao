@@ -75,7 +75,9 @@
         </div>
         <div class="col-md-3">
             <label class="form-label">Paciente</label>
-            <input type="text" name="paciente" class="form-control" value="{{ paciente }}" placeholder="CPF, SUS ou nome">
+            <input id="paciente" type="text" name="paciente" class="form-control" value="{{ paciente }}" placeholder="CPF, SUS ou nome" autocomplete="off" list="pacientes-sugestoes">
+            <datalist id="pacientes-sugestoes"></datalist>
+            <small id="paciente-info" class="form-text text-muted"></small>
         </div>
         <div class="col-md-2">
             <label class="form-label">Financiamento</label>
@@ -470,6 +472,11 @@
 
 <script>
 (() => {
+    const campoPaciente = document.getElementById('paciente');
+    const listaSugestoes = document.getElementById('pacientes-sugestoes');
+    const infoPaciente = document.getElementById('paciente-info');
+    let debounceTimer;
+
     function aplicarMascaraData(campo) {
         if (!campo) return;
 
@@ -489,6 +496,51 @@
             if (e.key === 'Backspace' && e.target.value.endsWith('/')) {
                 e.target.value = e.target.value.slice(0, -1);
             }
+        });
+    }
+
+    if (campoPaciente && listaSugestoes && infoPaciente) {
+        campoPaciente.addEventListener('input', () => {
+            const termo = campoPaciente.value.trim();
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(async () => {
+                if (termo.length < 3) {
+                    listaSugestoes.innerHTML = '';
+                    infoPaciente.textContent = '';
+                    infoPaciente.className = 'form-text text-muted';
+                    return;
+                }
+
+                try {
+                    const resposta = await fetch(`/api/buscar_paciente?termo=${encodeURIComponent(termo)}`);
+                    if (!resposta.ok) {
+                        infoPaciente.textContent = 'Erro ao buscar paciente.';
+                        return;
+                    }
+
+                    const pacientes = await resposta.json();
+                    listaSugestoes.innerHTML = '';
+
+                    if (pacientes.length === 0) {
+                        infoPaciente.textContent = 'Nenhum paciente encontrado.';
+                        infoPaciente.className = 'form-text fw-semibold text-danger';
+                        return;
+                    }
+
+                    pacientes.forEach((p) => {
+                        const option = document.createElement('option');
+                        option.value = p.id;
+                        option.label = `${p.nome} (${p.id})`;
+                        listaSugestoes.appendChild(option);
+                    });
+
+                    infoPaciente.textContent = `${pacientes.length} paciente(s) encontrado(s) por CPF/SUS ou nome.`;
+                    infoPaciente.className = 'form-text text-muted';
+                } catch (error) {
+                    infoPaciente.textContent = 'Erro ao buscar paciente.';
+                    infoPaciente.className = 'form-text fw-semibold text-danger';
+                }
+            }, 250);
         });
     }
 
