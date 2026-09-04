@@ -699,6 +699,113 @@ def formatar_conclusao_relatorio(conclusao):
     return mapa.get(str(conclusao).strip().upper(), str(conclusao).strip())
 
 
+def _normalizar_texto_procedimento(valor):
+    if valor is None:
+        return ''
+    texto = str(valor).strip().upper()
+    texto = unicodedata.normalize('NFD', texto)
+    texto = ''.join(ch for ch in texto if unicodedata.category(ch) != 'Mn')
+    texto = re.sub(r'[^A-Z0-9\s/]+', ' ', texto)
+    texto = re.sub(r'\s+', ' ', texto).strip()
+    return texto
+
+
+def _classificar_principio_procedimento(procedimento):
+    texto = _normalizar_texto_procedimento(procedimento)
+    if not texto:
+        return ''
+    if 'ULTRASSON' in texto or 'ECOGRAF' in texto:
+        return 'ULTRASSONOGRAFIA'
+    if 'RESSONAN' in texto:
+        return 'RESSONANCIA'
+    if 'RADIOGRAF' in texto:
+        return 'RADIOGRAFIA'
+    if 'TOMOGRAF' in texto:
+        return 'TOMOGRAFIA'
+    if 'MAMOGRAF' in texto:
+        return 'MAMOGRAFIA'
+    if 'CONSULT' in texto:
+        return 'CONSULTA'
+    if 'EXAME' in texto:
+        return 'EXAME'
+    return texto
+
+
+def _rotular_principio_procedimento(principio):
+    labels = {
+        'ULTRASSONOGRAFIA': 'ULTRASSONOGRAFIAS',
+        'RESSONANCIA': 'RESSONANCIAS',
+        'RADIOGRAFIA': 'RADIOGRAFIAS',
+        'TOMOGRAFIA': 'TOMOGRAFIAS',
+        'MAMOGRAFIA': 'MAMOGRAFIAS',
+        'CONSULTA': 'CONSULTAS',
+        'EXAME': 'EXAMES',
+    }
+    return labels.get(principio, principio)
+
+
+def _normalizar_rotulo_procedimento(item):
+    if isinstance(item, dict):
+        procedimento = item.get('procedimento') or item.get('especialidade') or ''
+        tipo = item.get('tipo') or item.get('tipo_procedimento') or ''
+    else:
+        procedimento = item[1] if len(item) > 1 else ''
+        tipo = item[2] if len(item) > 2 else ''
+
+    procedimento_texto = _normalizar_texto_procedimento(procedimento)
+    tipo_texto = _normalizar_texto_procedimento(tipo)
+
+    if 'CONSULT' in tipo_texto or 'CONSULT' in procedimento_texto:
+        especialidade = procedimento_texto or 'CONSULTA'
+        if especialidade in {'CONSULTA', 'CONSULTAS'}:
+            return 'CONSULTAS'
+        return f'CONSULTA EM {especialidade}'
+
+    if 'EXAME' in tipo_texto or 'EXAME' in procedimento_texto:
+        especialidade = procedimento_texto or 'LABORATORIAIS'
+        if especialidade in {'LABORATORIO', 'LABORATORIAL', 'LABORATORIAIS'}:
+            return 'EXAMES LABORATORIAIS'
+        if especialidade.startswith('EXAMES'):
+            return especialidade
+        return f'EXAMES {especialidade}'
+
+    return _rotular_principio_procedimento(_classificar_principio_procedimento(procedimento))
+
+
+def gerar_relatorio_procedimentos_sintetico(solicitacoes):
+    agrupados = {}
+    for item in solicitacoes or []:
+        rotulo = _normalizar_rotulo_procedimento(item)
+        if not rotulo:
+            continue
+        if rotulo not in agrupados:
+            agrupados[rotulo] = 0
+        agrupados[rotulo] += 1
+
+    return [f'{rotulo} ({quantidade})' for rotulo, quantidade in agrupados.items()]
+
+
+def gerar_relatorio_procedimentos_detalhado(solicitacoes, incluir_pacientes=True):
+    linhas = []
+    for item in solicitacoes or []:
+        if isinstance(item, dict):
+            procedimento = item.get('procedimento') or item.get('especialidade') or ''
+            paciente_nome = item.get('paciente_nome') or ''
+        else:
+            procedimento = item[1] if len(item) > 1 else ''
+            paciente_nome = item[0] if len(item) > 0 else ''
+
+        procedimento_limpo = str(procedimento).strip()
+        if not procedimento_limpo:
+            continue
+        linha = procedimento_limpo
+        if incluir_pacientes and paciente_nome:
+            linha = f'{linha} — {paciente_nome}'
+        linhas.append(linha)
+
+    return linhas
+
+
 def resolver_id_paciente(identificador):
     identificador = '' if identificador is None else str(identificador).strip()
     if not identificador:
@@ -891,6 +998,10 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.enums import TA_LEFT
+from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import Image as ReportLabImage
 
 
 def gerar_pdf_relatorio_resumo(resumo, tipo, especialidade, data_inicio, data_fim, total_registros, pacientes_por_especialidade=None):
@@ -962,6 +1073,164 @@ def gerar_pdf_relatorio_resumo(resumo, tipo, especialidade, data_inicio, data_fi
         story.append(table)
     else:
         story.append(Paragraph('Nenhum registro encontrado para os filtros informados.', style_normal))
+
+    doc.build(story)
+    return buffer.getvalue()
+
+
+def gerar_pdf_relatorio_texto(conteudo, titulo, periodo, tipo='Sintético'):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=0.7 * inch, leftMargin=0.7 * inch, topMargin=0.7 * inch, bottomMargin=0.7 * inch)
+
+    font_name = 'Helvetica-UTF8'
+    registered_fonts = set(pdfmetrics.getRegisteredFontNames())
+    if font_name not in registered_fonts:
+        caminhos_fontes = []
+        base_path = os.path.join(app.root_path, 'static', 'fonts', 'arial.ttf')
+        if os.path.exists(base_path):
+            caminhos_fontes.append(base_path)
+        system_root = os.environ.get('SystemRoot') or os.environ.get('WINDIR') or r'C:\Windows'
+        caminhos_fontes.extend([
+            os.path.join(system_root, 'Fonts', 'arial.ttf'),
+            os.path.join(system_root, 'Fonts', 'Arial.ttf'),
+            os.path.join(system_root, 'Fonts', 'arialbd.ttf'),
+            os.path.join(system_root, 'Fonts', 'verdana.ttf'),
+        ])
+        for caminho_fonte in caminhos_fontes:
+            try:
+                if os.path.exists(caminho_fonte):
+                    pdfmetrics.registerFont(TTFont(font_name, caminho_fonte))
+                    break
+            except Exception:
+                continue
+
+    styles = getSampleStyleSheet()
+
+    style_heading = styles['Heading1']
+    style_heading.fontName = font_name if font_name in set(pdfmetrics.getRegisteredFontNames()) else 'Helvetica-Bold'
+    style_heading.fontSize = 13
+    style_heading.leading = 16
+    style_heading.textColor = colors.white
+
+    style_title = styles['Heading2']
+    style_title.fontName = font_name if font_name in set(pdfmetrics.getRegisteredFontNames()) else 'Helvetica-Bold'
+    style_title.fontSize = 12
+    style_title.leading = 14
+    style_title.textColor = colors.white
+
+    style_normal = styles['BodyText']
+    style_normal.fontName = font_name if font_name in set(pdfmetrics.getRegisteredFontNames()) else 'Helvetica'
+    style_normal.fontSize = 9
+    style_normal.leading = 11
+
+    style_meta = styles['BodyText']
+    style_meta.fontName = font_name if font_name in set(pdfmetrics.getRegisteredFontNames()) else 'Helvetica'
+    style_meta.fontSize = 8
+    style_meta.leading = 10
+
+    data_geracao = datetime.now().strftime('%d/%m/%Y %H:%M')
+    story = []
+
+    imagem_logo = None
+    caminho_logo = os.path.join(app.root_path, 'static', 'image_7426c3df.png')
+    if os.path.exists(caminho_logo):
+        try:
+            imagem_logo = ReportLabImage(caminho_logo, width=0.44 * inch, height=0.44 * inch)
+        except Exception:
+            imagem_logo = None
+
+    if imagem_logo is not None:
+        header_cells = [
+            [
+                ReportLabImage(caminho_logo, width=0.44 * inch, height=0.44 * inch),
+                Paragraph('<font color="white"><b>SIGA SAÚDE</b><br/>Secretaria Municipal de Saúde de Fernando Pedroza</font>', style_heading),
+            ]
+        ]
+        header_block = Table(header_cells, colWidths=[0.6 * inch, 5.8 * inch], repeatRows=1)
+        header_block.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#0d6efd')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (0, 0), 'CENTER'),
+            ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 10),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ]))
+    else:
+        header_content = Paragraph(
+            '<font color="white"><b>SIGA SAÚDE</b><br/>Secretaria Municipal de Saúde de Fernando Pedroza</font>',
+            style_heading,
+        )
+        header_block = Table(
+            [[header_content]],
+            colWidths=[6.4 * inch],
+            repeatRows=1,
+        )
+        header_block.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#0d6efd')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 10),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 10),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ]))
+
+    story.append(header_block)
+
+    story.append(Spacer(1, 0.08 * inch))
+    story.append(Paragraph(titulo or 'Relatório', style_title))
+    story.append(Spacer(1, 0.12 * inch))
+
+    linhas = []
+    for linha in (conteudo or '').splitlines():
+        linha_limpa = linha.strip()
+        if linha_limpa:
+            linhas.append(linha_limpa)
+
+    linhas_tabela = []
+    for linha in linhas:
+        if '|' in linha:
+            linhas_tabela.append(linha)
+        elif '(' in linha and ')' in linha and linha.rfind('(') < len(linha) - 1:
+            nome, quantidade = linha.rsplit('(', 1)
+            quantidade = quantidade[:-1].strip()
+            if nome.strip() and quantidade.isdigit():
+                linhas_tabela.append(f"{nome.strip()}|{quantidade}")
+
+    if linhas_tabela:
+        rows = [['Especialidade', 'Quantidade']]
+        for linha in linhas_tabela:
+            if '|' not in linha:
+                continue
+            especialidade, quantidade = [parte.strip() for parte in linha.split('|', 1)]
+            rows.append([especialidade, quantidade])
+        if len(rows) > 1:
+            table = Table(rows, repeatRows=1, colWidths=[3.2 * inch, 0.9 * inch])
+            table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0d6efd')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('FONTNAME', (0, 0), (-1, 0), font_name if font_name in set(pdfmetrics.getRegisteredFontNames()) else 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 8),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#d0d7de')),
+                ('ALIGN', (1, 1), (1, -1), 'CENTER'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.whitesmoke, colors.white]),
+                ('FONTNAME', (0, 1), (-1, -1), font_name if font_name in set(pdfmetrics.getRegisteredFontNames()) else 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 8),
+                ('TOPPADDING', (0, 0), (-1, -1), 4),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ]))
+            story.append(table)
+            story.append(Spacer(1, 0.08 * inch))
+            story.append(Paragraph(f'Tipo: {tipo}', style_meta))
+            story.append(Paragraph(f'Período: {periodo or "Todos os registros"}', style_meta))
+            doc.build(story)
+            return buffer.getvalue()
+
+    texto_formatado = '<br/>'.join(linhas) if linhas else 'Nenhum conteúdo disponível.'
+    story.append(Paragraph(texto_formatado, style_normal))
 
     doc.build(story)
     return buffer.getvalue()
@@ -2573,6 +2842,22 @@ def pesquisar():
         inicio_exibicao=paginacao['inicio_exibicao'], fim_exibicao=paginacao['fim_exibicao'],
         paginas_visiveis=paginacao['paginas_visiveis'], rota_paginacao='pesquisar')
 
+@app.route('/relatorios/gerar_texto_pdf', methods=['POST'])
+def gerar_pdf_relatorio_texto_route():
+    dados = request.get_json(silent=True) or {}
+    conteudo = dados.get('conteudo', '')
+    titulo = dados.get('titulo', 'Relatório')
+    periodo = dados.get('periodo', 'Todos os registros')
+    tipo = dados.get('tipo', 'Sintético')
+
+    pdf_content = gerar_pdf_relatorio_texto(conteudo, titulo, periodo, tipo=tipo)
+    nome_arquivo = f"relatorio_texto_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    return Response(
+        pdf_content,
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename={nome_arquivo}'}
+    )
+
 @app.route('/relatorios')
 def relatorios():
     tipo = request.args.get('tipo', '').strip().upper()
@@ -2621,7 +2906,12 @@ def relatorios():
     paciente_relatorio = None
     idade_paciente = ''
     tempo_medio_espera = []
+    relatorio_procedimentos_sintetico = []
+    relatorio_procedimentos_detalhado = []
+    texto_sintetico_relatorio = ''
+    texto_detalhado_relatorio = ''
     total_registros = 0
+    dados_procedimentos_geral = []
 
     conn = conectar()
     c = conn.cursor()
@@ -2675,6 +2965,7 @@ def relatorios():
         query_resumo += ' GROUP BY s.especialidade ORDER BY total_registros DESC, s.especialidade'
         c.execute(query_resumo, params_resumo)
         resumo = c.fetchall()
+
 
     elif view == 'pacientes_mais_solicitacoes':
         query_pacientes_top = '''
@@ -2775,20 +3066,85 @@ def relatorios():
         c.execute(query_espera, params_espera)
         especialidades_maior_espera = c.fetchall()
 
+    if view == 'resumo':
+        params_procedimentos_geral = []
+        query_procedimentos_geral = '''
+            SELECT
+                s.especialidade,
+                s.data_realizacao,
+                p.nome AS paciente_nome
+            FROM solicitacao s
+            LEFT JOIN paciente p ON p.id = s.paciente_id
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
+              AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
+        '''
+
+        if situacao == 'EM_ESPERA':
+            query_procedimentos_geral += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
+        else:
+            query_procedimentos_geral += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
+
+        if tipo in ('CONSULTA', 'EXAME'):
+            query_procedimentos_geral += ' AND UPPER(s.tipo) = %s'
+            params_procedimentos_geral.append(tipo)
+
+        if financiamento:
+            query_procedimentos_geral += " AND UPPER(COALESCE(s.financiamento, '')) = %s"
+            params_procedimentos_geral.append(financiamento)
+
+        if especialidade:
+            query_procedimentos_geral += (
+                " AND translate(UPPER(COALESCE(s.especialidade, '')), "
+                "'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', "
+                "'AAAAAEEEEIIIIOOOOOUUUUC') LIKE %s"
+            )
+            params_procedimentos_geral.append(f"%{normalizar_texto_busca(especialidade)}%")
+
+        if data_inicio:
+            if situacao == 'EM_ESPERA':
+                query_procedimentos_geral += ' AND s.data_entrada >= %s'
+            else:
+                query_procedimentos_geral += ' AND s.data_realizacao >= %s'
+            params_procedimentos_geral.append(data_inicio)
+
+        if data_fim:
+            if situacao == 'EM_ESPERA':
+                query_procedimentos_geral += ' AND s.data_entrada <= %s'
+            else:
+                query_procedimentos_geral += ' AND s.data_realizacao <= %s'
+            params_procedimentos_geral.append(data_fim)
+
+        c.execute(query_procedimentos_geral, params_procedimentos_geral)
+        dados_procedimentos_geral = []
+        for row in c.fetchall():
+            dados_procedimentos_geral.append({
+                'paciente_nome': row[2] if row[2] else '',
+                'procedimento': row[0] if row[0] else ''
+            })
+        relatorio_procedimentos_sintetico = gerar_relatorio_procedimentos_sintetico(dados_procedimentos_geral)
+        relatorio_procedimentos_detalhado = gerar_relatorio_procedimentos_detalhado(dados_procedimentos_geral, incluir_pacientes=False)
+        texto_sintetico_relatorio = '\n'.join(relatorio_procedimentos_sintetico)
+        texto_detalhado_relatorio = '\n'.join(relatorio_procedimentos_detalhado)
+
     if view == 'paciente':
         relatorio_paciente = []
         paciente_relatorio = None
         if paciente:
             paciente_id_normalizado = normalizar_documento(paciente)
+            texto_paciente = normalizar_texto_busca(paciente)
             params_paciente = []
             query_paciente = '''
                 SELECT id, nome, nascimento, sus
                 FROM paciente
                 WHERE regexp_replace(COALESCE(id, ''), '\\D', '', 'g') LIKE %s
-                   OR UPPER(nome) LIKE %s
+                   OR regexp_replace(COALESCE(sus, ''), '\\D', '', 'g') LIKE %s
+                   OR translate(UPPER(COALESCE(nome, '')), 'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', 'AAAAAEEEEIIIIOOOOOUUUUC') LIKE %s
+                   OR UPPER(COALESCE(nome, '')) LIKE %s
                 LIMIT 1
             '''
             params_paciente.append(f"%{paciente_id_normalizado}%")
+            params_paciente.append(f"%{paciente_id_normalizado}%")
+            params_paciente.append(f"%{texto_paciente}%")
             params_paciente.append(f"%{paciente.upper()}%")
             c.execute(query_paciente, params_paciente)
             paciente_relatorio = c.fetchone()
@@ -2818,6 +3174,14 @@ def relatorios():
                 relatorio_paciente = c.fetchall()
 
         idade_paciente = calcular_idade(paciente_relatorio[2] if paciente_relatorio and len(paciente_relatorio) > 2 else None) if paciente_relatorio else ''
+        dados_procedimentos = [{
+            'paciente_nome': paciente_relatorio[1] if paciente_relatorio else '',
+            'procedimento': solicitacao[4] if len(solicitacao) > 4 else ''
+        } for solicitacao in relatorio_paciente]
+        relatorio_procedimentos_sintetico = gerar_relatorio_procedimentos_sintetico(dados_procedimentos)
+        relatorio_procedimentos_detalhado = gerar_relatorio_procedimentos_detalhado(dados_procedimentos)
+        texto_sintetico_relatorio = '\n'.join(relatorio_procedimentos_sintetico)
+        texto_detalhado_relatorio = '\n'.join(relatorio_procedimentos_detalhado)
 
     if tempo_espera and view == 'resumo':
         query_tempo = '''
@@ -3116,6 +3480,10 @@ def relatorios():
         relatorio_paciente=relatorio_paciente,
         paciente_relatorio=paciente_relatorio,
         idade_paciente=idade_paciente,
+        relatorio_procedimentos_sintetico=relatorio_procedimentos_sintetico,
+        relatorio_procedimentos_detalhado=relatorio_procedimentos_detalhado,
+        texto_sintetico_relatorio=texto_sintetico_relatorio,
+        texto_detalhado_relatorio=texto_detalhado_relatorio,
         resumo=resumo,
         total_registros=total_registros,
         pacientes_mais_solicitacoes=pacientes_mais_solicitacoes,
