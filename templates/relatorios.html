@@ -39,6 +39,7 @@
                 <option value="" {% if not tipo %}selected{% endif %}>Todos</option>
                 <option value="CONSULTA" {% if tipo == 'CONSULTA' %}selected{% endif %}>Consulta</option>
                 <option value="EXAME" {% if tipo == 'EXAME' %}selected{% endif %}>Exame</option>
+                <option value="CIRURGIA" {% if tipo == 'CIRURGIA' %}selected{% endif %}>Cirurgia</option>
             </select>
         </div>
         <div class="col-md-2">
@@ -177,6 +178,27 @@
 
 {% if view == 'resumo' %}
 <div class="card mb-4">
+    <div class="card-header bg-dark text-white">Texto do relatório</div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label class="form-label fw-bold mb-0">Sintético</label>
+                    <button type="button" class="btn btn-sm btn-outline-dark" onclick="gerarPdfTexto('sintetico')">Gerar PDF</button>
+                </div>
+                <textarea id="texto-sintetico" class="form-control" rows="8" readonly>{{ texto_sintetico_relatorio }}</textarea>
+            </div>
+            <div class="col-md-6">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <label class="form-label fw-bold mb-0">Detalhado</label>
+                    <button type="button" class="btn btn-sm btn-outline-dark" onclick="gerarPdfTexto('detalhado')">Gerar PDF</button>
+                </div>
+                <textarea id="texto-detalhado" class="form-control" rows="8" readonly>{{ texto_detalhado_relatorio }}</textarea>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="card mb-4">
     <div class="card-header bg-primary text-white">
         {% if situacao == 'EM_ESPERA' %}
             Resumo por Especialidade (Em Espera)
@@ -258,6 +280,57 @@
                 <strong>Paciente:</strong> {{ paciente_relatorio[1] }}<br>
                 <strong>ID:</strong> {{ paciente_relatorio[0]|formatar_documento }}<br>
                 <strong>Idade:</strong> {{ idade_paciente or '-' }}
+            </div>
+            <div class="card mb-3 border-dark">
+                <div class="card-header bg-dark text-white">Texto do relatório</div>
+                        <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label fw-bold mb-0">Sintético</label>
+                                <button type="button" class="btn btn-sm btn-outline-dark" onclick="gerarPdfTexto('sintetico')">Gerar PDF</button>
+                            </div>
+                            <textarea id="texto-sintetico" class="form-control" rows="8" readonly>{{ texto_sintetico_relatorio }}</textarea>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label fw-bold mb-0">Detalhado</label>
+                                <button type="button" class="btn btn-sm btn-outline-dark" onclick="gerarPdfTexto('detalhado')">Gerar PDF</button>
+                            </div>
+                            <textarea id="texto-detalhado" class="form-control" rows="8" readonly>{{ texto_detalhado_relatorio }}</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row g-3 mb-3">
+                <div class="col-md-6">
+                    <div class="card border-info shadow-sm h-100">
+                        <div class="card-header bg-info text-dark">Resumo sintético dos procedimentos</div>
+                        <ul class="list-group list-group-flush">
+                            {% if relatorio_procedimentos_sintetico %}
+                                {% for item in relatorio_procedimentos_sintetico %}
+                                <li class="list-group-item">{{ item }}</li>
+                                {% endfor %}
+                            {% else %}
+                                <li class="list-group-item text-muted">Nenhum procedimento encontrado.</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card border-secondary shadow-sm h-100">
+                        <div class="card-header bg-secondary text-white">Detalhamento dos procedimentos</div>
+                        <ul class="list-group list-group-flush">
+                            {% if relatorio_procedimentos_detalhado %}
+                                {% for item in relatorio_procedimentos_detalhado %}
+                                <li class="list-group-item">{{ item }}</li>
+                                {% endfor %}
+                            {% else %}
+                                <li class="list-group-item text-muted">Nenhum procedimento encontrado.</li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                </div>
             </div>
             <div class="table-responsive">
                 <table class="table table-striped table-bordered mb-0">
@@ -471,6 +544,46 @@
 </div>
 
 <script>
+async function gerarPdfTexto(tipo) {
+    const textareaId = tipo === 'sintetico' ? 'texto-sintetico' : 'texto-detalhado';
+    const textarea = document.getElementById(textareaId);
+    if (!textarea) return;
+
+    const conteudo = textarea.value;
+    const titulo = tipo === 'sintetico' ? 'Relatório Sintético' : 'Relatório Detalhado';
+    const dataInicio = document.getElementById('data_inicio')?.value || '';
+    const dataFim = document.getElementById('data_fim')?.value || '';
+    const periodoTexto = dataInicio || dataFim
+        ? `De ${dataInicio || 'início não informado'}${dataFim ? ` até ${dataFim}` : ''}`
+        : 'Todos os registros';
+
+    const response = await fetch('{{ url_for("gerar_pdf_relatorio_texto_route") }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            tipo: tipo === 'sintetico' ? 'Sintético' : 'Detalhado',
+            titulo,
+            conteudo,
+            periodo: periodoTexto
+        })
+    });
+
+    if (!response.ok) {
+        alert('Não foi possível gerar o PDF do relatório.');
+        return;
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${titulo.toLowerCase().replace(/\s+/g, '_')}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+}
+
 (() => {
     const campoPaciente = document.getElementById('paciente');
     const listaSugestoes = document.getElementById('pacientes-sugestoes');

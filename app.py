@@ -684,6 +684,14 @@ def formatar_identificador_paciente(valor):
     return valor
 
 
+def listar_tipos_relatorio():
+    return ['TODOS', 'CONSULTA', 'EXAME', 'CIRURGIA']
+
+
+def tipos_relatorio_ativos():
+    return ['CONSULTA', 'EXAME', 'CIRURGIA']
+
+
 def formatar_conclusao_relatorio(conclusao):
     if not conclusao:
         return '-'
@@ -2861,6 +2869,8 @@ def gerar_pdf_relatorio_texto_route():
 @app.route('/relatorios')
 def relatorios():
     tipo = request.args.get('tipo', '').strip().upper()
+    if tipo not in tipos_relatorio_ativos() and tipo != '':
+        tipo = ''
     especialidade = request.args.get('especialidade', '').strip()
     paciente = request.args.get('paciente', '').strip()
     situacao = request.args.get('situacao', 'REALIZADOS').strip().upper()
@@ -2922,7 +2932,7 @@ def relatorios():
                 s.especialidade,
                 COUNT(*) AS total_registros
             FROM solicitacao s
-            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
         params_resumo = []
@@ -2932,7 +2942,7 @@ def relatorios():
         else:
             query_resumo += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
 
-        if tipo in ('CONSULTA', 'EXAME'):
+        if tipo in tipos_relatorio_ativos():
             query_resumo += ' AND UPPER(s.tipo) = %s'
             params_resumo.append(tipo)
 
@@ -2976,7 +2986,7 @@ def relatorios():
                 MIN(s.data_solicitacao) AS data_solicitacao
             FROM paciente p
             INNER JOIN solicitacao s ON s.paciente_id = p.id
-            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
         params_pacientes_top = []
@@ -2986,7 +2996,7 @@ def relatorios():
         else:
             query_pacientes_top += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
 
-        if tipo in ('CONSULTA', 'EXAME'):
+        if tipo in tipos_relatorio_ativos():
             query_pacientes_top += ' AND UPPER(s.tipo) = %s'
             params_pacientes_top.append(tipo)
 
@@ -3026,7 +3036,7 @@ def relatorios():
                 AVG(DATE(%s) - DATE(s.data_entrada))::numeric(10,1) AS tempo_medio_dias,
                 COUNT(*) AS total_registros
             FROM solicitacao s
-            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
         params_espera = []
@@ -3038,7 +3048,7 @@ def relatorios():
             query_espera = query_espera.replace('%s', 's.data_realizacao')
             query_espera += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
 
-        if tipo in ('CONSULTA', 'EXAME'):
+        if tipo in tipos_relatorio_ativos():
             query_espera += ' AND UPPER(s.tipo) = %s'
             params_espera.append(tipo)
 
@@ -3075,7 +3085,7 @@ def relatorios():
                 p.nome AS paciente_nome
             FROM solicitacao s
             LEFT JOIN paciente p ON p.id = s.paciente_id
-            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
 
@@ -3084,7 +3094,7 @@ def relatorios():
         else:
             query_procedimentos_geral += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
 
-        if tipo in ('CONSULTA', 'EXAME'):
+        if tipo in tipos_relatorio_ativos():
             query_procedimentos_geral += ' AND UPPER(s.tipo) = %s'
             params_procedimentos_geral.append(tipo)
 
@@ -3189,12 +3199,12 @@ def relatorios():
                 UPPER(s.tipo) AS tipo,
                 AVG(DATE(s.data_realizacao) - DATE(s.data_entrada))::numeric(10,1) AS tempo_medio_dias
             FROM solicitacao s
-            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
         params_tempo = []
 
-        if tipo in ('CONSULTA', 'EXAME'):
+        if tipo in tipos_relatorio_ativos():
             query_tempo += ' AND UPPER(s.tipo) = %s'
             params_tempo.append(tipo)
 
@@ -3335,7 +3345,7 @@ def relatorios():
                         FROM paciente p
                         INNER JOIN solicitacao s ON s.paciente_id = p.id
                         WHERE UPPER(COALESCE(s.especialidade, '')) = UPPER(%s)
-                          AND UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
+                          AND UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
                           AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
                         GROUP BY p.id, p.nome
                         ORDER BY p.nome ASC
@@ -3396,7 +3406,7 @@ def relatorios():
                 {tipos_radiografia_expr}
             FROM paciente p
             INNER JOIN solicitacao s ON s.paciente_id = p.id
-            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME')
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
               AND translate(UPPER(COALESCE(s.especialidade, '')),
                     'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
@@ -3413,7 +3423,7 @@ def relatorios():
         else:
             query_pacientes += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
 
-        if tipo in ('CONSULTA', 'EXAME'):
+        if tipo in tipos_relatorio_ativos():
             query_pacientes += ' AND UPPER(s.tipo) = %s'
             params_pacientes.append(tipo)
 
@@ -3517,7 +3527,7 @@ def nova_solicitacao():
     }
 
     tipo_selecionado = form_data['tipo'].strip().upper()
-    especialidades_filtradas = listar_especialidades(tipo_selecionado if tipo_selecionado in ('CONSULTA', 'EXAME') else None)
+    especialidades_filtradas = listar_especialidades(tipo_selecionado if tipo_selecionado in tipos_relatorio_ativos() else None)
     especialidades_completas = listar_especialidades(full=True)
 
     def render_nova_solicitacao_page():
@@ -3658,7 +3668,7 @@ def nova_solicitacao():
         if apenas_admin():
             for especialidade_item in especialidades:
                 if especialidade_item not in especialidades_catalogo:
-                    categoria_nova_sugestao = tipo if tipo in ('CONSULTA', 'EXAME') else None
+                    categoria_nova_sugestao = tipo if tipo in tipos_relatorio_ativos() else None
                     c.execute(
                         '''
                         INSERT INTO sugestao_solicitacao (tipo, valor, categoria)
