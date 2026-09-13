@@ -9,21 +9,21 @@
 <form method="post" class="row g-3">
     <input type="hidden" name="next" value="{{ origem_retorno }}">
     <div class="col-md-4">
-        <label class="form-label">Paciente (CPF/SUS):</label>
+        <label class="form-label">Paciente (CPF/SUS): <span class="text-danger">*</span></label>
         <input id="paciente_id" name="paciente_id" class="form-control" required list="pacientes-sugestoes" autocomplete="off" placeholder="Digite CPF, SUS ou nome" value="{{ form_data.paciente_id or '' }}">
         <datalist id="pacientes-sugestoes"></datalist>
         <small id="paciente-info" class="form-text text-muted"></small>
     </div>
     <div class="col-md-4">
-        <label class="form-label">Data Solicitação:</label>
+        <label class="form-label">Data Solicitação: <span class="text-danger">*</span></label>
         <input id="data_solicitacao" name="data_solicitacao" class="form-control" required placeholder="DD/MM/AAAA" maxlength="10" value="{{ form_data.data_solicitacao or '' }}">
     </div>
     <div class="col-md-4">
-        <label class="form-label">Data Entrada:</label>
+        <label class="form-label">Data Entrada: <span class="text-danger">*</span></label>
         <input id="data_entrada" name="data_entrada" class="form-control" required placeholder="DD/MM/AAAA" maxlength="10" value="{{ form_data.data_entrada or '' }}">
     </div>
     <div class="col-md-4">
-        <label class="form-label">Tipo de Requisição:</label>
+        <label class="form-label">Tipo de Requisição: <span class="text-danger">*</span></label>
         <select name="tipo" class="form-control" required>
             <option value="">Selecione uma opção</option>
             <option value="CONSULTA" {% if form_data.tipo == 'CONSULTA' %}selected{% endif %}>Consulta</option>
@@ -32,7 +32,7 @@
         </select>
     </div>
     <div id="especialidade_unica_container" class="col-md-4">
-        <label class="form-label">Especialidade/Descrição:</label>
+        <label class="form-label">Especialidade/Descrição: <span class="text-danger">*</span></label>
         <div class="d-flex flex-column gap-1">
             <div class="d-flex align-items-center gap-2 flex-wrap">
                 {% if session.get('usuario_perfil') == 'ADMIN' %}
@@ -55,7 +55,7 @@
         </div>
     </div>
     <div id="especialidades_multiplas_container" class="col-md-4 d-none">
-        <label class="form-label">Especialidades/Exames (EXAME):</label>
+        <label class="form-label">Especialidades/Exames (EXAME): <span class="text-danger">*</span></label>
         <div class="input-group mb-2">
             <input id="especialidade_busca" name="especialidade_busca" type="text" class="form-control" autocomplete="off" placeholder="Digite para buscar especialidade" list="especialidades-sugestoes">
             <button id="btnAdicionarEspecialidade" type="button" class="btn btn-outline-primary">Adicionar</button>
@@ -81,7 +81,7 @@
         <small class="text-muted">Descreva o que o médico escreveu na requisição.</small>
     </div>
     <div class="col-md-4">
-        <label class="form-label">Prioridade:</label>
+        <label class="form-label">Prioridade: <span class="text-danger">*</span></label>
         <select name="prioridade" class="form-control" required>
             <option value="">Selecione uma opção</option>
             <option value="SIM" {% if form_data.prioridade == 'SIM' %}selected{% endif %}>Sim</option>
@@ -89,7 +89,7 @@
         </select>
     </div>
     <div class="col-md-3">
-        <label class="form-label">Status:</label>
+        <label class="form-label">Status: <span class="text-danger">*</span></label>
         <select id="status_select" name="status" class="form-control" required>
             <option value="">Selecione uma opção</option>
             <option value="ELETIVO" {% if form_data.status == 'ELETIVO' %}selected{% endif %}>Eletivo</option>
@@ -121,6 +121,7 @@
         <a href="{{ origem_retorno }}" class="btn btn-secondary">Voltar</a>
     </div>
 </form>
+<div id="erro-validacao" class="alert alert-danger mt-3" style="display:none;"></div>
 
 {% if session.get('usuario_perfil') == 'ADMIN' %}
 <div class="alert alert-info mt-4">
@@ -685,15 +686,112 @@
 
             e.preventDefault();
 
-            // Validar datas futuras
-            const campoDataSolicitacao = document.getElementById('data_solicitacao');
-            const campoDataEntrada = document.getElementById('data_entrada');
-            const campoDataInsercao = document.getElementById('data_insercao');
+            // Validar campos obrigatórios
+            const errosValidacao = [];
 
+            // Paciente
+            const campoPaciente = document.getElementById('paciente_id');
+            if (!campoPaciente.value.trim()) {
+                errosValidacao.push('Paciente é obrigatório');
+                campoPaciente.classList.add('is-invalid');
+            } else {
+                campoPaciente.classList.remove('is-invalid');
+            }
+
+            // Data Solicitação
+            const campoDataSolicitacao = document.getElementById('data_solicitacao');
+            if (!campoDataSolicitacao.value.trim()) {
+                errosValidacao.push('Data Solicitação é obrigatória');
+                campoDataSolicitacao.classList.add('is-invalid');
+            } else {
+                campoDataSolicitacao.classList.remove('is-invalid');
+            }
+
+            // Data Entrada
+            const campoDataEntrada = document.getElementById('data_entrada');
+            if (!campoDataEntrada.value.trim()) {
+                errosValidacao.push('Data Entrada é obrigatória');
+                campoDataEntrada.classList.add('is-invalid');
+            } else {
+                campoDataEntrada.classList.remove('is-invalid');
+            }
+
+            // Tipo de Requisição
+            const campoTipo = document.querySelector('select[name="tipo"]');
+            if (!campoTipo.value.trim()) {
+                errosValidacao.push('Tipo de Requisição é obrigatório');
+                campoTipo.classList.add('is-invalid');
+            } else {
+                campoTipo.classList.remove('is-invalid');
+            }
+
+            // Especialidade
+            const tipo = campoTipo.value.trim().toUpperCase();
+            if (tipo === 'EXAME') {
+                // Para EXAME, verificar se há especialidades selecionadas
+                if (!especialidadesSelecionadas || especialidadesSelecionadas.size === 0) {
+                    errosValidacao.push('Selecione pelo menos uma especialidade/exame');
+                    if (campoEspecialidadeBusca) campoEspecialidadeBusca.classList.add('is-invalid');
+                }
+            } else {
+                // Para CONSULTA/CIRURGIA
+                const campoEspecialidade = document.getElementById('especialidade_input');
+                if (!campoEspecialidade.value.trim()) {
+                    errosValidacao.push('Especialidade/Descrição é obrigatória');
+                    campoEspecialidade.classList.add('is-invalid');
+                } else {
+                    campoEspecialidade.classList.remove('is-invalid');
+                }
+            }
+
+            // Prioridade
+            const campoPrioridade = document.querySelector('select[name="prioridade"]');
+            if (!campoPrioridade.value.trim()) {
+                errosValidacao.push('Prioridade é obrigatória');
+                campoPrioridade.classList.add('is-invalid');
+            } else {
+                campoPrioridade.classList.remove('is-invalid');
+            }
+
+            // Status
+            const campoStatus = document.querySelector('select[name="status"]');
+            if (!campoStatus.value.trim()) {
+                errosValidacao.push('Status é obrigatório');
+                campoStatus.classList.add('is-invalid');
+            } else {
+                campoStatus.classList.remove('is-invalid');
+            }
+
+            // Data Retorno (se Status = RETORNO)
+            if (campoStatus.value === 'RETORNO') {
+                const campoDataRetorno = document.getElementById('data_retorno');
+                if (!campoDataRetorno || !campoDataRetorno.value.trim()) {
+                    errosValidacao.push('Previsão de Retorno é obrigatória quando Status = Retorno');
+                    if (campoDataRetorno) campoDataRetorno.classList.add('is-invalid');
+                }
+            }
+
+            // Se houver erros de validação, exibir mensagem
+            if (errosValidacao.length > 0) {
+                const divErro = document.getElementById('erro-validacao');
+                if (divErro) {
+                    divErro.innerHTML = '<strong>Erro na validação:</strong><ul>' +
+                        errosValidacao.map(erro => `<li>${erro}</li>`).join('') +
+                        '</ul>';
+                    divErro.style.display = 'block';
+                    divErro.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                return;
+            }
+
+            // Limpar mensagem de erro se não houver erros
+            const divErro = document.getElementById('erro-validacao');
+            if (divErro) divErro.style.display = 'none';
+
+            // Validar datas futuras
             const campos_data_critica = [
                 { campo: campoDataSolicitacao, nome: 'Data Solicitação' },
-                { campo: campoDataEntrada, nome: 'Data Entrada' },
-                { campo: campoDataInsercao, nome: 'Data de Inserção' }
+                { campo: campoDataEntrada, nome: 'Data Entrada' }
             ];
 
             for (let {campo, nome} of campos_data_critica) {
