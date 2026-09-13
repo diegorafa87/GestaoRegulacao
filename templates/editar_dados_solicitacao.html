@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}Editar Dados da Solicitação{% endblock %}
+{% block content %}
+<div class="text-center mb-4 pb-3 border-bottom border-2">
+    <div class="text-primary fw-bold text-uppercase small mb-1">Secretaria Municipal de Saúde de Fernando Pedroza</div>
+    <h2 class="mb-1 fw-bold text-primary">Editar Dados da Solicitação</h2>
+    <div class="text-muted small">Paciente: {{ paciente_id|formatar_documento }} &mdash; Solicitação #{{ solicitacao[0] }} &mdash; Status: {{ solicitacao[5] if solicitacao[5] else '-' }}</div>
+</div>
+
+<form method="post" class="row g-3">
+    <input type="hidden" name="paciente_id" value="{{ paciente_id }}">
+    <input type="hidden" name="next" value="{{ origem_retorno }}">
+
+    <div class="col-md-6">
+        <label class="form-label">Data de Solicitação (DD/MM/AAAA):</label>
+        <input type="text" class="form-control" value="{{ solicitacao[2]|formatar_data }}" disabled>
+    </div>
+
+    <div class="col-md-6">
+        <label class="form-label">Data de Entrada (DD/MM/AAAA):</label>
+        <input type="text" class="form-control" value="{{ solicitacao[3]|formatar_data }}" disabled>
+    </div>
+
+    <div class="col-md-6">
+        <label class="form-label">Prioridade: <span class="text-danger">*</span></label>
+        <select id="prioridade_select" name="prioridade" class="form-select" required>
+            <option value="">Selecione</option>
+            <option value="SIM" {% if solicitacao[4] == 'SIM' %}selected{% endif %}>Sim</option>
+            <option value="NÃO" {% if solicitacao[4] == 'NÃO' %}selected{% endif %}>Não</option>
+        </select>
+    </div>
+
+    <div class="col-md-6">
+        <label class="form-label">Status: <span class="text-danger">*</span></label>
+        <select id="status_select" name="status" class="form-select" required>
+            <option value="">Selecione</option>
+            <option value="ELETIVO" {% if solicitacao[5] == 'ELETIVO' %}selected{% endif %}>Eletivo</option>
+            <option value="URGENTE" {% if solicitacao[5] == 'URGENTE' %}selected{% endif %}>Urgente</option>
+            <option value="RETORNO" {% if solicitacao[5] == 'RETORNO' %}selected{% endif %}>Retorno</option>
+        </select>
+    </div>
+
+    <div class="col-12">
+        <label class="form-label">Resumo Clínico: <span class="text-danger">*</span></label>
+        <textarea id="resumo_clinico" name="resumo_clinico" class="form-control" rows="4" placeholder="Digite o resumo clínico da solicitação" required>{{ solicitacao[6] if solicitacao[6] else '' }}</textarea>
+        <small class="text-muted">Campo obrigatório</small>
+    </div>
+
+    <div class="col-12">
+        <button type="submit" class="btn btn-success">Salvar</button>
+        <a href="{{ origem_retorno }}" class="btn btn-secondary">Cancelar</a>
+    </div>
+</form>
+
+<script>
+(() => {
+    const form = document.querySelector('form');
+    const resumoField = document.getElementById('resumo_clinico');
+    
+    if (form && resumoField) {
+        form.addEventListener('submit', (e) => {
+            const resumo = resumoField.value.trim();
+            if (!resumo || resumo.length === 0) {
+                e.preventDefault();
+                resumoField.classList.add('is-invalid');
+                resumoField.focus();
+                alert('⚠️ O campo "Resumo Clínico" é obrigatório. Por favor, preencha antes de salvar.');
+            } else {
+                resumoField.classList.remove('is-invalid');
+            }
+        });
+        
+        // Remove a classe de erro ao começar a digitar
+        resumoField.addEventListener('input', () => {
+            resumoField.classList.remove('is-invalid');
+        });
+    }
+})();
+</script>
+{% endblock %}

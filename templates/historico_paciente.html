@@ -60,12 +60,13 @@
                 {% if conclusao == 'OBITO' %}
                     -
                 {% else %}
-                    {# Só exigir financiamento quando a conclusão NÃO for CANCELADO ou RETIRADO #}
+                    {# Botão EDITAR - sempre disponível para alterar prioridade, status, resumo clínico #}
+                    <a href="{{ url_for('editar_dados_solicitacao', solicitacao_id=s[0], paciente_id=paciente_id, next=request.full_path) }}" class="btn btn-sm btn-info mb-1">Editar</a>
+                    
+                    {# Botão CONCLUIR - mostrar quando faltam dados obrigatórios #}
                     {% set precisa_financiamento = not (conclusao in ['CANCELADO', 'RETIRADO']) %}
                     {% if not s[7] or not unidade|trim or not conclusao|trim or (precisa_financiamento and (not financiamento or financiamento|trim == '-')) %}
-                        <a href="{{ url_for('editar_solicitacao', solicitacao_id=s[0], paciente_id=paciente_id, next=request.full_path) }}" class="btn btn-sm btn-warning">Editar</a>
-                    {% else %}
-                        -
+                        <a href="{{ url_for('editar_solicitacao', solicitacao_id=s[0], paciente_id=paciente_id, next=request.full_path) }}" class="btn btn-sm btn-warning">Concluir</a>
                     {% endif %}
                 {% endif %}
             </td>

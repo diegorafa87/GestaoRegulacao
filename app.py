@@ -2801,6 +2801,84 @@ def editar_solicitacao(solicitacao_id):
         origem_retorno=origem_retorno,
     )
 
+@app.route('/solicitacao/<int:solicitacao_id>/editar-dados', methods=['GET', 'POST'])
+def editar_dados_solicitacao(solicitacao_id):
+    conn = conectar()
+    c = conn.cursor()
+    origem_retorno = normalizar_url_retorno(request.form.get('next') or request.args.get('next'), fallback=None)
+
+    # Buscar dados da solicitação
+    c.execute(
+        '''
+        SELECT id, paciente_id, data_solicitacao, data_entrada, prioridade, status, resumo_clinico
+        FROM solicitacao
+        WHERE id = %s
+        ''',
+        (solicitacao_id,)
+    )
+    solicitacao = c.fetchone()
+
+    if not solicitacao:
+        conn.close()
+        flash('Solicitação não encontrada.', 'warning')
+        return redirect(url_for('solicitacoes'))
+
+    if request.method == 'POST':
+        prioridade = request.form.get('prioridade', '').strip()
+        status = request.form.get('status', '').strip().upper()
+        resumo_clinico = request.form.get('resumo_clinico', '').strip()
+
+        # Validar resumo clínico - obrigatório
+        if not resumo_clinico:
+            conn.close()
+            flash('O campo "Resumo Clínico" é obrigatório. Por favor, preencha antes de salvar.', 'warning')
+            paciente_id = solicitacao[1]
+            return redirect(url_for('editar_dados_solicitacao', solicitacao_id=solicitacao_id, paciente_id=paciente_id, next=request.form.get('next', '')))
+
+        # Validar prioridade (mantém case original)
+        opcoes_prioridade = {'SIM', 'NÃO'}
+        prioridade = prioridade if prioridade in opcoes_prioridade else None
+
+        # Validar status
+        opcoes_status = {'ELETIVO', 'URGENTE', 'RETORNO'}
+        status = status if status in opcoes_status else None
+
+        # Atualizar apenas a solicitação específica
+        c.execute(
+            '''
+            UPDATE solicitacao 
+            SET prioridade = %s, status = %s, resumo_clinico = %s
+            WHERE id = %s
+            ''',
+            (
+                prioridade,
+                status,
+                resumo_clinico,
+                solicitacao_id
+            )
+        )
+        
+        conn.commit()
+        conn.close()
+
+        paciente_id = solicitacao[1]
+        if origem_retorno:
+            return redirect(origem_retorno)
+        return redirect(url_for('historico_paciente', paciente_id=paciente_id))
+
+    conn.close()
+
+    paciente_id = resolver_id_paciente(request.args.get('paciente_id', solicitacao[1])) or solicitacao[1]
+    if not request.args.get('next'):
+        origem_retorno = url_for('historico_paciente', paciente_id=paciente_id)
+
+    return render_template(
+        'editar_dados_solicitacao.html',
+        solicitacao=solicitacao,
+        paciente_id=paciente_id,
+        origem_retorno=origem_retorno,
+    )
+
 @app.route('/solicitacoes')
 def solicitacoes():
     origem_retorno = normalizar_url_retorno(request.args.get('next'), fallback=url_for('index'))
