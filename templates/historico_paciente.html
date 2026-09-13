@@ -60,12 +60,18 @@
                 {% if conclusao == 'OBITO' %}
                     -
                 {% else %}
-                    {# Botão EDITAR - sempre disponível para alterar prioridade, status, resumo clínico #}
-                    <a href="{{ url_for('editar_dados_solicitacao', solicitacao_id=s[0], paciente_id=paciente_id, next=request.full_path) }}" class="btn btn-sm btn-info mb-1">Editar</a>
-                    
-                    {# Botão CONCLUIR - mostrar quando faltam dados obrigatórios #}
+                    {# Verificar se todos os dados obrigatórios estão preenchidos #}
                     {% set precisa_financiamento = not (conclusao in ['CANCELADO', 'RETIRADO']) %}
-                    {% if not s[7] or not unidade|trim or not conclusao|trim or (precisa_financiamento and (not financiamento or financiamento|trim == '-')) %}
+                    {% set dados_completos = s[7] and unidade|trim and conclusao|trim and (not precisa_financiamento or (financiamento and financiamento|trim != '-')) %}
+                    
+                    {% if dados_completos %}
+                        {# Todos os dados preenchidos - não mostrar botões #}
+                        -
+                    {% else %}
+                        {# Botão EDITAR - sempre disponível para alterar prioridade, status, resumo clínico #}
+                        <a href="{{ url_for('editar_dados_solicitacao', solicitacao_id=s[0], paciente_id=paciente_id, next=request.full_path) }}" class="btn btn-sm btn-info mb-1">Editar</a>
+                        
+                        {# Botão CONCLUIR - mostrar quando faltam dados obrigatórios #}
                         <a href="{{ url_for('editar_solicitacao', solicitacao_id=s[0], paciente_id=paciente_id, next=request.full_path) }}" class="btn btn-sm btn-warning">Concluir</a>
                     {% endif %}
                 {% endif %}
