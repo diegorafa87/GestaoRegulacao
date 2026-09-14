@@ -8,10 +8,10 @@
 </div>
 <form method="post" class="row g-3">
     <input type="hidden" name="next" value="{{ origem_retorno }}">
-    <div class="col-md-4">
+    <div class="col-md-4 position-relative">
         <label class="form-label">Paciente (CPF/SUS): <span class="text-danger">*</span></label>
-        <input id="paciente_id" name="paciente_id" class="form-control" required list="pacientes-sugestoes" autocomplete="off" placeholder="Digite CPF, SUS ou nome" value="{{ form_data.paciente_id or '' }}">
-        <datalist id="pacientes-sugestoes"></datalist>
+        <input id="paciente_id" name="paciente_id" class="form-control" required autocomplete="off" placeholder="Digite CPF, SUS ou nome" value="{{ form_data.paciente_id or '' }}">
+        <div id="pacientes-sugestoes" class="list-group position-absolute w-100 shadow-sm" role="listbox" style="z-index: 1050; display: none;"></div>
         <small id="paciente-info" class="form-text text-muted"></small>
     </div>
     <div class="col-md-4">
@@ -130,7 +130,7 @@
 {% endif %}
 
 <script>
-(() => {
+document.addEventListener('DOMContentLoaded', () => {
     const campoPaciente = document.getElementById('paciente_id');
     const listaSugestoes = document.getElementById('pacientes-sugestoes');
     const infoPaciente = document.getElementById('paciente-info');
@@ -157,6 +157,7 @@
     const btnCopiarEspecialidadeAtual = document.getElementById('btnCopiarEspecialidadeAtual');
     const btnCopiarSistemaAtual = document.getElementById('btnCopiarSistemaAtual');
     let debounceTimer;
+    let buscaPacienteSequencia = 0;
 
     function somenteDigitos(valor) {
         return (valor || '').replace(/\D/g, '');
@@ -386,55 +387,100 @@
         atualizarVisibilidadeDataRetorno();
     }
 
-    campoPaciente.addEventListener('input', () => {
-        const termo = campoPaciente.value.trim();
+    // ========== AUTOCOMPLETE DE PACIENTES ==========
+    if (!campoPaciente || !listaSugestoes || !infoPaciente) {
+        console.error('Elementos do autocomplete não encontrados', {
+            campoPaciente,
+            listaSugestoes,
+            infoPaciente
+        });
+    } else {
+        campoPaciente.addEventListener('input', () => {
+            const termo = campoPaciente.value.trim();
+            const sequenciaAtual = ++buscaPacienteSequencia;
 
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(async () => {
-            if (termo.length < 3) {
-                listaSugestoes.innerHTML = '';
-                infoPaciente.textContent = '';
-                infoPaciente.className = 'form-text text-muted';
-                return;
-            }
-
-            try {
-                const resposta = await fetch(`/api/buscar_paciente?termo=${encodeURIComponent(termo)}`);
-                if (!resposta.ok) {
-                    infoPaciente.textContent = 'Erro ao buscar paciente.';
-                    return;
-                }
-
-                const pacientes = await resposta.json();
-                listaSugestoes.innerHTML = '';
-
-                if (pacientes.length === 0) {
-                    infoPaciente.textContent = 'Nenhum paciente encontrado.';
-                    infoPaciente.className = 'form-text fw-semibold text-danger';
-                    return;
-                }
-
-                pacientes.forEach((p) => {
-                    const option = document.createElement('option');
-                    option.value = p.id;
-                    option.label = `${p.nome} (${p.id})`;
-                    listaSugestoes.appendChild(option);
-                });
-
-                const termoNormalizado = somenteDigitos(termo);
-                const matchExato = pacientes.find((p) => p.id === termo || (termoNormalizado && somenteDigitos(p.id) === termoNormalizado));
-                if (matchExato) {
-                    infoPaciente.textContent = `Paciente selecionado: ${matchExato.nome}`;
-                    infoPaciente.className = 'form-text fw-semibold text-success';
-                } else {
-                    infoPaciente.textContent = `${pacientes.length} paciente(s) encontrado(s) por CPF/SUS ou nome.`;
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(async () => {
+                if (termo.length < 3) {
+                    listaSugestoes.innerHTML = '';
+                    listaSugestoes.style.display = 'none';
+                    infoPaciente.textContent = '';
                     infoPaciente.className = 'form-text text-muted';
+                    return;
                 }
-            } catch (e) {
-                infoPaciente.textContent = 'Erro ao buscar paciente.';
-            }
-        }, 250);
-    });
+
+                try {
+                    const resposta = await fetch(`/api/buscar_paciente?termo=${encodeURIComponent(termo)}`);
+                    if (sequenciaAtual !== buscaPacienteSequencia) return;
+                    if (!resposta.ok) {
+                        infoPaciente.textContent = 'Erro ao buscar paciente.';
+                        return;
+                    }
+
+                    const tipoResposta = resposta.headers.get('content-type') || '';
+                    if (!tipoResposta.includes('application/json')) {
+                        throw new Error('Sessão expirada ou resposta inválida da API. Atualize a página e entre novamente.');
+                    }
+
+                    const pacientes = await resposta.json();
+                    if (sequenciaAtual !== buscaPacienteSequencia) return;
+                    listaSugestoes.innerHTML = '';
+
+                    if (pacientes.length === 0) {
+                        listaSugestoes.style.display = 'none';
+                        infoPaciente.textContent = 'Nenhum paciente encontrado.';
+                        infoPaciente.className = 'form-text fw-semibold text-danger';
+                        return;
+                    }
+
+                    pacientes.forEach((p) => {
+                        const sugestao = document.createElement('button');
+                        sugestao.type = 'button';
+                        sugestao.className = 'list-group-item list-group-item-action text-start';
+                        sugestao.setAttribute('role', 'option');
+                        const nome = document.createElement('strong');
+                        nome.textContent = p.nome;
+                        const identificador = document.createElement('small');
+                        identificador.className = 'text-muted';
+                        identificador.textContent = p.id;
+                        sugestao.append(nome, document.createElement('br'), identificador);
+                        sugestao.addEventListener('click', () => {
+                            campoPaciente.value = p.id;
+                            listaSugestoes.innerHTML = '';
+                            listaSugestoes.style.display = 'none';
+                            infoPaciente.textContent = `Paciente selecionado: ${p.nome}`;
+                            infoPaciente.className = 'form-text fw-semibold text-success';
+                        });
+                        listaSugestoes.appendChild(sugestao);
+                    });
+                    listaSugestoes.style.display = 'block';
+
+                    const termoNormalizado = somenteDigitos(termo);
+                    const matchExato = pacientes.find((p) => p.id === termo || (termoNormalizado && somenteDigitos(p.id) === termoNormalizado));
+                    if (matchExato) {
+                        infoPaciente.textContent = `Paciente selecionado: ${matchExato.nome}`;
+                        infoPaciente.className = 'form-text fw-semibold text-success';
+                    } else {
+                        infoPaciente.textContent = `${pacientes.length} paciente(s) encontrado(s) por CPF/SUS ou nome.`;
+                        infoPaciente.className = 'form-text text-muted';
+                    }
+                } catch (e) {
+                    if (sequenciaAtual !== buscaPacienteSequencia) return;
+                    listaSugestoes.innerHTML = '';
+                    listaSugestoes.style.display = 'none';
+                    infoPaciente.textContent = e.message || 'Erro ao buscar paciente.';
+                    infoPaciente.className = 'form-text fw-semibold text-danger';
+                }
+            }, 250);
+        });
+
+            document.addEventListener('click', (event) => {
+                if (!campoPaciente.contains(event.target) && !listaSugestoes.contains(event.target)) {
+                    listaSugestoes.style.display = 'none';
+                }
+            });
+    }
+    // ========== FIM AUTOCOMPLETE DE PACIENTES ==========
 
     if (campoEspecialidadeBusca) {
         campoEspecialidadeBusca.addEventListener('keydown', (event) => {
@@ -662,17 +708,16 @@
         return `${dia}/${mes}/${ano}`;
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-        const dataAtual = obterDataAtual();
-        if (camposSolicitacao && !camposSolicitacao.value) {
-            camposSolicitacao.value = dataAtual;
-        }
-        if (camposEntrada && !camposEntrada.value) {
-            camposEntrada.value = dataAtual;
-        }
-        atualizaCampoQuantidadeSolicitacoes();
-        atualizarMensagemEspecialidade();
-    });
+    // Preenchimento automático de datas
+    const dataAtual = obterDataAtual();
+    if (camposSolicitacao && !camposSolicitacao.value) {
+        camposSolicitacao.value = dataAtual;
+    }
+    if (camposEntrada && !camposEntrada.value) {
+        camposEntrada.value = dataAtual;
+    }
+    atualizaCampoQuantidadeSolicitacoes();
+    atualizarMensagemEspecialidade();
 
     // Verificar duplicatas antes de submeter
     const formulario = document.querySelector('form');
@@ -805,10 +850,10 @@
             }
 
             const paciente_id = document.getElementById('paciente_id').value.trim();
-            const tipo = document.querySelector('select[name="tipo"]').value;
+            const tipoSolicitacao = document.querySelector('select[name="tipo"]').value;
             const especialidade = document.getElementById('especialidade_input').value.trim();
 
-            if (!paciente_id || !tipo || !especialidade) {
+            if (!paciente_id || !tipoSolicitacao || !especialidade) {
                 // Se campos vazios, submete normalmente (a validação do servidor cuida)
                 formulario.submit();
                 return;
@@ -822,7 +867,7 @@
                     },
                     body: JSON.stringify({
                         paciente_id: paciente_id,
-                        tipo: tipo,
+                        tipo: tipoSolicitacao,
                         especialidade: especialidade
                     })
                 });
@@ -929,7 +974,7 @@
 
         modal.style.display = 'block';
     }
-})();
+});
 </script>
 
 <!-- Modal para duplicatas -->
