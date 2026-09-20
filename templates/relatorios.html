@@ -374,7 +374,7 @@
                             <th>Especialidade</th>
                             <th class="text-center">Prioridade</th>
                             <th>Status</th>
-                            <th>{% if situacao == 'EM_ESPERA' %}Data Solicitação{% else %}Data Realização{% endif %}</th>
+                            <th>{% if situacao == 'EM_ESPERA' %}Data Solicitação{% elif situacao == 'RETIRADOS' %}Data de Retirada{% else %}Data Realização{% endif %}</th>
                             <th>Unidade Realizadora</th>
                             <th class="text-center">Financiamento</th>
                             <th class="text-center">Conclusão</th>
@@ -531,7 +531,7 @@
                     {% if situacao != 'EM_ESPERA' %}
                     <th data-preservar-pdf="true" data-centralizar-pdf="true" class="text-center">Data Solicitação</th>
                     {% endif %}
-                    <th data-preservar-pdf="true" data-centralizar-pdf="true" class="text-center">{% if situacao == 'EM_ESPERA' %}Data Solicitação{% else %}Data de Realização{% endif %}</th>
+                    <th data-preservar-pdf="true" data-centralizar-pdf="true" class="text-center">{% if situacao == 'EM_ESPERA' %}Data Solicitação{% elif situacao == 'RETIRADOS' %}Data de Retirada{% else %}Data de Realização{% endif %}</th>
                     <th data-centralizar-pdf="true" class="text-center">Especialidade Solicitada</th>
                     {% if mostrar_tipos_radiografia_relatorio %}
                     <th>Tipo de Radiografia</th>

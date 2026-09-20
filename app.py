@@ -3381,7 +3381,7 @@ def relatorios():
             'Especialidade',
             'Prioridade',
             'Status',
-            'Data Solicitação' if situacao == 'EM_ESPERA' else 'Data Realização',
+            'Data Solicitação' if situacao == 'EM_ESPERA' else ('Data de Retirada' if situacao == 'RETIRADOS' else 'Data Realização'),
             'Unidade Realizadora',
             'Financiamento',
             'Conclusão'
