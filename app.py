@@ -1687,7 +1687,8 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                 s.status,
                 s.data_solicitacao,
                 s.data_entrada,
-                0 AS retorno_agendado_count
+                0 AS retorno_agendado_count,
+                p.oncologico
             FROM solicitacao s
             INNER JOIN paciente p ON p.id = s.paciente_id
             WHERE UPPER(s.status) = 'URGENTE'
@@ -1759,7 +1760,8 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                   AND TRIM(COALESCE(sr.data_retorno, '')) <> ''
                   AND UPPER(COALESCE(sr.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
             ) AS retorno_agendado_count,
-            {tipos_radiografia_expr}
+            {tipos_radiografia_expr},
+            p.oncologico
         FROM paciente p
         LEFT JOIN solicitacao s ON s.paciente_id = p.id AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         WHERE 1=1
@@ -1784,7 +1786,7 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
     if status:
         query += " AND EXISTS (SELECT 1 FROM solicitacao sx WHERE sx.paciente_id = p.id AND sx.status LIKE %s AND UPPER(COALESCE(sx.conclusao, '')) NOT IN ('CANCELADO', 'OBITO'))"
         params.append(f"%{status}%")
-    query += ' GROUP BY p.id, p.nome ORDER BY p.nome ASC'
+    query += ' GROUP BY p.id, p.nome, p.oncologico ORDER BY p.nome ASC'
 
     conn = conectar()
     c = conn.cursor()
@@ -3892,7 +3894,7 @@ def api_buscar_paciente():
     if termo_normalizado:
         c.execute(
             """
-            SELECT id, nome
+            SELECT id, nome, oncologico
             FROM paciente
             WHERE regexp_replace(COALESCE(id, ''), '\\D', '', 'g') LIKE %s
                OR regexp_replace(COALESCE(sus, ''), '\\D', '', 'g') LIKE %s
@@ -3907,7 +3909,7 @@ def api_buscar_paciente():
     else:
         c.execute(
             """
-            SELECT id, nome
+            SELECT id, nome, oncologico
             FROM paciente
             WHERE id ILIKE %s OR sus ILIKE %s OR nome ILIKE %s
             ORDER BY nome
@@ -3918,7 +3920,7 @@ def api_buscar_paciente():
     pacientes = c.fetchall()
     conn.close()
 
-    resultado = [{'id': formatar_identificador_paciente(p[0]), 'nome': p[1]} for p in pacientes]
+    resultado = [{'id': formatar_identificador_paciente(p[0]), 'nome': p[1], 'oncologico': bool(p[2])} for p in pacientes]
     return jsonify(resultado)
 
 

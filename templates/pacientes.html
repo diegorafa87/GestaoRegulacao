@@ -41,7 +41,7 @@
     {% for p in pacientes %}
         <tr>
             <td class="small" style="white-space: nowrap;">{{ p[0]|formatar_documento }}</td>
-            <td class="small">{{ p[1] }}</td>
+            <td class="small {% if p[7] %}text-danger fw-bold{% endif %}" {% if p[7] %}style="color: #dc3545;"{% endif %}>{{ p[1] }}</td>
             <td class="small" style="white-space: nowrap;">{{ p[2]|formatar_data }}</td>
             <td class="small" style="white-space: nowrap;">{{ p[3] }}</td>
             <td class="small">{{ p[4]|formatar_endereco_lista }}</td>
@@ -127,9 +127,11 @@
                     const item = document.createElement('a');
                     item.href = `/paciente/${encodeURIComponent(p.id)}/editar?next=${encodeURIComponent(origemAtual)}`;
                     item.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+                    const nomeClasse = p.oncologico ? 'fw-bold text-danger' : 'fw-semibold';
+                    const nomeStyle = p.oncologico ? 'color: #dc3545;' : '';
                     item.innerHTML = `
                         <div>
-                            <div class="fw-semibold">${p.nome}</div>
+                            <div class="${nomeClasse}" style="${nomeStyle}">${p.nome}</div>
                             <small class="text-muted">ID: ${p.id}</small>
                         </div>
                         <span class="badge bg-primary rounded-pill">Ver dados</span>
