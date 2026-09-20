@@ -3371,36 +3371,40 @@ def relatorios():
     if formato == 'csv' and view == 'paciente':
         output = io.StringIO()
         writer = csv.writer(output, delimiter=';')
-        writer.writerow([
-            'ID Solicitação',
-            'Data Solicitação',
+        cabecalho_csv = ['ID Solicitação']
+        if situacao != 'EM_ESPERA':
+            cabecalho_csv.append('Data Solicitação')
+        cabecalho_csv.extend([
             'Data Entrada',
             'Tipo',
             'Idade',
             'Especialidade',
             'Prioridade',
             'Status',
-            'Data Realização',
+            'Data Solicitação' if situacao == 'EM_ESPERA' else 'Data Realização',
             'Unidade Realizadora',
             'Financiamento',
             'Conclusão'
         ])
+        writer.writerow(cabecalho_csv)
 
         for s in relatorio_paciente:
-            writer.writerow([
-                s[0],
-                s[1],
+            linha_csv = [s[0]]
+            if situacao != 'EM_ESPERA':
+                linha_csv.append(s[1])
+            linha_csv.extend([
                 s[2],
                 s[3],
                 idade_paciente,
                 s[4],
                 s[5],
                 s[6],
-                s[7],
+                s[1] if situacao == 'EM_ESPERA' else s[7],
                 s[8],
                 s[10],
                 formatar_conclusao_relatorio(s[9] if len(s) > 9 else '')
             ])
+            writer.writerow(linha_csv)
 
         csv_content = output.getvalue()
         output.close()

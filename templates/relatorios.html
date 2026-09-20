@@ -264,7 +264,9 @@
                     <th class="text-center">ID (CPF/SUS)</th>
                     <th>Paciente</th>
                     <th class="text-center">Total de Solicitações</th>
+                    {% if situacao != 'EM_ESPERA' %}
                     <th data-preservar-pdf="true" data-centralizar-pdf="true" class="text-center">Data Solicitação</th>
+                    {% endif %}
                     {% if situacao == 'RETIRADOS' %}
                     <th class="text-center">Data de Retirada</th>
                     {% endif %}
@@ -277,7 +279,9 @@
                     <td class="text-center">{{ p[0]|formatar_documento }}</td>
                     <td>{{ p[1] }}</td>
                     <td class="text-center">{{ p[2] }}</td>
+                    {% if situacao != 'EM_ESPERA' %}
                     <td data-preservar-pdf="true" data-centralizar-pdf="true" class="text-center">{{ p[3]|formatar_data }}</td>
+                    {% endif %}
                     {% if situacao == 'RETIRADOS' %}
                     <td class="text-center">{{ p[4]|formatar_data }}</td>
                     {% endif %}
@@ -285,7 +289,7 @@
                 {% endfor %}
             {% else %}
                 <tr>
-                    <td colspan="{{ 5 if situacao == 'RETIRADOS' else 4 }}" class="text-center text-muted">Nenhum paciente encontrado para os filtros informados.</td>
+                    <td colspan="{{ 5 if situacao == 'RETIRADOS' else (3 if situacao == 'EM_ESPERA' else 4) }}" class="text-center text-muted">Nenhum paciente encontrado para os filtros informados.</td>
                 </tr>
             {% endif %}
             </tbody>
@@ -361,14 +365,16 @@
                     <thead class="table-dark">
                         <tr>
                             <th>ID Solicitação</th>
+                            {% if situacao != 'EM_ESPERA' %}
                             <th>Data Solicitação</th>
+                            {% endif %}
                             <th>Data Entrada</th>
                             <th class="text-center">Tipo</th>
                             <th class="text-center">Idade</th>
                             <th>Especialidade</th>
                             <th class="text-center">Prioridade</th>
                             <th>Status</th>
-                            <th>Data Realização</th>
+                            <th>{% if situacao == 'EM_ESPERA' %}Data Solicitação{% else %}Data Realização{% endif %}</th>
                             <th>Unidade Realizadora</th>
                             <th class="text-center">Financiamento</th>
                             <th class="text-center">Conclusão</th>
@@ -379,14 +385,16 @@
                         {% for s in relatorio_paciente %}
                         <tr>
                             <td>{{ s[0] }}</td>
+                            {% if situacao != 'EM_ESPERA' %}
                             <td>{{ s[1]|formatar_data }}</td>
+                            {% endif %}
                             <td>{{ s[2]|formatar_data }}</td>
                             <td class="text-center">{{ s[3] }}</td>
                             <td class="text-center">{{ idade_paciente or '-' }}</td>
                             <td>{{ s[4] }}</td>
                             <td class="text-center">{{ s[5] }}</td>
                             <td>{{ s[6] }}</td>
-                            <td>{{ s[7]|formatar_data }}</td>
+                            <td>{{ (s[1] if situacao == 'EM_ESPERA' else s[7])|formatar_data }}</td>
                             <td>{{ s[8] }}</td>
                             <td class="text-center">{{ {'SUS': 'SUS', 'CONVENIO': 'RECURSOS PROPRIOS'}.get(s[10], s[10] if s[10] else '-') }}</td>
                             {% set conclusao = s[9] if s[9] else '' %}
@@ -412,7 +420,7 @@
                         {% endfor %}
                     {% else %}
                         <tr>
-                            <td colspan="12" class="text-center text-muted">Nenhuma solicitação encontrada para este paciente.</td>
+                            <td colspan="{{ 11 if situacao == 'EM_ESPERA' else 12 }}" class="text-center text-muted">Nenhuma solicitação encontrada para este paciente.</td>
                         </tr>
                     {% endif %}
                     </tbody>
@@ -520,8 +528,10 @@
                     <th>Paciente</th>
                     <th data-centralizar-pdf="true" class="text-center">Idade</th>
                     <th data-centralizar-pdf="true" class="text-center">Total de Solicitações</th>
+                    {% if situacao != 'EM_ESPERA' %}
                     <th data-preservar-pdf="true" data-centralizar-pdf="true" class="text-center">Data Solicitação</th>
-                    <th data-centralizar-pdf="true" class="text-center">Data de Realização</th>
+                    {% endif %}
+                    <th data-preservar-pdf="true" data-centralizar-pdf="true" class="text-center">{% if situacao == 'EM_ESPERA' %}Data Solicitação{% else %}Data de Realização{% endif %}</th>
                     <th data-centralizar-pdf="true" class="text-center">Especialidade Solicitada</th>
                     {% if mostrar_tipos_radiografia_relatorio %}
                     <th>Tipo de Radiografia</th>
@@ -536,8 +546,10 @@
                     <td>{{ p[1] }}</td>
                     <td data-centralizar-pdf="true" class="text-center">{{ p[4] if p[4] else '-' }}</td>
                     <td data-centralizar-pdf="true" class="text-center">{{ p[2] }}</td>
+                    {% if situacao != 'EM_ESPERA' %}
                     <td data-preservar-pdf="true" data-centralizar-pdf="true" class="text-center">{{ p[3]|formatar_data }}</td>
-                    <td data-centralizar-pdf="true" class="text-center">{{ p[7]|formatar_data }}</td>
+                    {% endif %}
+                    <td data-preservar-pdf="true" data-centralizar-pdf="true" class="text-center">{{ (p[3] if situacao == 'EM_ESPERA' else p[7])|formatar_data }}</td>
                     <td data-centralizar-pdf="true" class="text-center">
                         {% if p[5] %}
                             {% for especialidade_solicitada in p[5].split('||') %}
