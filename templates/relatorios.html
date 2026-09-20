@@ -6,6 +6,8 @@
     <h2 class="mb-1 fw-bold text-primary">
         {% if situacao == 'EM_ESPERA' %}
             Relatórios de Solicitações em Espera
+        {% elif situacao == 'RETIRADOS' %}
+            Relatórios de Solicitações Retiradas
         {% else %}
             Relatórios de Especialidades Realizadas
         {% endif %}
@@ -13,6 +15,8 @@
     <div class="text-muted small">
         {% if situacao == 'EM_ESPERA' %}
             Painel consolidado de solicitações ainda não realizadas por especialidade
+        {% elif situacao == 'RETIRADOS' %}
+            Painel consolidado de solicitações retiradas pelos pacientes
         {% else %}
             Painel consolidado de procedimentos concluídos por especialidade
         {% endif %}
@@ -45,8 +49,9 @@
         <div class="col-md-2">
             <label class="form-label">Situação</label>
             <select name="situacao" class="form-control">
-                <option value="REALIZADOS" {% if situacao != 'EM_ESPERA' %}selected{% endif %}>Realizados</option>
+                <option value="REALIZADOS" {% if situacao == 'REALIZADOS' %}selected{% endif %}>Realizados</option>
                 <option value="EM_ESPERA" {% if situacao == 'EM_ESPERA' %}selected{% endif %}>Em Espera</option>
+                <option value="RETIRADOS" {% if situacao == 'RETIRADOS' %}selected{% endif %}>Retirados</option>
             </select>
         </div>
         <div class="col-md-2">
@@ -150,7 +155,7 @@
 <div class="card mb-4">
     <div class="card-header bg-info text-white">Tempo Médio de Espera</div>
     <div class="table-responsive">
-        <table class="table table-striped table-bordered mb-0">
+        <table id="tabela-tempo-espera" class="table table-striped table-bordered mb-0">
             <thead class="table-dark">
                 <tr>
                     <th class="text-center">Tipo</th>
@@ -172,6 +177,9 @@
             {% endif %}
             </tbody>
         </table>
+    </div>
+    <div class="card-body pt-2">
+        <button type="button" class="btn btn-outline-danger btn-sm" onclick="baixarTabelaPDF('tabela-tempo-espera', 'Tempo Médio de Espera')">Baixar PDF</button>
     </div>
 </div>
 {% endif %}
@@ -202,16 +210,18 @@
     <div class="card-header bg-primary text-white">
         {% if situacao == 'EM_ESPERA' %}
             Resumo por Especialidade (Em Espera)
+        {% elif situacao == 'RETIRADOS' %}
+            Resumo por Especialidade (Retirados)
         {% else %}
             Resumo por Especialidade (Realizados)
         {% endif %}
     </div>
     <div class="table-responsive">
-        <table class="table table-striped table-bordered mb-0">
+        <table id="tabela-resumo-especialidade" class="table table-striped table-bordered mb-0">
             <thead class="table-dark">
                 <tr>
                     <th class="text-center">Especialidade</th>
-                    <th class="text-center">{% if situacao == 'EM_ESPERA' %}Quantidade em Espera{% else %}Quantidade Realizada{% endif %}</th>
+                    <th class="text-center">{% if situacao == 'EM_ESPERA' %}Quantidade em Espera{% elif situacao == 'RETIRADOS' %}Quantidade Retirada{% else %}Quantidade Realizada{% endif %}</th>
                     <th class="text-center">Resumo</th>
                 </tr>
             </thead>
@@ -224,6 +234,8 @@
                     <td>
                         {% if situacao == 'EM_ESPERA' %}
                             {{ r[0] if r[0] else 'solicitações sem especialidade informada' }}
+                        {% elif situacao == 'RETIRADOS' %}
+                            {{ r[0] if r[0] else 'solicitações retiradas sem especialidade informada' }}
                         {% else %}
                             {{ r[0] if r[0] else 'procedimentos sem especialidade informada' }}
                         {% endif %}
@@ -238,18 +250,24 @@
             </tbody>
         </table>
     </div>
+    <div class="card-body pt-2">
+        <button type="button" class="btn btn-outline-danger btn-sm" onclick="baixarTabelaPDF('tabela-resumo-especialidade', 'Relatório de Solicitações')">Baixar PDF</button>
+    </div>
 </div>
 {% elif view == 'pacientes_mais_solicitacoes' %}
 <div class="card mb-4">
     <div class="card-header bg-primary text-white">Pacientes com mais solicitações</div>
     <div class="table-responsive">
-        <table class="table table-striped table-bordered mb-0">
+        <table id="tabela-pacientes-mais-solicitacoes" class="table table-striped table-bordered mb-0">
             <thead class="table-dark">
                 <tr>
                     <th class="text-center">ID (CPF/SUS)</th>
                     <th>Paciente</th>
                     <th class="text-center">Total de Solicitações</th>
-                    <th class="text-center">Data Solicitação</th>
+                    <th data-preservar-pdf="true" data-centralizar-pdf="true" class="text-center">Data Solicitação</th>
+                    {% if situacao == 'RETIRADOS' %}
+                    <th class="text-center">Data de Retirada</th>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -259,16 +277,22 @@
                     <td class="text-center">{{ p[0]|formatar_documento }}</td>
                     <td>{{ p[1] }}</td>
                     <td class="text-center">{{ p[2] }}</td>
-                    <td class="text-center">{{ p[3]|formatar_data }}</td>
+                    <td data-preservar-pdf="true" data-centralizar-pdf="true" class="text-center">{{ p[3]|formatar_data }}</td>
+                    {% if situacao == 'RETIRADOS' %}
+                    <td class="text-center">{{ p[4]|formatar_data }}</td>
+                    {% endif %}
                 </tr>
                 {% endfor %}
             {% else %}
                 <tr>
-                    <td colspan="4" class="text-center text-muted">Nenhum paciente encontrado para os filtros informados.</td>
+                    <td colspan="{{ 5 if situacao == 'RETIRADOS' else 4 }}" class="text-center text-muted">Nenhum paciente encontrado para os filtros informados.</td>
                 </tr>
             {% endif %}
             </tbody>
         </table>
+    </div>
+    <div class="card-body pt-2">
+        <button type="button" class="btn btn-outline-danger btn-sm" onclick="baixarTabelaPDF('tabela-pacientes-mais-solicitacoes', 'Pacientes com Mais Solicitações')">Baixar PDF</button>
     </div>
 </div>
 {% elif view == 'paciente' %}
@@ -333,7 +357,7 @@
                 </div>
             </div>
             <div class="table-responsive">
-                <table class="table table-striped table-bordered mb-0">
+                <table id="tabela-relatorio-paciente" class="table table-striped table-bordered mb-0">
                     <thead class="table-dark">
                         <tr>
                             <th>ID Solicitação</th>
@@ -394,6 +418,9 @@
                     </tbody>
                 </table>
             </div>
+            <div class="pt-2">
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="baixarTabelaPDF('tabela-relatorio-paciente', 'Relatório do Paciente')">Baixar PDF</button>
+            </div>
         {% else %}
             <div class="alert alert-info mb-0">Informe CPF/SUS ou nome do paciente para gerar o relatório.</div>
         {% endif %}
@@ -403,7 +430,7 @@
 <div class="card mb-4">
     <div class="card-header bg-primary text-white">Especialidades com maior tempo de agendamento</div>
     <div class="table-responsive">
-        <table class="table table-striped table-bordered mb-0">
+        <table id="tabela-especialidades-espera" class="table table-striped table-bordered mb-0">
             <thead class="table-dark">
                 <tr>
                     <th>Especialidade</th>
@@ -427,6 +454,9 @@
             {% endif %}
             </tbody>
         </table>
+    </div>
+    <div class="card-body pt-2">
+        <button type="button" class="btn btn-outline-danger btn-sm" onclick="baixarTabelaPDF('tabela-especialidades-espera', 'Especialidades com Maior Tempo de Agendamento')">Baixar PDF</button>
     </div>
 </div>
 {% elif view == 'ia' %}
@@ -476,31 +506,41 @@
 {% if view == 'resumo' and especialidade and pacientes_especialidade %}
 <div class="card mb-4">
     <div class="card-header bg-success text-white">
-        Pacientes da Especialidade: <strong>{{ especialidade }}</strong>
+        {% if situacao == 'RETIRADOS' %}
+            RELATÓRIO DE SOLICITAÇÕES RETIRADAS: {{ especialidade or 'TODAS AS ESPECIALIDADES' }}
+        {% else %}
+            Pacientes da Especialidade: <strong>{{ especialidade }}</strong>
+        {% endif %}
     </div>
     <div class="table-responsive">
-        <table class="table table-striped table-bordered mb-0">
+        <table id="tabela-pacientes-especialidade" class="table table-striped table-bordered mb-0">
             <thead class="table-dark">
                 <tr>
-                    <th class="text-center">ID (CPF/SUS)</th>
+                    <th data-centralizar-pdf="true" class="text-center">ID (CPF/SUS)</th>
                     <th>Paciente</th>
-                    <th class="text-center">Idade</th>
-                    <th class="text-center">Total de Solicitações</th>
-                    <th class="text-center">Data Solicitação</th>
+                    <th data-centralizar-pdf="true" class="text-center">Idade</th>
+                    <th data-centralizar-pdf="true" class="text-center">Total de Solicitações</th>
+                    <th data-preservar-pdf="true" data-centralizar-pdf="true" class="text-center">Data Solicitação</th>
+                    {% if situacao == 'RETIRADOS' %}
+                    <th data-centralizar-pdf="true" class="text-center">Data de Retirada</th>
+                    {% endif %}
                     {% if mostrar_tipos_radiografia_relatorio %}
                     <th>Tipo de Radiografia</th>
                     {% endif %}
-                    <th class="text-center">Ação</th>
+                    <th data-coluna-acao="true" class="text-center">Ação</th>
                 </tr>
             </thead>
             <tbody>
             {% for p in pacientes_especialidade %}
                 <tr>
-                    <td class="text-center">{{ p[0]|formatar_documento }}</td>
+                    <td data-centralizar-pdf="true" class="text-center">{{ p[0]|formatar_documento }}</td>
                     <td>{{ p[1] }}</td>
-                    <td class="text-center">{{ p[4] if p[4] else '-' }}</td>
-                    <td class="text-center">{{ p[2] }}</td>
-                    <td class="text-center">{{ p[3]|formatar_data }}</td>
+                    <td data-centralizar-pdf="true" class="text-center">{{ p[4] if p[4] else '-' }}</td>
+                    <td data-centralizar-pdf="true" class="text-center">{{ p[2] }}</td>
+                    <td data-preservar-pdf="true" data-centralizar-pdf="true" class="text-center">{{ p[3]|formatar_data }}</td>
+                    {% if situacao == 'RETIRADOS' %}
+                    <td data-centralizar-pdf="true" class="text-center">{{ p[6]|formatar_data }}</td>
+                    {% endif %}
                     {% if mostrar_tipos_radiografia_relatorio %}
                     <td>
                         {% if p[5] %}
@@ -512,13 +552,16 @@
                         {% endif %}
                     </td>
                     {% endif %}
-                    <td class="text-center">
+                    <td data-coluna-acao="true" class="text-center">
                         <a href="{{ url_for('historico_paciente', paciente_id=p[0], next=request.full_path) }}" class="btn btn-sm btn-info">Ver Histórico</a>
                     </td>
                 </tr>
             {% endfor %}
             </tbody>
         </table>
+    </div>
+    <div class="card-body pt-2">
+        <button type="button" class="btn btn-outline-danger btn-sm" onclick="baixarTabelaPDF('tabela-pacientes-especialidade', '{{ ('RELATÓRIO DE SOLICITAÇÕES RETIRADAS: ' ~ (especialidade or 'TODAS AS ESPECIALIDADES')) if situacao == 'RETIRADOS' else 'Pacientes da Especialidade' }}')">Baixar PDF</button>
     </div>
 </div>
 {% elif especialidade and not pacientes_especialidade %}
@@ -532,6 +575,8 @@
     <div>
         {% if situacao == 'EM_ESPERA' %}
             Quantidade total em espera: <strong>{{ total_registros }}</strong>
+        {% elif situacao == 'RETIRADOS' %}
+            Quantidade total retirada: <strong>{{ total_registros }}</strong>
         {% else %}
             Quantidade total realizada: <strong>{{ total_registros }}</strong>
         {% endif %}
@@ -544,6 +589,82 @@
 </div>
 
 <script>
+function baixarTabelaPDF(tabelaId, titulo) {
+    const tabela = document.getElementById(tabelaId);
+    if (!tabela) return;
+
+    const janela = window.open('', '_blank', 'width=1200,height=800');
+    if (!janela) {
+        alert('Permita janelas pop-up para gerar o PDF.');
+        return;
+    }
+
+    const tabelaClonada = tabela.cloneNode(true);
+    tabelaClonada.removeAttribute('id');
+    tabelaClonada.querySelectorAll('[data-coluna-acao]').forEach((celula) => celula.remove());
+    const logoUrl = "{{ url_for('static', filename='image_7426c3df.png') }}";
+    const situacoes = {
+        REALIZADOS: 'REALIZADOS',
+        EM_ESPERA: 'EM ESPERA',
+        RETIRADOS: 'RETIRADOS'
+    };
+    const situacaoSelecionada = {{ situacao|tojson }};
+    const situacaoTexto = situacoes[situacaoSelecionada] || situacaoSelecionada;
+    const especialidadeSelecionada = {{ (especialidade or 'TODAS AS ESPECIALIDADES')|tojson }};
+    const tituloPDF = situacaoSelecionada === 'RETIRADOS'
+        ? `RELATÓRIO DE SOLICITAÇÕES RETIRADAS: ${especialidadeSelecionada}`
+        : titulo;
+    janela.document.open();
+    janela.document.write(`<!doctype html>
+        <html lang="pt-BR">
+        <head>
+            <meta charset="utf-8">
+            <title>${titulo}</title>
+            <style>
+                @page { size: A4 landscape; margin: 12mm; }
+                * { box-sizing: border-box; }
+                body { font-family: Arial, sans-serif; color: #212529; margin: 0; }
+                .cabecalho { display: flex; align-items: center; gap: 16px; border-bottom: 2px solid #0d6efd; padding-bottom: 10px; margin-bottom: 12px; }
+                .cabecalho img { width: 64px; height: 64px; object-fit: contain; }
+                .secretaria { color: #0d6efd; font-size: 15px; font-weight: bold; text-transform: uppercase; }
+                .municipio { color: #495057; font-size: 12px; margin-top: 2px; text-transform: uppercase; }
+                h1 { color: #212529; font-size: 18px; margin: 5px 0 0; }
+                .situacao { color: #fd7e14; font-size: 12px; font-weight: bold; margin-top: 4px; text-transform: uppercase; }
+                table { width: 100%; border-collapse: collapse; font-size: 10px; }
+                th, td { border: 1px solid #adb5bd; padding: 5px 6px; vertical-align: middle; }
+                [data-centralizar-pdf="true"] { text-align: center !important; }
+                th { background: #212529; color: white; font-weight: bold; }
+                tr:nth-child(even) td { background: #f8f9fa; }
+                @media print { h1 { margin-bottom: 8px; } }
+            </style>
+        </head>
+        <body>
+            <div class="cabecalho">
+                <img src="${logoUrl}" alt="Logo SIGA SAÚDE">
+                <div>
+                    <div class="secretaria">SIGA SAÚDE FERNANDO PEDROZA</div>
+                    <div class="municipio">SECRETARIA MUNICIPAL DE SAÚDE</div>
+                    <h1>${tituloPDF}</h1>
+                    ${situacaoSelecionada === 'RETIRADOS' ? '' : `<div class="situacao">Situação: ${situacaoTexto}</div>`}
+                </div>
+            </div>
+            ${tabelaClonada.outerHTML}
+        </body>
+        </html>`);
+    janela.document.close();
+    janela.focus();
+            let impresso = false;
+            const imprimir = () => {
+                if (impresso || janela.closed) return;
+                impresso = true;
+                janela.focus();
+                janela.print();
+            };
+            janela.addEventListener('afterprint', () => janela.close(), {once: true});
+            janela.addEventListener('load', () => janela.setTimeout(imprimir, 150), {once: true});
+            janela.setTimeout(imprimir, 1200);
+}
+
 async function gerarPdfTexto(tipo) {
     const textareaId = tipo === 'sintetico' ? 'texto-sintetico' : 'texto-detalhado';
     const textarea = document.getElementById(textareaId);

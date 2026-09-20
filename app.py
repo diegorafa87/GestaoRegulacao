@@ -2959,7 +2959,7 @@ def relatorios():
     acao = request.args.get('acao', '').strip().lower()
     ordenacao = request.args.get('ordenacao', 'nome_asc').strip().lower()
 
-    if situacao not in ('REALIZADOS', 'EM_ESPERA'):
+    if situacao not in ('REALIZADOS', 'EM_ESPERA', 'RETIRADOS'):
         situacao = 'REALIZADOS'
     if acao == 'paciente':
         view = 'paciente'
@@ -2984,7 +2984,7 @@ def relatorios():
             resposta_ia = ia_utils.processar_pergunta_ia(pergunta_ia)
 
     filtros_aplicados = bool(
-        tipo or especialidade or paciente or data_inicio_raw or data_fim_raw or situacao == 'EM_ESPERA' or financiamento or tempo_espera or view != 'resumo' or pergunta_ia
+        tipo or especialidade or paciente or data_inicio_raw or data_fim_raw or situacao in ('EM_ESPERA', 'RETIRADOS') or financiamento or tempo_espera or view != 'resumo' or pergunta_ia
     )
 
     resumo = []
@@ -3015,7 +3015,9 @@ def relatorios():
         '''
         params_resumo = []
 
-        if situacao == 'EM_ESPERA':
+        if situacao == 'RETIRADOS':
+            query_resumo += " AND UPPER(COALESCE(s.conclusao, '')) = 'RETIRADO'"
+        elif situacao == 'EM_ESPERA':
             query_resumo += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
         else:
             query_resumo += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
@@ -3061,7 +3063,8 @@ def relatorios():
                 p.id,
                 p.nome,
                 COUNT(s.id) AS total_solicitacoes,
-                MIN(s.data_solicitacao) AS data_solicitacao
+                MIN(s.data_solicitacao) AS data_solicitacao,
+                MIN(s.data_realizacao) AS data_retirada
             FROM paciente p
             INNER JOIN solicitacao s ON s.paciente_id = p.id
             WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
@@ -3069,7 +3072,9 @@ def relatorios():
         '''
         params_pacientes_top = []
 
-        if situacao == 'EM_ESPERA':
+        if situacao == 'RETIRADOS':
+            query_pacientes_top += " AND UPPER(COALESCE(s.conclusao, '')) = 'RETIRADO'"
+        elif situacao == 'EM_ESPERA':
             query_pacientes_top += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
         else:
             query_pacientes_top += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
@@ -3119,7 +3124,10 @@ def relatorios():
         '''
         params_espera = []
 
-        if situacao == 'EM_ESPERA':
+        if situacao == 'RETIRADOS':
+            query_espera = query_espera.replace('%s', 'CURRENT_DATE')
+            query_espera += " AND UPPER(COALESCE(s.conclusao, '')) = 'RETIRADO'"
+        elif situacao == 'EM_ESPERA':
             query_espera = query_espera.replace('%s', 'CURRENT_DATE')
             query_espera += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
         else:
@@ -3143,11 +3151,17 @@ def relatorios():
             params_espera.append(f"%{normalizar_texto_busca(especialidade)}%")
 
         if data_inicio:
-            query_espera += ' AND s.data_entrada >= %s'
+            if situacao == 'EM_ESPERA':
+                query_espera += ' AND s.data_entrada >= %s'
+            else:
+                query_espera += ' AND s.data_realizacao >= %s'
             params_espera.append(data_inicio)
 
         if data_fim:
-            query_espera += ' AND s.data_entrada <= %s'
+            if situacao == 'EM_ESPERA':
+                query_espera += ' AND s.data_entrada <= %s'
+            else:
+                query_espera += ' AND s.data_realizacao <= %s'
             params_espera.append(data_fim)
 
         query_espera += ' GROUP BY s.especialidade ORDER BY tempo_medio_dias DESC, s.especialidade LIMIT 50'
@@ -3167,7 +3181,9 @@ def relatorios():
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
 
-        if situacao == 'EM_ESPERA':
+        if situacao == 'RETIRADOS':
+            query_procedimentos_geral += " AND UPPER(COALESCE(s.conclusao, '')) = 'RETIRADO'"
+        elif situacao == 'EM_ESPERA':
             query_procedimentos_geral += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
         else:
             query_procedimentos_geral += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
@@ -3298,7 +3314,9 @@ def relatorios():
             )
             params_tempo.append(f"%{normalizar_texto_busca(especialidade)}%")
 
-        if situacao == 'EM_ESPERA':
+        if situacao == 'RETIRADOS':
+            query_tempo += " AND UPPER(COALESCE(s.conclusao, '')) = 'RETIRADO'"
+        elif situacao == 'EM_ESPERA':
             query_tempo += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
         else:
             query_tempo += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
@@ -3328,7 +3346,7 @@ def relatorios():
         writer = csv.writer(output, delimiter=';')
         writer.writerow([
             'Especialidade',
-            'Quantidade Realizada'
+            'Quantidade Retirada' if situacao == 'RETIRADOS' else ('Quantidade em Espera' if situacao == 'EM_ESPERA' else 'Quantidade Realizada')
         ])
 
         for r in resumo:
@@ -3340,7 +3358,7 @@ def relatorios():
         csv_content = output.getvalue()
         output.close()
 
-        prefixo_arquivo = 'relatorio_em_espera' if situacao == 'EM_ESPERA' else 'relatorio_realizados'
+        prefixo_arquivo = 'relatorio_retirados' if situacao == 'RETIRADOS' else ('relatorio_em_espera' if situacao == 'EM_ESPERA' else 'relatorio_realizados')
         nome_arquivo = f"{prefixo_arquivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
         return Response(
             '\ufeff' + csv_content,
@@ -3444,7 +3462,7 @@ def relatorios():
             total_registros,
             pacientes_por_especialidade=pacientes_por_especialidade,
         )
-        prefixo_arquivo = 'relatorio_em_espera' if situacao == 'EM_ESPERA' else 'relatorio_realizados'
+        prefixo_arquivo = 'relatorio_retirados' if situacao == 'RETIRADOS' else ('relatorio_em_espera' if situacao == 'EM_ESPERA' else 'relatorio_realizados')
         nome_arquivo = f"{prefixo_arquivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
         return Response(
             pdf_content,
@@ -3481,7 +3499,8 @@ def relatorios():
                 COUNT(s.id) AS total_solicitacoes,
                 MIN(s.data_solicitacao) AS data_solicitacao,
                 p.nascimento AS nascimento_paciente,
-                {tipos_radiografia_expr}
+                {tipos_radiografia_expr},
+                MIN(s.data_realizacao) AS data_retirada
             FROM paciente p
             INNER JOIN solicitacao s ON s.paciente_id = p.id
             WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
@@ -3496,7 +3515,9 @@ def relatorios():
             query_pacientes += " AND UPPER(COALESCE(s.financiamento, '')) = %s"
             params_pacientes.append(financiamento)
 
-        if situacao == 'EM_ESPERA':
+        if situacao == 'RETIRADOS':
+            query_pacientes += " AND UPPER(COALESCE(s.conclusao, '')) = 'RETIRADO'"
+        elif situacao == 'EM_ESPERA':
             query_pacientes += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
         else:
             query_pacientes += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
@@ -3546,6 +3567,7 @@ def relatorios():
                 paciente_row[3],
                 idade,
                 paciente_row[5] if len(paciente_row) > 5 else None,
+                paciente_row[6] if len(paciente_row) > 6 else None,
             ))
         conn.close()
 
