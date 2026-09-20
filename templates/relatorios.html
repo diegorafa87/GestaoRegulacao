@@ -521,9 +521,8 @@
                     <th data-centralizar-pdf="true" class="text-center">Idade</th>
                     <th data-centralizar-pdf="true" class="text-center">Total de Solicitações</th>
                     <th data-preservar-pdf="true" data-centralizar-pdf="true" class="text-center">Data Solicitação</th>
-                    {% if situacao == 'RETIRADOS' %}
-                    <th data-centralizar-pdf="true" class="text-center">Data de Retirada</th>
-                    {% endif %}
+                    <th data-centralizar-pdf="true" class="text-center">Data de Realização</th>
+                    <th data-centralizar-pdf="true" class="text-center">Especialidade Solicitada</th>
                     {% if mostrar_tipos_radiografia_relatorio %}
                     <th>Tipo de Radiografia</th>
                     {% endif %}
@@ -538,13 +537,20 @@
                     <td data-centralizar-pdf="true" class="text-center">{{ p[4] if p[4] else '-' }}</td>
                     <td data-centralizar-pdf="true" class="text-center">{{ p[2] }}</td>
                     <td data-preservar-pdf="true" data-centralizar-pdf="true" class="text-center">{{ p[3]|formatar_data }}</td>
-                    {% if situacao == 'RETIRADOS' %}
-                    <td data-centralizar-pdf="true" class="text-center">{{ p[6]|formatar_data }}</td>
-                    {% endif %}
+                    <td data-centralizar-pdf="true" class="text-center">{{ p[7]|formatar_data }}</td>
+                    <td data-centralizar-pdf="true" class="text-center">
+                        {% if p[5] %}
+                            {% for especialidade_solicitada in p[5].split('||') %}
+                                <div>{{ especialidade_solicitada }}</div>
+                            {% endfor %}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
                     {% if mostrar_tipos_radiografia_relatorio %}
                     <td>
-                        {% if p[5] %}
-                            {% for tipo_radiografia in p[5].split('||') %}
+                        {% if p[6] %}
+                            {% for tipo_radiografia in p[6].split('||') %}
                                 <div>{{ tipo_radiografia }}</div>
                             {% endfor %}
                         {% else %}
@@ -561,7 +567,7 @@
         </table>
     </div>
     <div class="card-body pt-2">
-        <button type="button" class="btn btn-outline-danger btn-sm" onclick="baixarTabelaPDF('tabela-pacientes-especialidade', '{{ ('RELATÓRIO DE SOLICITAÇÕES RETIRADAS: ' ~ (especialidade or 'TODAS AS ESPECIALIDADES')) if situacao == 'RETIRADOS' else 'Pacientes da Especialidade' }}')">Baixar PDF</button>
+        <button type="button" class="btn btn-outline-danger btn-sm" onclick="baixarTabelaPDF('tabela-pacientes-especialidade', '{{ ('RELATÓRIO DE SOLICITAÇÕES RETIRADAS: ' ~ (especialidade or 'TODAS AS ESPECIALIDADES')) if situacao == 'RETIRADOS' else ('Pacientes da Especialidade: ' ~ especialidade) }}')">Baixar PDF</button>
     </div>
 </div>
 {% elif especialidade and not pacientes_especialidade %}

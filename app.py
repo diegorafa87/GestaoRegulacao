@@ -3486,6 +3486,12 @@ def relatorios():
     pacientes_especialidade = []
     mostrar_tipos_radiografia_relatorio = 'RADIOGRAFIA' in normalizar_texto_busca(especialidade)
     if especialidade:
+        especialidades_solicitadas_expr = '''
+            STRING_AGG(
+                DISTINCT NULLIF(TRIM(s.especialidade), ''),
+                '||' ORDER BY NULLIF(TRIM(s.especialidade), '')
+            ) AS especialidades_solicitadas
+        '''
         tipos_radiografia_expr = 'NULL AS tipos_radiografia'
         if mostrar_tipos_radiografia_relatorio:
             tipos_radiografia_expr = '''
@@ -3499,6 +3505,7 @@ def relatorios():
                 COUNT(s.id) AS total_solicitacoes,
                 MIN(s.data_solicitacao) AS data_solicitacao,
                 p.nascimento AS nascimento_paciente,
+                {especialidades_solicitadas_expr},
                 {tipos_radiografia_expr},
                 MIN(s.data_realizacao) AS data_retirada
             FROM paciente p
@@ -3508,7 +3515,10 @@ def relatorios():
               AND translate(UPPER(COALESCE(s.especialidade, '')),
                     'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
                     'AAAAAEEEEIIIIOOOOOUUUUC') LIKE %s
-        '''.format(tipos_radiografia_expr=tipos_radiografia_expr)
+        '''.format(
+            especialidades_solicitadas_expr=especialidades_solicitadas_expr,
+            tipos_radiografia_expr=tipos_radiografia_expr,
+        )
         params_pacientes = [f"%{normalizar_texto_busca(especialidade)}%"]
 
         if financiamento:
@@ -3568,6 +3578,7 @@ def relatorios():
                 idade,
                 paciente_row[5] if len(paciente_row) > 5 else None,
                 paciente_row[6] if len(paciente_row) > 6 else None,
+                paciente_row[7] if len(paciente_row) > 7 else None,
             ))
         conn.close()
 
