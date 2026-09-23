@@ -27,7 +27,7 @@
             <td class="text-center fw-bold small">{{ s[3] }}</td>
             <td class="fw-bold small">{{ s[4] }}</td>
             <td class="text-center fw-bold small">{{ s[5] }}</td>
-            <td class="fw-bold small">{{ s[6] }}</td>
+            <td class="fw-bold small">{% if s[6] == 'URGENTE' %}<span class="text-danger">{{ s[6] }}</span>{% else %}{{ s[6] }}{% endif %}</td>
             <td class="fw-bold small" style="white-space: nowrap;">{{ s[7]|formatar_data }}</td>
             <td class="fw-bold small">{{ s[8] }}</td>
             <td class="text-center fw-bold small">{{ {'SUS': 'SUS', 'CONVENIO': 'RECURSOS PROPRIOS'}.get(s[10], s[10] if s[10] else '-') }}</td>

@@ -393,7 +393,7 @@
                             <td class="text-center">{{ idade_paciente or '-' }}</td>
                             <td>{{ s[4] }}</td>
                             <td class="text-center">{{ s[5] }}</td>
-                            <td>{{ s[6] }}</td>
+                            <td>{% if s[6] == 'URGENTE' %}<span class="text-danger fw-bold">{{ s[6] }}</span>{% else %}{{ s[6] }}{% endif %}</td>
                             <td>{{ (s[1] if situacao == 'EM_ESPERA' else s[7])|formatar_data }}</td>
                             <td>{{ s[8] }}</td>
                             <td class="text-center">{{ {'SUS': 'SUS', 'CONVENIO': 'RECURSOS PROPRIOS'}.get(s[10], s[10] if s[10] else '-') }}</td>

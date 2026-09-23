@@ -47,7 +47,9 @@
             <td class="small {% if s[8] %}text-danger fw-bold{% endif %}" {% if s[8] %}style="color: #dc3545;"{% endif %}>{{ s[1] }}</td>
             <td class="small">{{ s[2] if s[2] else '-' }}</td>
             <td class="small">{{ s[3] if s[3] else '-' }}</td>
-            <td class="small">{{ s[4] if s[4] else '-' }}</td>
+            <td class="small">
+                {% if s[4] == 'URGENTE' %}<span class="text-danger fw-bold">{{ s[4] }}</span>{% else %}{{ s[4] if s[4] else '-' }}{% endif %}
+            </td>
             <td class="small" style="white-space: nowrap;">{{ s[5]|formatar_data }}</td>
             <td class="small" style="white-space: nowrap;">{{ s[6]|formatar_data }}</td>
             <td class="text-nowrap small">
@@ -66,7 +68,7 @@
             <td class="text-center small">{{ s[2] }}</td>
             <td class="text-center small" style="white-space: nowrap;">{{ s[3]|formatar_data }}</td>
             <td class="text-center small">
-                {{ s[4] if s[4] else '-' }}
+                {% if s[4] == 'URGENTE' %}<span class="text-danger fw-bold">{{ s[4] }}</span>{% else %}{{ s[4] if s[4] else '-' }}{% endif %}
                 {% if s[5] and s[5] > 0 %}
                     <span class="badge bg-warning text-dark ms-1">Retorno agendado</span>
                 {% endif %}
