@@ -752,6 +752,17 @@ def _rotular_principio_procedimento(principio):
     return labels.get(principio, principio)
 
 
+def agrupar_resumo_por_principio(resumo):
+    """Consolida especialidades que pertencem ao mesmo grupo de procedimento."""
+    agrupados = {}
+    for especialidade, quantidade in resumo or []:
+        principio = _classificar_principio_procedimento(especialidade)
+        rotulo = _rotular_principio_procedimento(principio) or 'SEM ESPECIALIDADE'
+        agrupados[rotulo] = agrupados.get(rotulo, 0) + (quantidade or 0)
+
+    return sorted(agrupados.items(), key=lambda item: (-item[1], item[0]))
+
+
 def _normalizar_rotulo_procedimento(item):
     if isinstance(item, dict):
         procedimento = item.get('procedimento') or item.get('especialidade') or ''
@@ -1010,9 +1021,32 @@ from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Image as ReportLabImage
+from reportlab.graphics.shapes import Drawing, Rect, String
 
 
-def gerar_pdf_relatorio_resumo(resumo, tipo, especialidade, data_inicio, data_fim, total_registros, pacientes_por_especialidade=None):
+def _grafico_barras_pdf(titulo, dados, largura=460, altura_por_item=22):
+    """Cria um gráfico de barras horizontal vetorial para uso em relatórios PDF."""
+    if not dados:
+        return None
+
+    altura = max(44, len(dados) * altura_por_item + 8)
+    desenho = Drawing(largura, altura)
+    largura_barra = 270
+    x_barra = 145
+    cor = colors.HexColor('#0d6efd')
+
+    for indice, item in enumerate(dados):
+        y = altura - (indice + 1) * altura_por_item + 5
+        percentual = max(0, min(100, float(item.get('percentual', 0) or 0)))
+        desenho.add(String(0, y + 4, str(item.get('label', '')), fontName='Helvetica', fontSize=8))
+        desenho.add(Rect(x_barra, y, largura_barra, 11, fillColor=colors.HexColor('#e9ecef'), strokeColor=None))
+        desenho.add(Rect(x_barra, y, largura_barra * percentual / 100, 11, fillColor=cor, strokeColor=None))
+        desenho.add(String(x_barra + largura_barra + 8, y + 3, f"{item.get('total', 0)} ({percentual:g}%)", fontName='Helvetica-Bold', fontSize=8))
+
+    return desenho
+
+
+def gerar_pdf_relatorio_resumo(resumo, tipo, especialidade, data_inicio, data_fim, total_registros, pacientes_por_especialidade=None, graficos_relatorio=None, incluir_nomes_resumo=True):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=0.6 * inch, leftMargin=0.6 * inch, topMargin=0.7 * inch, bottomMargin=0.7 * inch)
     styles = getSampleStyleSheet()
@@ -1048,20 +1082,12 @@ def gerar_pdf_relatorio_resumo(resumo, tipo, especialidade, data_inicio, data_fi
     story.append(Spacer(1, 0.05 * inch))
 
     if resumo:
-        rows = [['Especialidade', 'Quantidade', 'Resumo']]
+        rows = [['Especialidade', 'Quantidade']]
         for especialidade_item, quantidade in resumo:
             descricao = especialidade_item if especialidade_item else 'Sem especialidade informada'
-            resumo_texto = descricao
-            if pacientes_por_especialidade:
-                pacientes = pacientes_por_especialidade.get(especialidade_item) or []
-                if pacientes:
-                    nomes = ', '.join(str(p[1]) for p in pacientes[:4])
-                    if len(pacientes) > 4:
-                        nomes += '...'
-                    resumo_texto = nomes
-            rows.append([descricao, str(quantidade), resumo_texto])
+            rows.append([descricao, str(quantidade)])
 
-        table = Table(rows, repeatRows=1, colWidths=[2.2 * inch, 0.9 * inch, 3.2 * inch])
+        table = Table(rows, repeatRows=1, colWidths=[5.4 * inch, 0.9 * inch])
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0d6efd')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
@@ -1081,6 +1107,23 @@ def gerar_pdf_relatorio_resumo(resumo, tipo, especialidade, data_inicio, data_fi
         story.append(table)
     else:
         story.append(Paragraph('Nenhum registro encontrado para os filtros informados.', style_normal))
+
+    graficos_relatorio = graficos_relatorio or {}
+    graficos = [
+        ('Procedimentos por tipo', graficos_relatorio.get('tipos', [])),
+        ('Atendimentos por financiamento', graficos_relatorio.get('financiamentos', [])),
+        ('Principais especialidades', graficos_relatorio.get('especialidades', [])),
+    ]
+    graficos_disponiveis = [(titulo_grafico, dados) for titulo_grafico, dados in graficos if dados]
+    if graficos_disponiveis:
+        story.append(Spacer(1, 0.18 * inch))
+        story.append(Paragraph('Gráficos do relatório', style_heading))
+        for titulo_grafico, dados in graficos_disponiveis:
+            story.append(Spacer(1, 0.08 * inch))
+            story.append(Paragraph(titulo_grafico, style_normal))
+            grafico = _grafico_barras_pdf(titulo_grafico, dados)
+            if grafico is not None:
+                story.append(grafico)
 
     doc.build(story)
     return buffer.getvalue()
@@ -3002,6 +3045,11 @@ def relatorios():
     texto_detalhado_relatorio = ''
     total_registros = 0
     dados_procedimentos_geral = []
+    graficos_relatorio = {
+        'tipos': [],
+        'financiamentos': [],
+        'especialidades': [],
+    }
 
     conn = conectar()
     c = conn.cursor()
@@ -3056,7 +3104,7 @@ def relatorios():
 
         query_resumo += ' GROUP BY s.especialidade ORDER BY total_registros DESC, s.especialidade'
         c.execute(query_resumo, params_resumo)
-        resumo = c.fetchall()
+        resumo = agrupar_resumo_por_principio(c.fetchall())
 
 
     elif view == 'pacientes_mais_solicitacoes':
@@ -3176,7 +3224,9 @@ def relatorios():
             SELECT
                 s.especialidade,
                 s.data_realizacao,
-                p.nome AS paciente_nome
+                p.nome AS paciente_nome,
+                UPPER(s.tipo) AS tipo,
+                UPPER(COALESCE(s.financiamento, '')) AS financiamento
             FROM solicitacao s
             LEFT JOIN paciente p ON p.id = s.paciente_id
             WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
@@ -3225,8 +3275,57 @@ def relatorios():
         for row in c.fetchall():
             dados_procedimentos_geral.append({
                 'paciente_nome': row[2] if row[2] else '',
-                'procedimento': row[0] if row[0] else ''
+                'procedimento': row[0] if row[0] else '',
+                'tipo': row[3] if row[3] else '',
+                'financiamento': row[4] if row[4] else '',
             })
+
+        def montar_dados_grafico(chave, rotulos):
+            contagens = {rotulo: 0 for rotulo in rotulos}
+            for item in dados_procedimentos_geral:
+                valor = item.get(chave, '')
+                if chave == 'financiamento':
+                    valor = {
+                        'SUS': 'SUS',
+                        'CONVENIO': 'RECURSOS PROPRIOS',
+                    }.get(valor, 'NAO INFORMADO')
+                elif chave == 'tipo':
+                    valor = {
+                        'CONSULTA': 'CONSULTAS',
+                        'EXAME': 'EXAMES',
+                        'CIRURGIA': 'CIRURGIAS',
+                    }.get(valor, 'OUTROS')
+                else:
+                    valor = valor or 'SEM ESPECIALIDADE'
+                if valor in contagens:
+                    contagens[valor] += 1
+
+            total = sum(contagens.values())
+            return [
+                {
+                    'label': label,
+                    'total': total_item,
+                    'percentual': round((total_item / total) * 100, 1) if total else 0,
+                }
+                for label, total_item in contagens.items()
+                if total_item
+            ]
+
+        graficos_relatorio['tipos'] = montar_dados_grafico(
+            'tipo', ['CONSULTAS', 'EXAMES', 'CIRURGIAS', 'OUTROS']
+        )
+        graficos_relatorio['financiamentos'] = montar_dados_grafico(
+            'financiamento', ['SUS', 'RECURSOS PROPRIOS', 'NAO INFORMADO']
+        )
+        total_resumo_graficos = sum(item[1] for item in resumo) if resumo else 0
+        graficos_relatorio['especialidades'] = [
+            {
+                'label': especialidade_item or 'SEM ESPECIALIDADE',
+                'total': total_item,
+                'percentual': round((total_item / total_resumo_graficos) * 100, 1) if total_resumo_graficos else 0,
+            }
+            for especialidade_item, total_item in resumo[:10]
+        ]
         relatorio_procedimentos_sintetico = gerar_relatorio_procedimentos_sintetico(dados_procedimentos_geral)
         relatorio_procedimentos_detalhado = gerar_relatorio_procedimentos_detalhado(dados_procedimentos_geral, incluir_pacientes=False)
         texto_sintetico_relatorio = '\n'.join(relatorio_procedimentos_sintetico)
@@ -3467,6 +3566,8 @@ def relatorios():
             data_fim_raw,
             total_registros,
             pacientes_por_especialidade=pacientes_por_especialidade,
+            graficos_relatorio=graficos_relatorio,
+            incluir_nomes_resumo=(situacao != 'REALIZADOS'),
         )
         prefixo_arquivo = 'relatorio_retirados' if situacao == 'RETIRADOS' else ('relatorio_em_espera' if situacao == 'EM_ESPERA' else 'relatorio_realizados')
         nome_arquivo = f"{prefixo_arquivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
@@ -3617,7 +3718,8 @@ def relatorios():
         especialidades_maior_espera=especialidades_maior_espera,
         pacientes_especialidade=pacientes_especialidade,
         tempo_medio_espera=tempo_medio_espera,
-        mostrar_tipos_radiografia_relatorio=mostrar_tipos_radiografia_relatorio
+        mostrar_tipos_radiografia_relatorio=mostrar_tipos_radiografia_relatorio,
+        graficos_relatorio=graficos_relatorio,
     )
 
 @app.route('/nova_solicitacao', methods=['GET', 'POST'])

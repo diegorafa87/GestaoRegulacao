@@ -151,6 +151,39 @@
 </div>
 {% endif %}
 
+{% if view == 'resumo' %}
+<div class="row g-3 mb-4">
+    {% for grafico in [
+        {'titulo': 'Procedimentos por tipo', 'dados': graficos_relatorio.tipos, 'cor': '#0d6efd'},
+        {'titulo': 'Atendimentos por financiamento', 'dados': graficos_relatorio.financiamentos, 'cor': '#198754'},
+        {'titulo': 'Principais especialidades', 'dados': graficos_relatorio.especialidades, 'cor': '#6f42c1'}
+    ] %}
+    <div class="col-lg-4">
+        <div class="card h-100 shadow-sm">
+            <div class="card-header fw-semibold">{{ grafico.titulo }}</div>
+            <div class="card-body">
+                {% if grafico.dados %}
+                    {% for item in grafico.dados %}
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between small mb-1">
+                            <span class="text-truncate me-2" title="{{ item.label }}">{{ item.label }}</span>
+                            <strong>{{ item.total }} ({{ item.percentual }}%)</strong>
+                        </div>
+                        <div class="progress" role="img" aria-label="{{ item.label }}: {{ item.total }} registros">
+                            <div class="progress-bar" style="width: {{ item.percentual }}%; background-color: {{ grafico.cor }}"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-muted small">Nenhum dado para os filtros informados.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 {% if tempo_espera %}
 <div class="card mb-4">
     <div class="card-header bg-info text-white">Tempo Médio de Espera</div>
