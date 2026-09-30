@@ -3008,7 +3008,7 @@ def relatorios():
         situacao = 'REALIZADOS'
     if acao == 'paciente':
         view = 'paciente'
-    if view not in ('resumo', 'pacientes_mais_solicitacoes', 'especialidades_maior_espera', 'ia', 'paciente'):
+    if view not in ('resumo', 'pacientes_mais_solicitacoes', 'especialidades_maior_espera', 'ia', 'paciente', 'financiamento_nao_informado'):
         view = 'resumo'
     if ordenacao not in ('nome_asc', 'nome_desc', 'data_asc', 'data_desc', 'idade_desc', 'idade_asc'):
         ordenacao = 'nome_asc'
@@ -3033,6 +3033,7 @@ def relatorios():
     )
 
     resumo = []
+    solicitacoes_sem_financiamento = []
     pacientes_mais_solicitacoes = []
     especialidades_maior_espera = []
     relatorio_paciente = []
@@ -3054,7 +3055,60 @@ def relatorios():
     conn = conectar()
     c = conn.cursor()
 
-    if view == 'resumo':
+    if view == 'financiamento_nao_informado':
+        query_sem_financiamento = '''
+            SELECT
+                s.id,
+                p.id AS paciente_id,
+                p.nome AS paciente_nome,
+                UPPER(s.tipo) AS tipo,
+                s.especialidade,
+                s.data_realizacao,
+                s.conclusao,
+                s.financiamento
+            FROM solicitacao s
+            LEFT JOIN paciente p ON p.id = s.paciente_id
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
+              AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
+              AND UPPER(COALESCE(s.financiamento, '')) NOT IN ('SUS', 'CONVENIO')
+        '''
+        params_sem_financiamento = []
+
+        if situacao == 'RETIRADOS':
+            query_sem_financiamento += " AND UPPER(COALESCE(s.conclusao, '')) = 'RETIRADO'"
+        elif situacao == 'EM_ESPERA':
+            query_sem_financiamento += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
+        else:
+            query_sem_financiamento += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
+            query_sem_financiamento += " AND UPPER(COALESCE(s.conclusao, '')) <> 'RETIRADO'"
+
+        if tipo in tipos_relatorio_ativos():
+            query_sem_financiamento += ' AND UPPER(s.tipo) = %s'
+            params_sem_financiamento.append(tipo)
+
+        if especialidade:
+            query_sem_financiamento += (
+                " AND translate(UPPER(COALESCE(s.especialidade, '')), "
+                "'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', "
+                "'AAAAAEEEEIIIIOOOOOUUUUC') LIKE %s"
+            )
+            params_sem_financiamento.append(f"%{normalizar_texto_busca(especialidade)}%")
+
+        if data_inicio:
+            campo_data = 's.data_entrada' if situacao == 'EM_ESPERA' else 's.data_realizacao'
+            query_sem_financiamento += f' AND {campo_data} >= %s'
+            params_sem_financiamento.append(data_inicio)
+
+        if data_fim:
+            campo_data = 's.data_entrada' if situacao == 'EM_ESPERA' else 's.data_realizacao'
+            query_sem_financiamento += f' AND {campo_data} <= %s'
+            params_sem_financiamento.append(data_fim)
+
+        query_sem_financiamento += ' ORDER BY s.data_realizacao DESC NULLS LAST, s.data_entrada DESC NULLS LAST, p.nome ASC'
+        c.execute(query_sem_financiamento, params_sem_financiamento)
+        solicitacoes_sem_financiamento = c.fetchall()
+
+    elif view == 'resumo':
         query_resumo = '''
             SELECT
                 s.especialidade,
@@ -3071,6 +3125,7 @@ def relatorios():
             query_resumo += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
         else:
             query_resumo += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
+            query_resumo += " AND UPPER(COALESCE(s.conclusao, '')) <> 'RETIRADO'"
 
         if tipo in tipos_relatorio_ativos():
             query_resumo += ' AND UPPER(s.tipo) = %s'
@@ -3128,6 +3183,7 @@ def relatorios():
             query_pacientes_top += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
         else:
             query_pacientes_top += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
+            query_pacientes_top += " AND UPPER(COALESCE(s.conclusao, '')) <> 'RETIRADO'"
 
         if tipo in tipos_relatorio_ativos():
             query_pacientes_top += ' AND UPPER(s.tipo) = %s'
@@ -3183,6 +3239,7 @@ def relatorios():
         else:
             query_espera = query_espera.replace('%s', 's.data_realizacao')
             query_espera += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
+            query_espera += " AND UPPER(COALESCE(s.conclusao, '')) <> 'RETIRADO'"
 
         if tipo in tipos_relatorio_ativos():
             query_espera += ' AND UPPER(s.tipo) = %s'
@@ -3239,6 +3296,7 @@ def relatorios():
             query_procedimentos_geral += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
         else:
             query_procedimentos_geral += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
+            query_procedimentos_geral += " AND UPPER(COALESCE(s.conclusao, '')) <> 'RETIRADO'"
 
         if tipo in tipos_relatorio_ativos():
             query_procedimentos_geral += ' AND UPPER(s.tipo) = %s'
@@ -3355,8 +3413,7 @@ def relatorios():
             paciente_relatorio = c.fetchone()
 
             if paciente_relatorio:
-                c.execute(
-                    '''
+                query_solicitacoes_paciente = '''
                     SELECT
                         id,
                         data_solicitacao,
@@ -3373,9 +3430,13 @@ def relatorios():
                     WHERE paciente_id = %s
                       AND UPPER(COALESCE(conclusao, '')) <> 'CANCELADO'
                     ORDER BY data_solicitacao ASC NULLS LAST, data_entrada ASC NULLS LAST
-                    ''',
-                    (paciente_relatorio[0],)
-                )
+                    '''
+                if situacao == 'REALIZADOS':
+                    query_solicitacoes_paciente = query_solicitacoes_paciente.replace(
+                        "AND UPPER(COALESCE(conclusao, '')) <> 'CANCELADO'",
+                        "AND UPPER(COALESCE(conclusao, '')) NOT IN ('CANCELADO', 'RETIRADO')"
+                    )
+                c.execute(query_solicitacoes_paciente, (paciente_relatorio[0],))
                 relatorio_paciente = c.fetchall()
 
         idade_paciente = calcular_idade(paciente_relatorio[2] if paciente_relatorio and len(paciente_relatorio) > 2 else None) if paciente_relatorio else ''
@@ -3421,6 +3482,7 @@ def relatorios():
             query_tempo += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
         else:
             query_tempo += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
+            query_tempo += " AND UPPER(COALESCE(s.conclusao, '')) <> 'RETIRADO'"
 
         if data_inicio:
             if situacao == 'EM_ESPERA':
@@ -3589,6 +3651,8 @@ def relatorios():
         total_registros = ia_contexto.get('total_solicitacoes', 0) if ia_contexto else 0
     elif view == 'paciente':
         total_registros = len(relatorio_paciente) if 'relatorio_paciente' in locals() else 0
+    elif view == 'financiamento_nao_informado':
+        total_registros = len(solicitacoes_sem_financiamento)
 
     pacientes_especialidade = []
     mostrar_tipos_radiografia_relatorio = 'RADIOGRAFIA' in normalizar_texto_busca(especialidade)
@@ -3638,6 +3702,7 @@ def relatorios():
             query_pacientes += " AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')"
         else:
             query_pacientes += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
+            query_pacientes += " AND UPPER(COALESCE(s.conclusao, '')) <> 'RETIRADO'"
 
         if tipo in tipos_relatorio_ativos():
             query_pacientes += ' AND UPPER(s.tipo) = %s'
@@ -3713,6 +3778,7 @@ def relatorios():
         texto_sintetico_relatorio=texto_sintetico_relatorio,
         texto_detalhado_relatorio=texto_detalhado_relatorio,
         resumo=resumo,
+        solicitacoes_sem_financiamento=solicitacoes_sem_financiamento,
         total_registros=total_registros,
         pacientes_mais_solicitacoes=pacientes_mais_solicitacoes,
         especialidades_maior_espera=especialidades_maior_espera,
