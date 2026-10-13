@@ -8,9 +8,44 @@ load_dotenv()
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
+try:
+    from psycopg_pool import ConnectionPool
+except ImportError:  # pragma: no cover
+    ConnectionPool = None
+
+_pool = None
+
+
+class _ConexaoPool:
+    """Devolve a conexão ao pool em close(), mantendo a API do psycopg."""
+
+    def __init__(self, pool, conn):
+        self._pool = pool
+        self._conn = conn
+
+    def __getattr__(self, nome):
+        return getattr(self._conn, nome)
+
+    def close(self):
+        if self._conn is not None:
+            self._pool.putconn(self._conn)
+            self._conn = None
+
+
 def conectar():
-    conn = psycopg.connect(DATABASE_URL)
-    return conn
+    global _pool
+    if ConnectionPool is None:
+        return psycopg.connect(DATABASE_URL)
+    if _pool is None:
+        _pool = ConnectionPool(
+            DATABASE_URL,
+            min_size=1,
+            max_size=int(os.environ.get('DB_POOL_MAX', '6')),
+            check=ConnectionPool.check_connection,
+            max_idle=300,
+            open=True,
+        )
+    return _ConexaoPool(_pool, _pool.getconn())
 
 def garantir_foreign_key_solicitacao_paciente():
     conn = conectar()
