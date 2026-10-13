@@ -1663,6 +1663,11 @@ app.jinja_env.filters['formatar_data'] = formatar_data_br
 app.jinja_env.filters['formatar_endereco_lista'] = formatar_endereco_lista
 app.jinja_env.filters['formatar_documento'] = formatar_identificador_paciente
 
+@app.route('/healthz')
+def healthz():
+    return 'ok', 200
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if usuario_logado():
