@@ -174,6 +174,7 @@ def criar_tabelas():
         UNIQUE(tipo, valor)
     )''')
     c.execute('ALTER TABLE sugestao_solicitacao ADD COLUMN IF NOT EXISTS categoria TEXT')
+    c.execute('CREATE INDEX IF NOT EXISTS idx_solicitacao_paciente_entrada ON solicitacao (paciente_id, data_entrada DESC)')
     conn.commit()
     conn.close()
 
