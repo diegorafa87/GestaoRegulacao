@@ -3,6 +3,7 @@ import psycopg
 from psycopg import sql
 from datetime import datetime
 from dotenv import load_dotenv
+from flask import g, has_app_context
 
 load_dotenv()
 
@@ -22,6 +23,10 @@ class _ConexaoPool:
     def __init__(self, pool, conn):
         self._pool = pool
         self._conn = conn
+        if has_app_context():
+            if not hasattr(g, 'conexoes_db_pendentes'):
+                g.conexoes_db_pendentes = set()
+            g.conexoes_db_pendentes.add(self)
 
     def __getattr__(self, nome):
         return getattr(self._conn, nome)
@@ -30,6 +35,8 @@ class _ConexaoPool:
         conn, self._conn = self._conn, None
         if conn is None:
             return
+        if has_app_context():
+            getattr(g, 'conexoes_db_pendentes', set()).discard(self)
         try:
             if not conn.closed:
                 conn.rollback()
@@ -38,11 +45,17 @@ class _ConexaoPool:
         self._pool.putconn(conn)
 
     def __del__(self):
-        # Rotas que falham antes de close() não podem esgotar o pool.
         try:
             self.close()
         except Exception:
             pass
+
+def devolver_conexoes_pendentes(exception=None):
+    if not has_app_context():
+        return
+    conexoes = g.pop('conexoes_db_pendentes', set())
+    for conn in conexoes:
+        conn.close()
 
 
 def conectar():

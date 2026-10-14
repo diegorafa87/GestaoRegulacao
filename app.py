@@ -39,7 +39,7 @@ from PIL import Image
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
-from db import conectar, criar_tabelas
+from db import conectar, criar_tabelas, devolver_conexoes_pendentes
 import ia_utils
 try:
     import icd10
@@ -50,6 +50,7 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'trocar-esta-chave-em-producao')
+app.teardown_appcontext(devolver_conexoes_pendentes)
 
 PUBLIC_ENDPOINTS = {'login', 'logout', 'static'}
 
@@ -2806,17 +2807,16 @@ def editar_solicitacao(solicitacao_id):
         
         conn.commit()
 
-        if not paciente_id:
-            if solicitacao_info:
-                paciente_id = solicitacao_info[0]
-            else:
-                c.execute('SELECT paciente_id FROM solicitacao WHERE id = %s', (solicitacao_id,))
-                linha = c.fetchone()
-                paciente_id = linha[0] if linha else ''
-
-        paciente_id = resolver_id_paciente(paciente_id) or paciente_id
+        if solicitacao_info:
+            paciente_id = solicitacao_info[0]
+        elif not paciente_id:
+            c.execute('SELECT paciente_id FROM solicitacao WHERE id = %s', (solicitacao_id,))
+            linha = c.fetchone()
+            paciente_id = linha[0] if linha else ''
 
         conn.close()
+        if not solicitacao_info and paciente_id:
+            paciente_id = resolver_id_paciente(paciente_id) or paciente_id
         if origem_retorno:
             return redirect(origem_retorno)
         if paciente_id:
