@@ -113,7 +113,7 @@
             value="{{ form_data.quantidade_solicitacoes or '1' }}"
         >
         <small id="ajuda_quantidade_solicitacoes" class="text-muted">
-            Use quantidade maior que 1 para EXAME anatomopatológico/laboratorial.
+            Use quantidade maior que 1 para EXAME anatomopatológico/laboratorial{% if perfil_setor() %} ou, no seu perfil, para qualquer solicitação (ex.: 10 sessões de fisioterapia){% endif %}.
         </small>
     </div>
     <div class="col-12">
@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
             especialidade.includes('LABORATORI')
         );
 
-        const habilitado = ehExame && permiteReplicacao;
+        const habilitado = {{ 'true' if perfil_setor() else 'false' }} || (ehExame && permiteReplicacao);
         campoQuantidadeSolicitacoes.readOnly = !habilitado;
 
         if (!habilitado) {
@@ -205,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (ajudaQuantidadeSolicitacoes) {
-            ajudaQuantidadeSolicitacoes.textContent = 'Informe quantas solicitações iguais serão criadas para este paciente.';
+            ajudaQuantidadeSolicitacoes.textContent = 'Informe quantas solicitações iguais serão criadas (ex.: número de sessões).';
         }
     }
 

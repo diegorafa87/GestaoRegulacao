@@ -2129,6 +2129,8 @@ def paginar_registros(registros, pagina_atual, itens_por_pagina=30):
     }
 
 def permite_replicar_solicitacao(tipo, especialidade):
+    if perfil_setor():
+        return True
     if (tipo or '').strip().upper() != 'EXAME':
         return False
 
