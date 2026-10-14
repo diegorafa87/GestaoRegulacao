@@ -27,9 +27,22 @@ class _ConexaoPool:
         return getattr(self._conn, nome)
 
     def close(self):
-        if self._conn is not None:
-            self._pool.putconn(self._conn)
-            self._conn = None
+        conn, self._conn = self._conn, None
+        if conn is None:
+            return
+        try:
+            if not conn.closed:
+                conn.rollback()
+        except Exception:
+            pass
+        self._pool.putconn(conn)
+
+    def __del__(self):
+        # Rotas que falham antes de close() não podem esgotar o pool.
+        try:
+            self.close()
+        except Exception:
+            pass
 
 
 def conectar():
@@ -43,6 +56,7 @@ def conectar():
             max_size=int(os.environ.get('DB_POOL_MAX', '6')),
             check=ConnectionPool.check_connection,
             max_idle=300,
+            timeout=15,
             open=True,
         )
     return _ConexaoPool(_pool, _pool.getconn())
