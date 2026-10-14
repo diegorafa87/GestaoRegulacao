@@ -74,6 +74,40 @@ def usuario_logado():
 def apenas_admin():
     return session.get('usuario_perfil') == 'ADMIN'
 
+PERFIL_SETOR = 'SETOR'
+ENDPOINTS_SETOR = {
+    'index', 'pacientes', 'novo_paciente', 'historico_paciente',
+    'nova_solicitacao', 'editar_solicitacao', 'editar_dados_solicitacao',
+    'solicitacoes', 'pesquisar', 'healthz',
+    'api_buscar_paciente', 'api_verificar_paciente_existente',
+    'api_verificar_solicitacao_duplicada', 'api_sugestoes_endereco',
+    'api_sugestoes_solicitacao', 'api_consultar_cadsus',
+    'api_alertas_urgentes', 'api_alertas_antigos', 'cid_sugestoes',
+}
+
+def perfil_setor():
+    return session.get('usuario_perfil') == PERFIL_SETOR
+
+def especialidades_permitidas():
+    """None = sem restrição; lista = especialidades liberadas ao perfil SETOR."""
+    if not perfil_setor():
+        return None
+    return list(session.get('usuario_especialidades') or [])
+
+def especialidade_permitida(especialidade):
+    permitidas = especialidades_permitidas()
+    if permitidas is None:
+        return True
+    return (especialidade or '').strip().upper() in permitidas
+
+def serializar_especialidades(lista):
+    return '\n'.join(sorted({e.strip().upper() for e in lista if e and e.strip()}))
+
+def desserializar_especialidades(texto):
+    return [e.strip().upper() for e in (texto or '').split('\n') if e.strip()]
+
+app.jinja_env.globals['perfil_setor'] = perfil_setor
+
 def login_required_admin(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -94,6 +128,9 @@ def exigir_login_global():
         return
     if not usuario_logado():
         return redirect(url_for('login'))
+    if perfil_setor() and endpoint not in ENDPOINTS_SETOR:
+        flash('Seu perfil não tem acesso a esta área.', 'warning')
+        return redirect(url_for('index'))
 
 def garantir_usuario_admin():
     admin_user = os.environ.get('ADMIN_USER', '').strip()
@@ -1695,7 +1732,7 @@ def login():
         conn = conectar()
         c = conn.cursor()
         c.execute(
-            'SELECT id, nome, username, senha_hash, perfil, ativo FROM usuario WHERE username = %s',
+            'SELECT id, nome, username, senha_hash, perfil, ativo, especialidades_permitidas FROM usuario WHERE username = %s',
             (username,)
         )
         usuario = c.fetchone()
@@ -1717,6 +1754,7 @@ def login():
         session['usuario_nome'] = usuario[1]
         session['usuario_username'] = usuario[2]
         session['usuario_perfil'] = usuario[4]
+        session['usuario_especialidades'] = desserializar_especialidades(usuario[6])
         flash(f'Bem-vindo, {usuario[1]}!', 'success')
         return redirect(url_for('index'))
 
@@ -1727,6 +1765,23 @@ def logout():
     session.clear()
     flash('Sessão encerrada com sucesso.', 'info')
     return redirect(url_for('login'))
+
+def especialidade_da_solicitacao(cursor, solicitacao_id):
+    if especialidades_permitidas() is None:
+        return None
+    cursor.execute('SELECT especialidade FROM solicitacao WHERE id = %s', (solicitacao_id,))
+    linha = cursor.fetchone()
+    return linha[0] if linha else ''
+
+def sql_lista_especialidades():
+    permitidas = especialidades_permitidas() or []
+    itens = ', '.join("'" + e.replace("'", "''").replace('%', '%%') + "'" for e in permitidas)
+    return f"({itens or chr(39) * 2})"
+
+def filtro_setor(alias):
+    if especialidades_permitidas() is None:
+        return ''
+    return f" AND UPPER(TRIM(COALESCE({alias}.especialidade, ''))) IN {sql_lista_especialidades()}"
 
 def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
     especialidade_normalizada = normalizar_texto_busca(especialidade)
@@ -1741,7 +1796,7 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
     )
 
     if modo_urgencia_em_espera:
-        query = '''
+        query = f'''
             SELECT
                 p.id,
                 p.nome,
@@ -1756,6 +1811,7 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
             INNER JOIN paciente p ON p.id = s.paciente_id
             WHERE UPPER(s.status) = 'URGENTE'
               AND (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')
+              {filtro_setor('s')}
             ORDER BY s.data_entrada DESC, s.data_solicitacao DESC
         '''
         conn = conectar()
@@ -1773,7 +1829,7 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
     sus_normalizado = normalizar_documento(sus)
 
     if mostrar_tipos_radiografia:
-        tipos_radiografia_expr = '''
+        tipos_radiografia_expr = f'''
             (
                 SELECT STRING_AGG(sr.especialidade, '||' ORDER BY sr.data_entrada DESC, sr.id DESC)
                 FROM solicitacao sr
@@ -1782,11 +1838,12 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                         'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
                         'AAAAAEEEEIIIIOOOOOUUUUC') LIKE '%RADIOGRAFIA%'
                   AND UPPER(COALESCE(sr.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
+                  {filtro_setor('sr')}
             ) AS tipos_radiografia
         '''
 
     if usar_data_urgencia:
-        ultima_data_expr = '''
+        ultima_data_expr = f'''
             COALESCE(
                 (
                     SELECT MAX(su.data_solicitacao)
@@ -1795,11 +1852,16 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                       AND su.especialidade LIKE %s
                       AND UPPER(su.status) LIKE '%%URGENTE%%'
                       AND UPPER(COALESCE(su.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
+                      {filtro_setor('su')}
                 ),
                 MAX(s.data_entrada)
             ) AS ultima_data_entrada
         '''
         params.append(f"%{especialidade}%")
+
+    exige_solicitacao_setor = ''
+    if especialidades_permitidas() is not None:
+        exige_solicitacao_setor = 'AND EXISTS (SELECT 1 FROM solicitacao ss WHERE ss.paciente_id = p.id' + filtro_setor('ss') + ')'
 
     query = f'''
         SELECT
@@ -1812,6 +1874,7 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                 FROM solicitacao s2
                 WHERE s2.paciente_id = p.id
                   AND UPPER(COALESCE(s2.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
+                  {filtro_setor('s2')}
                 ORDER BY s2.data_entrada DESC, s2.status ASC
                 LIMIT 1
             ) AS status_atual,
@@ -1822,12 +1885,14 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                   AND UPPER(COALESCE(sr.status, '')) = 'RETORNO'
                   AND TRIM(COALESCE(sr.data_retorno, '')) <> ''
                   AND UPPER(COALESCE(sr.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
+                  {filtro_setor('sr')}
             ) AS retorno_agendado_count,
             {tipos_radiografia_expr},
             p.oncologico
         FROM paciente p
-        LEFT JOIN solicitacao s ON s.paciente_id = p.id AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
+        LEFT JOIN solicitacao s ON s.paciente_id = p.id AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO'){filtro_setor('s')}
         WHERE 1=1
+        {exige_solicitacao_setor}
     '''
 
     filtros_id = []
@@ -1856,7 +1921,7 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
     c.execute(query, params)
     solicitacoes = c.fetchall()
 
-    query_retorno = '''
+    query_retorno = f'''
         SELECT
             s.id,
             p.id,
@@ -1871,6 +1936,7 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
         INNER JOIN paciente p ON p.id = s.paciente_id
         WHERE UPPER(COALESCE(s.status, '')) = 'RETORNO'
           AND TRIM(COALESCE(s.data_retorno, '')) <> ''
+          {filtro_setor('s')}
     '''
     params_retorno = []
     filtros_retorno = []
@@ -2671,7 +2737,7 @@ def historico_paciente(paciente_id):
         ''',
         (paciente_id_resolvido,)
     )
-    historico = c.fetchall()
+    historico = [h for h in c.fetchall() if especialidade_permitida(h[4])]
     conn.close()
     origem_retorno = normalizar_url_retorno(request.args.get('next'), fallback=url_for('solicitacoes'))
     idade_paciente = calcular_idade(paciente[2] if paciente and len(paciente) > 2 else None)
@@ -2746,6 +2812,10 @@ def editar_solicitacao(solicitacao_id):
         (solicitacao_id,)
     )
     solicitacao_atual = c.fetchone()
+    if solicitacao_atual and not especialidade_permitida(especialidade_da_solicitacao(c, solicitacao_id)):
+        conn.close()
+        flash('Seu perfil não tem acesso a esta solicitação.', 'warning')
+        return redirect(url_for('solicitacoes'))
     if solicitacao_atual and (solicitacao_atual[1] or '').upper() == 'OBITO':
         conn.close()
         flash('Solicitações com conclusão de óbito não podem ser editadas.', 'warning')
@@ -2885,6 +2955,11 @@ def editar_dados_solicitacao(solicitacao_id):
     if not solicitacao:
         conn.close()
         flash('Solicitação não encontrada.', 'warning')
+        return redirect(url_for('solicitacoes'))
+
+    if not especialidade_permitida(especialidade_da_solicitacao(c, solicitacao_id)):
+        conn.close()
+        flash('Seu perfil não tem acesso a esta solicitação.', 'warning')
         return redirect(url_for('solicitacoes'))
 
     if request.method == 'POST':
@@ -3831,8 +3906,8 @@ def nova_solicitacao():
     }
 
     tipo_selecionado = form_data['tipo'].strip().upper()
-    especialidades_filtradas = listar_especialidades(tipo_selecionado if tipo_selecionado in tipos_relatorio_ativos() else None)
-    especialidades_completas = listar_especialidades(full=True)
+    especialidades_filtradas = [e for e in listar_especialidades(tipo_selecionado if tipo_selecionado in tipos_relatorio_ativos() else None) if especialidade_permitida(e)]
+    especialidades_completas = [e for e in listar_especialidades(full=True) if especialidade_permitida(e['valor'])]
 
     def render_nova_solicitacao_page():
         return render_template(
@@ -3922,6 +3997,10 @@ def nova_solicitacao():
 
         if not sistema_insercao:
             sistema_insercao = 'COPIRN'
+
+        if perfil_setor() and any(not especialidade_permitida(esp) for esp in especialidades):
+            flash('Seu perfil só pode criar solicitações das especialidades liberadas para o seu setor.', 'warning')
+            return render_nova_solicitacao_page()
 
         especialidades_catalogo = listar_especialidades()
         especialidades_invalidas = [esp for esp in especialidades if esp not in especialidades_catalogo]
@@ -4119,13 +4198,14 @@ def api_alertas_urgentes():
     conn = conectar()
     c = conn.cursor()
     c.execute(
-        '''
+        f'''
         SELECT s.tipo, s.especialidade, s.data_solicitacao, p.nome, p.id
         FROM solicitacao s
         INNER JOIN paciente p ON p.id = s.paciente_id
         WHERE UPPER(COALESCE(s.status, '')) = 'URGENTE'
           AND (s.data_realizacao IS NULL OR TRIM(COALESCE(s.data_realizacao, '')) = '')
           AND (s.unidade_realizadora IS NULL OR TRIM(COALESCE(s.unidade_realizadora, '')) = '')
+          {filtro_setor('s')}
         ORDER BY s.data_solicitacao ASC NULLS LAST, s.data_entrada ASC NULLS LAST
         LIMIT 30
         '''
@@ -4252,7 +4332,7 @@ def api_sugestoes_solicitacao():
     resultados = c.fetchall()
     conn.close()
 
-    return jsonify([r[0] for r in resultados if r and r[0]])
+    return jsonify([r[0] for r in resultados if r and r[0] and (campo != 'especialidade' or especialidade_permitida(r[0]))])
 
 @app.route('/api/alertas_antigos')
 def api_alertas_antigos():
@@ -4261,13 +4341,14 @@ def api_alertas_antigos():
     conn = conectar()
     c = conn.cursor()
     c.execute(
-        '''
+        f'''
         SELECT s.tipo, s.especialidade, s.data_solicitacao, p.nome, p.id
         FROM solicitacao s
         INNER JOIN paciente p ON p.id = s.paciente_id
         WHERE (s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = '')
           AND s.especialidade IS NOT NULL
           AND TRIM(s.especialidade) <> ''
+          {filtro_setor('s')}
         ORDER BY s.data_solicitacao ASC NULLS LAST, s.data_entrada ASC NULLS LAST
         LIMIT 30
         '''
@@ -4305,8 +4386,17 @@ def usuarios():
             flash('Preencha nome, usuário e senha.', 'warning')
             return redirect(url_for('usuarios'))
 
-        if perfil not in ('ADMIN', 'OPERADOR'):
+        if perfil not in ('ADMIN', 'OPERADOR', PERFIL_SETOR):
             perfil = 'OPERADOR'
+
+        especialidades_setor = None
+        if perfil == PERFIL_SETOR:
+            catalogo = set(listar_especialidades())
+            escolhidas = [e for e in request.form.getlist('especialidades_permitidas') if e.strip().upper() in {x.upper() for x in catalogo}]
+            if not escolhidas:
+                flash('Selecione ao menos uma especialidade para o perfil Setor.', 'warning')
+                return redirect(url_for('usuarios'))
+            especialidades_setor = serializar_especialidades(escolhidas)
 
         conn = conectar()
         c = conn.cursor()
@@ -4317,8 +4407,8 @@ def usuarios():
             return redirect(url_for('usuarios'))
 
         c.execute(
-            'INSERT INTO usuario (nome, username, senha_hash, perfil, ativo) VALUES (%s, %s, %s, %s, %s)',
-            (nome, username, generate_password_hash(senha), perfil, True)
+            'INSERT INTO usuario (nome, username, senha_hash, perfil, ativo, especialidades_permitidas) VALUES (%s, %s, %s, %s, %s, %s)',
+            (nome, username, generate_password_hash(senha), perfil, True, especialidades_setor)
         )
         conn.commit()
         conn.close()
@@ -4327,10 +4417,10 @@ def usuarios():
 
     conn = conectar()
     c = conn.cursor()
-    c.execute('SELECT id, nome, username, perfil, ativo, criado_em FROM usuario ORDER BY id DESC')
+    c.execute('SELECT id, nome, username, perfil, ativo, criado_em, especialidades_permitidas FROM usuario ORDER BY id DESC')
     lista_usuarios = c.fetchall()
     conn.close()
-    return render_template('usuarios.html', usuarios=lista_usuarios)
+    return render_template('usuarios.html', usuarios=lista_usuarios, especialidades_catalogo=listar_especialidades())
 
 @app.route('/admin/pacientes', methods=['GET', 'POST'])
 @login_required_admin

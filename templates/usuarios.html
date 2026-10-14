@@ -28,11 +28,30 @@
                     </div>
                     <div class="col-12">
                         <label class="form-label">Perfil</label>
-                        <select name="perfil" class="form-control" required>
+                        <select name="perfil" id="perfil-select" class="form-control" required>
                             <option value="OPERADOR">Operador</option>
                             <option value="ADMIN">Administrador</option>
+                            <option value="SETOR">Setor (pacientes e especialidades restritas)</option>
                         </select>
                     </div>
+                    <div class="col-12" id="especialidades-setor" style="display:none;">
+                        <label class="form-label">Especialidades liberadas</label>
+                        <select name="especialidades_permitidas" class="form-select" multiple size="10">
+                            {% for e in especialidades_catalogo %}
+                            <option value="{{ e }}">{{ e }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Segure Ctrl para selecionar várias.</div>
+                    </div>
+                    <script>
+                        (function () {
+                            const sel = document.getElementById('perfil-select');
+                            const box = document.getElementById('especialidades-setor');
+                            const atualizar = () => { box.style.display = sel.value === 'SETOR' ? '' : 'none'; };
+                            sel.addEventListener('change', atualizar);
+                            atualizar();
+                        })();
+                    </script>
                     <div class="col-12">
                         <button type="submit" class="btn btn-success">Criar usuário</button>
                     </div>
@@ -63,7 +82,7 @@
                                 <td>{{ u[0] }}</td>
                                 <td>{{ u[1] }}</td>
                                 <td>{{ u[2] }}</td>
-                                <td>{{ u[3] }}</td>
+                                <td>{{ u[3] }}{% if u[6] %}<div class="small text-muted">{{ u[6].replace('\n', ', ') }}</div>{% endif %}</td>
                                 <td>
                                     {% if u[4] %}
                                     <span class="badge text-bg-success">Ativo</span>

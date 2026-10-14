@@ -46,7 +46,7 @@
             <td class="small" style="white-space: nowrap;">{{ p[3] }}</td>
             <td class="small">{{ p[4]|formatar_endereco_lista }}</td>
             <td class="text-nowrap small" style="white-space: nowrap;">
-                <a href="{{ url_for('editar_paciente', paciente_id=p[0], next=request.full_path) }}" class="btn btn-sm btn-outline-primary">Editar</a>
+                {% if not perfil_setor() %}<a href="{{ url_for('editar_paciente', paciente_id=p[0], next=request.full_path) }}" class="btn btn-sm btn-outline-primary">Editar</a>{% endif %}
             </td>
         </tr>
     {% else %}

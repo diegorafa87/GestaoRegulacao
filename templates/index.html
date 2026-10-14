@@ -14,7 +14,7 @@
         <div class="d-flex flex-wrap justify-content-center gap-2">
             <a href="{{ url_for('pacientes', next=request.full_path) }}" class="btn btn-primary btn-lg">Pacientes</a>
             <a href="{{ url_for('solicitacoes', next=request.full_path) }}" class="btn btn-success btn-lg">Solicitações</a>
-            <a href="{{ url_for('relatorios', next=request.full_path) }}" class="btn btn-outline-primary btn-lg">Relatórios</a>
+            {% if not perfil_setor() %}<a href="{{ url_for('relatorios', next=request.full_path) }}" class="btn btn-outline-primary btn-lg">Relatórios</a>{% endif %}
         </div>
     </div>
 </div>

@@ -149,6 +149,7 @@ def criar_tabelas():
         ativo BOOLEAN NOT NULL DEFAULT TRUE,
         criado_em TIMESTAMP NOT NULL DEFAULT NOW()
     )''')
+    c.execute('ALTER TABLE usuario ADD COLUMN IF NOT EXISTS especialidades_permitidas TEXT')
     c.execute('''CREATE TABLE IF NOT EXISTS paciente (
         id TEXT PRIMARY KEY,
         nome TEXT NOT NULL,

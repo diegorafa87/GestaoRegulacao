@@ -54,7 +54,7 @@
             <td class="text-center fw-bold small">
                 {% set unidade = s[8] if s[8] else '' %}
                 {% set financiamento = s[10] if s[10] else '' %}
-                {% if conclusao == 'RETIRADO' %}
+                {% if conclusao == 'RETIRADO' and not perfil_setor() %}
                     <a href="{{ url_for('termo_retirada_solicitacao', solicitacao_id=s[0]) }}" class="btn btn-sm btn-outline-danger mb-1">Termo de Retirada</a>
                 {% endif %}
                 {% if conclusao == 'OBITO' %}
