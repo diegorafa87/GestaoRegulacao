@@ -737,11 +737,11 @@ def formatar_identificador_paciente(valor):
 
 
 def listar_tipos_relatorio():
-    return ['TODOS', 'CONSULTA', 'EXAME', 'CIRURGIA']
+    return ['TODOS', 'CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO']
 
 
 def tipos_relatorio_ativos():
-    return ['CONSULTA', 'EXAME', 'CIRURGIA']
+    return ['CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO']
 
 
 def formatar_conclusao_relatorio(conclusao):
@@ -1978,7 +1978,7 @@ def listar_especialidades(categoria=None, full=False):
             AND TRIM(valor) <> ''
     '''
     params = []
-    if categoria in ('CONSULTA', 'EXAME', 'CIRURGIA'):
+    if categoria in ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO'):
         query += '''
             AND (categoria = %s OR categoria IS NULL)
         '''
@@ -2517,8 +2517,8 @@ def editar_especialidade_admin():
     valor_novo = request.form.get('valor_novo', '').strip().upper()
     categoria_nova = request.form.get('categoria_nova', '').strip().upper()
 
-    if not valor_atual or not valor_novo or categoria_nova not in ('CONSULTA', 'EXAME', 'CIRURGIA'):
-        flash('Informe a especialidade e selecione se é Consulta, Exame ou Cirurgia.', 'warning')
+    if not valor_atual or not valor_novo or categoria_nova not in ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO'):
+        flash('Informe a especialidade e selecione se é Consulta, Exame, Cirurgia ou Procedimento.', 'warning')
         return redirect(url_for('admin_catalogos'))
 
     conn = conectar()
@@ -3164,7 +3164,7 @@ def relatorios():
                 s.financiamento
             FROM solicitacao s
             LEFT JOIN paciente p ON p.id = s.paciente_id
-            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO')
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
               AND UPPER(COALESCE(s.financiamento, '')) NOT IN ('SUS', 'CONVENIO')
         '''
@@ -3210,7 +3210,7 @@ def relatorios():
                 s.especialidade,
                 COUNT(*) AS total_registros
             FROM solicitacao s
-            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO')
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
         params_resumo = []
@@ -3268,7 +3268,7 @@ def relatorios():
                 MIN(s.data_realizacao) AS data_retirada
             FROM paciente p
             INNER JOIN solicitacao s ON s.paciente_id = p.id
-            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO')
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
         params_pacientes_top = []
@@ -3321,7 +3321,7 @@ def relatorios():
                 AVG(DATE(%s) - DATE(s.data_entrada))::numeric(10,1) AS tempo_medio_dias,
                 COUNT(*) AS total_registros
             FROM solicitacao s
-            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO')
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
         params_espera = []
@@ -3382,7 +3382,7 @@ def relatorios():
                 UPPER(COALESCE(s.financiamento, '')) AS financiamento
             FROM solicitacao s
             LEFT JOIN paciente p ON p.id = s.paciente_id
-            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO')
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
 
@@ -3448,6 +3448,7 @@ def relatorios():
                         'CONSULTA': 'CONSULTAS',
                         'EXAME': 'EXAMES',
                         'CIRURGIA': 'CIRURGIAS',
+                        'PROCEDIMENTO': 'PROCEDIMENTOS',
                     }.get(valor, 'OUTROS')
                 else:
                     valor = valor or 'SEM ESPECIALIDADE'
@@ -3466,7 +3467,7 @@ def relatorios():
             ]
 
         graficos_relatorio['tipos'] = montar_dados_grafico(
-            'tipo', ['CONSULTAS', 'EXAMES', 'CIRURGIAS', 'OUTROS']
+            'tipo', ['CONSULTAS', 'EXAMES', 'CIRURGIAS', 'PROCEDIMENTOS', 'OUTROS']
         )
         graficos_relatorio['financiamentos'] = montar_dados_grafico(
             'financiamento', ['SUS', 'RECURSOS PROPRIOS', 'NAO INFORMADO']
@@ -3551,7 +3552,7 @@ def relatorios():
                 UPPER(s.tipo) AS tipo,
                 AVG(DATE(s.data_realizacao) - DATE(s.data_entrada))::numeric(10,1) AS tempo_medio_dias
             FROM solicitacao s
-            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO')
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
         params_tempo = []
@@ -3704,7 +3705,7 @@ def relatorios():
                         FROM paciente p
                         INNER JOIN solicitacao s ON s.paciente_id = p.id
                         WHERE UPPER(COALESCE(s.especialidade, '')) = UPPER(%s)
-                          AND UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
+                          AND UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO')
                           AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
                         GROUP BY p.id, p.nome
                         ORDER BY p.nome ASC
@@ -3777,7 +3778,7 @@ def relatorios():
                 MIN(s.data_realizacao) AS data_retirada
             FROM paciente p
             INNER JOIN solicitacao s ON s.paciente_id = p.id
-            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA')
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO')
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
               AND translate(UPPER(COALESCE(s.especialidade, '')),
                     'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ',
@@ -4095,8 +4096,8 @@ def cid_sugestoes():
 def adicionar_especialidade_admin():
     especialidade = request.form.get('especialidade_nova', '').strip().upper()
     categoria = request.form.get('categoria_nova', '').strip().upper()
-    if not especialidade or categoria not in ('CONSULTA', 'EXAME', 'CIRURGIA'):
-        flash('Informe a especialidade e selecione se é Consulta, Exame ou Cirurgia.', 'warning')
+    if not especialidade or categoria not in ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO'):
+        flash('Informe a especialidade e selecione se é Consulta, Exame, Cirurgia ou Procedimento.', 'warning')
         return redirect(url_for('admin_catalogos'))
 
     conn = conectar()
@@ -4303,7 +4304,7 @@ def api_sugestoes_solicitacao():
               AND valor ILIKE %s
         '''
         params = [filtro]
-        if categoria in ('CONSULTA', 'EXAME', 'CIRURGIA'):
+        if categoria in ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO'):
             query += '''
               AND (categoria = %s OR categoria IS NULL)
             '''

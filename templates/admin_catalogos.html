@@ -31,6 +31,7 @@
                             <option value="CONSULTA">Consulta</option>
                             <option value="EXAME">Exame</option>
                             <option value="CIRURGIA">Cirurgia</option>
+                            <option value="PROCEDIMENTO">Procedimento</option>
                         </select>
                     </div>
                     <div class="col-12">
@@ -61,6 +62,7 @@
                                             <option value="CONSULTA" {% if item.categoria == 'CONSULTA' %}selected{% endif %}>Consulta</option>
                                             <option value="EXAME" {% if item.categoria == 'EXAME' %}selected{% endif %}>Exame</option>
                                             <option value="CIRURGIA" {% if item.categoria == 'CIRURGIA' %}selected{% endif %}>Cirurgia</option>
+                                            <option value="PROCEDIMENTO" {% if item.categoria == 'PROCEDIMENTO' %}selected{% endif %}>Procedimento</option>
                                         </select>
                                         <button type="submit" class="btn btn-sm btn-primary">Salvar</button>
                                     </form>
