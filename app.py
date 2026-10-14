@@ -52,6 +52,20 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'trocar-esta-chave-em-producao')
 app.teardown_appcontext(devolver_conexoes_pendentes)
 
+
+@app.errorhandler(Exception)
+def tratar_erro_inesperado(erro):
+    from werkzeug.exceptions import HTTPException
+    if isinstance(erro, HTTPException):
+        return erro
+    app.logger.exception('Erro 500 em %s %s', request.method, request.path)
+    banco_indisponivel = isinstance(erro, psycopg.OperationalError) or type(erro).__name__ == 'PoolTimeout'
+    status = 503 if banco_indisponivel else 500
+    mensagem = 'Banco de dados temporariamente indisponível. Tente novamente em instantes.' if banco_indisponivel else 'Erro interno do servidor.'
+    if request.path.startswith('/api') or request.is_json or 'application/json' in request.headers.get('Accept', ''):
+        return jsonify({'erro': mensagem}), status
+    return mensagem, status
+
 PUBLIC_ENDPOINTS = {'login', 'logout', 'static'}
 
 def usuario_logado():
