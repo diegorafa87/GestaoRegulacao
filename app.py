@@ -2972,7 +2972,8 @@ def editar_dados_solicitacao(solicitacao_id):
     # Buscar dados da solicitação
     c.execute(
         '''
-        SELECT id, paciente_id, data_solicitacao, data_entrada, prioridade, status, resumo_clinico
+        SELECT id, paciente_id, data_solicitacao, data_entrada, prioridade, status, resumo_clinico,
+               conclusao, profissional_solicitante, ocupacao, unidade_solicitante
         FROM solicitacao
         WHERE id = %s
         ''',
@@ -2989,6 +2990,9 @@ def editar_dados_solicitacao(solicitacao_id):
         conn.close()
         flash('Seu perfil não tem acesso a esta solicitação.', 'warning')
         return redirect(url_for('solicitacoes'))
+
+    solicitacao_concluida = bool((solicitacao[7] or '').strip())
+    profissionais_solicitantes = listar_catalogo_solicitante('profissional_solicitante')
 
     if request.method == 'POST':
         prioridade = request.form.get('prioridade', '').strip()
@@ -3010,17 +3014,36 @@ def editar_dados_solicitacao(solicitacao_id):
         opcoes_status = {'ELETIVO', 'URGENTE', 'RETORNO'}
         status = status if status in opcoes_status else None
 
+        # Solicitante só pode ser alterado enquanto a solicitação não está concluída
+        if solicitacao_concluida:
+            profissional_solicitante, ocupacao, unidade_solicitante = solicitacao[8], solicitacao[9], solicitacao[10]
+        else:
+            profissional_solicitante = request.form.get('profissional_solicitante', '').strip() or None
+            unidade_solicitante = request.form.get('unidade_solicitante', '').strip() or None
+            # A ocupação vem do cadastro do profissional, nunca do formulário
+            ocupacao = None
+            if profissional_solicitante:
+                ocupacao = next(
+                    (i['ocupacao'] for i in profissionais_solicitantes
+                     if i['valor'].upper() == profissional_solicitante.upper()),
+                    None
+                ) or None
+
         # Atualizar apenas a solicitação específica
         c.execute(
             '''
             UPDATE solicitacao 
-            SET prioridade = %s, status = %s, resumo_clinico = %s
+            SET prioridade = %s, status = %s, resumo_clinico = %s,
+                profissional_solicitante = %s, ocupacao = %s, unidade_solicitante = %s
             WHERE id = %s
             ''',
             (
                 prioridade,
                 status,
                 resumo_clinico,
+                profissional_solicitante,
+                ocupacao,
+                unidade_solicitante,
                 solicitacao_id
             )
         )
@@ -3044,6 +3067,9 @@ def editar_dados_solicitacao(solicitacao_id):
         solicitacao=solicitacao,
         paciente_id=paciente_id,
         origem_retorno=origem_retorno,
+        solicitacao_concluida=solicitacao_concluida,
+        profissionais_solicitantes=profissionais_solicitantes,
+        unidades_solicitantes=listar_catalogo_solicitante('unidade_solicitante'),
     )
 
 @app.route('/solicitacoes')

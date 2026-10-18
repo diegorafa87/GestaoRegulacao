@@ -40,6 +40,48 @@
         </select>
     </div>
 
+    {% if not solicitacao_concluida %}
+    <div class="col-md-4">
+        <label class="form-label">Profissional Solicitante:</label>
+        <select id="profissional_solicitante" name="profissional_solicitante" class="form-select">
+            <option value="" data-ocupacao="">Selecione</option>
+            {% set nomes_profissionais = profissionais_solicitantes | map(attribute='valor') | list %}
+            {% if solicitacao[8] and solicitacao[8] not in nomes_profissionais %}
+            <option value="{{ solicitacao[8] }}" data-ocupacao="{{ solicitacao[9] or '' }}" selected>{{ solicitacao[8] }}</option>
+            {% endif %}
+            {% for item in profissionais_solicitantes %}
+            <option value="{{ item.valor }}" data-ocupacao="{{ item.ocupacao }}" {% if solicitacao[8] == item.valor %}selected{% endif %}>{{ item.valor }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Ocupação:</label>
+        <input id="ocupacao" class="form-control bg-light" readonly tabindex="-1" placeholder="Preenchida ao selecionar o profissional" value="{{ solicitacao[9] or '' }}">
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Unidade Solicitante:</label>
+        {% if session.get('usuario_perfil') == 'ADMIN' %}
+        <input id="unidade_solicitante" name="unidade_solicitante" class="form-control" list="unidade_solicitante-sugestoes" autocomplete="off" value="{{ solicitacao[10] or '' }}">
+        <datalist id="unidade_solicitante-sugestoes">
+            {% for item in unidades_solicitantes %}
+            <option value="{{ item.valor }}"></option>
+            {% endfor %}
+        </datalist>
+        {% else %}
+        <select id="unidade_solicitante" name="unidade_solicitante" class="form-select">
+            <option value="">Selecione</option>
+            {% set nomes_unidades = unidades_solicitantes | map(attribute='valor') | list %}
+            {% if solicitacao[10] and solicitacao[10] not in nomes_unidades %}
+            <option value="{{ solicitacao[10] }}" selected>{{ solicitacao[10] }}</option>
+            {% endif %}
+            {% for item in unidades_solicitantes %}
+            <option value="{{ item.valor }}" {% if solicitacao[10] == item.valor %}selected{% endif %}>{{ item.valor }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <div class="col-12">
         <label class="form-label">Resumo Clínico: <span class="text-danger">*</span></label>
         <textarea id="resumo_clinico" name="resumo_clinico" class="form-control" rows="4" placeholder="Digite o resumo clínico da solicitação" required>{{ solicitacao[6] if solicitacao[6] else '' }}</textarea>
@@ -54,6 +96,15 @@
 
 <script>
 (() => {
+    const campoProfissional = document.getElementById('profissional_solicitante');
+    const campoOcupacao = document.getElementById('ocupacao');
+    if (campoProfissional && campoOcupacao) {
+        campoProfissional.addEventListener('change', () => {
+            const opcao = campoProfissional.options[campoProfissional.selectedIndex];
+            campoOcupacao.value = opcao ? (opcao.dataset.ocupacao || '') : '';
+        });
+    }
+
     const form = document.querySelector('form');
     const resumoField = document.getElementById('resumo_clinico');
     
