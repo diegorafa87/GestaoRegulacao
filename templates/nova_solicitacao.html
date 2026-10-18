@@ -23,6 +23,37 @@
         <input id="data_entrada" name="data_entrada" class="form-control" required placeholder="DD/MM/AAAA" maxlength="10" value="{{ form_data.data_entrada or '' }}">
     </div>
     <div class="col-md-4">
+        <label class="form-label">Profissional Solicitante:</label>
+        <select id="profissional_solicitante" name="profissional_solicitante" class="form-control">
+            <option value="" data-ocupacao="">Selecione</option>
+            {% for item in profissionais_solicitantes %}
+            <option value="{{ item.valor }}" data-ocupacao="{{ item.ocupacao }}" {% if form_data.profissional_solicitante == item.valor %}selected{% endif %}>{{ item.valor }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Ocupação:</label>
+        <input id="ocupacao" name="ocupacao" class="form-control bg-light" readonly tabindex="-1" placeholder="Preenchida ao selecionar o profissional" value="{{ form_data.ocupacao or '' }}">
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Unidade Solicitante:</label>
+        {% if session.get('usuario_perfil') == 'ADMIN' %}
+        <input id="unidade_solicitante" name="unidade_solicitante" class="form-control" list="unidade_solicitante-sugestoes" autocomplete="off" value="{{ form_data.unidade_solicitante or '' }}">
+        <datalist id="unidade_solicitante-sugestoes">
+            {% for item in unidades_solicitantes %}
+            <option value="{{ item.valor }}"></option>
+            {% endfor %}
+        </datalist>
+        {% else %}
+        <select id="unidade_solicitante" name="unidade_solicitante" class="form-control">
+            <option value="">Selecione</option>
+            {% for item in unidades_solicitantes %}
+            <option value="{{ item.valor }}" {% if form_data.unidade_solicitante == item.valor %}selected{% endif %}>{{ item.valor }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+    </div>
+    <div class="col-md-4">
         <label class="form-label">Tipo de Requisição: <span class="text-danger">*</span></label>
         <select name="tipo" class="form-control" required>
             <option value="">Selecione uma opção</option>
@@ -129,6 +160,21 @@
     <strong>Catálogo administrativo removido deste formulário.</strong> Gerencie procedimentos e endereços em <a href="{{ url_for('admin_catalogos') }}">Catálogos</a>.
 </div>
 {% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const campoProfissional = document.getElementById('profissional_solicitante');
+    const campoOcupacao = document.getElementById('ocupacao');
+    if (!campoProfissional || !campoOcupacao) return;
+    function preencherOcupacao() {
+        const opcao = campoProfissional.options[campoProfissional.selectedIndex];
+        campoOcupacao.value = opcao ? (opcao.dataset.ocupacao || '') : '';
+    }
+
+    campoProfissional.addEventListener('change', preencherOcupacao);
+    preencherOcupacao();
+});
+</script>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {

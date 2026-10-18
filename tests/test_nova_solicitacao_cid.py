@@ -23,6 +23,17 @@ def test_nova_solicitacao_template_has_resumo_clinico_field():
     assert 'placeholder="Descreva o resumo clínico da requisição"' in template
 
 
+def test_nova_solicitacao_template_has_requester_fields_after_entry_date():
+    template = Path('templates/nova_solicitacao.html').read_text(encoding='utf-8')
+
+    data_entrada = template.index('name="data_entrada"')
+    profissional = template.index('name="profissional_solicitante"')
+    ocupacao = template.index('name="ocupacao"')
+    unidade = template.index('name="unidade_solicitante"')
+
+    assert data_entrada < profissional < ocupacao < unidade
+
+
 def test_nova_solicitacao_template_has_specialty_feedback_in_both_modes():
     template = Path('templates/nova_solicitacao.html').read_text(encoding='utf-8')
 
@@ -202,10 +213,16 @@ def test_nova_solicitacao_allows_submission_without_sistema_insercao():
     fake_conn.close.return_value = None
 
     with patch('app.resolver_id_paciente', return_value='123'), \
-         patch('app.listar_especialidades', return_value=['CARDIOLOGIA']), \
+         patch(
+             'app.listar_especialidades',
+             side_effect=lambda *args, **kwargs: (
+                 [{'valor': 'CARDIOLOGIA'}] if kwargs.get('full') else ['CARDIOLOGIA']
+             ),
+         ), \
          patch('app.listar_sistemas_insercao', return_value=['COPIRN']), \
          patch('app.listar_sistemas_insercao_catalogo', return_value=['COPIRN']), \
          patch('app.permite_replicar_solicitacao', return_value=False), \
+         patch('app.listar_catalogo_solicitante', return_value=[{'valor': 'DRA. ANA', 'ocupacao': 'MÉDICA'}]), \
          patch('app.conectar', return_value=fake_conn):
         response = client.post('/nova_solicitacao', data={
             'paciente_id': '123',
@@ -213,6 +230,9 @@ def test_nova_solicitacao_allows_submission_without_sistema_insercao():
             'data_entrada': '14/08/2026',
             'tipo': 'CONSULTA',
             'especialidade': 'CARDIOLOGIA',
+            'profissional_solicitante': 'Dra. Ana',
+            'ocupacao': 'Digitada pelo operador',
+            'unidade_solicitante': 'UBS Central',
             'prioridade': 'SIM',
             'status': 'ELETIVO',
             'quantidade_solicitacoes': '1',
@@ -221,3 +241,8 @@ def test_nova_solicitacao_allows_submission_without_sistema_insercao():
 
     assert response.status_code == 302
     assert 'Informe o sistema de inserção' not in response.get_data(as_text=True)
+    insert_call = next(
+        call for call in fake_cursor.execute.call_args_list
+        if 'INSERT INTO solicitacao' in call.args[0]
+    )
+    assert insert_call.args[1][3:6] == ('Dra. Ana', 'MÉDICA', 'UBS Central')

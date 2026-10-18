@@ -2042,6 +2042,32 @@ def listar_sistemas_insercao_catalogo():
     conn.close()
     return [r[0] for r in resultados if r and r[0]]
 
+CATALOGOS_SOLICITANTE = {
+    'profissional_solicitante': 'Profissional solicitante',
+    'ocupacao': 'Ocupação',
+    'unidade_solicitante': 'Unidade solicitante',
+}
+
+def listar_catalogo_solicitante(tipo):
+    if tipo not in CATALOGOS_SOLICITANTE:
+        return []
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        '''
+        SELECT TRIM(valor) AS valor, COALESCE(categoria, '') AS ocupacao
+        FROM sugestao_solicitacao
+        WHERE tipo = %s
+          AND TRIM(valor) <> ''
+        ORDER BY valor
+        ''',
+        (tipo,)
+    )
+    resultados = c.fetchall()
+    conn.close()
+    # Para profissional_solicitante, "ocupacao" guarda a ocupação vinculada
+    return [{'valor': r[0], 'ocupacao': r[1]} for r in resultados if r and r[0]]
+
 def listar_sugestoes_endereco(tipo):
     if tipo not in ('rua', 'bairro'):
         return []
@@ -3092,6 +3118,7 @@ def relatorios():
         tipo = ''
     especialidade = request.args.get('especialidade', '').strip()
     paciente = request.args.get('paciente', '').strip()
+    profissional = request.args.get('profissional', '').strip()
     situacao = request.args.get('situacao', 'REALIZADOS').strip().upper()
     data_inicio_raw = request.args.get('data_inicio', '').strip()
     data_fim_raw = request.args.get('data_fim', '').strip()
@@ -3104,7 +3131,7 @@ def relatorios():
         situacao = 'REALIZADOS'
     if acao == 'paciente':
         view = 'paciente'
-    if view not in ('resumo', 'pacientes_mais_solicitacoes', 'especialidades_maior_espera', 'ia', 'paciente', 'financiamento_nao_informado'):
+    if view not in ('resumo', 'pacientes_mais_solicitacoes', 'especialidades_maior_espera', 'ia', 'paciente', 'financiamento_nao_informado', 'profissionais_solicitantes'):
         view = 'resumo'
     if ordenacao not in ('nome_asc', 'nome_desc', 'data_asc', 'data_desc', 'idade_desc', 'idade_asc'):
         ordenacao = 'nome_asc'
@@ -3125,12 +3152,13 @@ def relatorios():
             resposta_ia = ia_utils.processar_pergunta_ia(pergunta_ia)
 
     filtros_aplicados = bool(
-        tipo or especialidade or paciente or data_inicio_raw or data_fim_raw or situacao in ('EM_ESPERA', 'RETIRADOS') or financiamento or tempo_espera or view != 'resumo' or pergunta_ia
+        tipo or especialidade or paciente or profissional or data_inicio_raw or data_fim_raw or situacao in ('EM_ESPERA', 'RETIRADOS') or financiamento or tempo_espera or view != 'resumo' or pergunta_ia
     )
 
     resumo = []
     solicitacoes_sem_financiamento = []
     pacientes_mais_solicitacoes = []
+    profissionais_relatorio = []
     especialidades_maior_espera = []
     relatorio_paciente = []
     paciente_relatorio = None
@@ -3313,6 +3341,64 @@ def relatorios():
             query_pacientes_top += ' GROUP BY p.id, p.nome ORDER BY MIN(s.data_solicitacao) DESC, p.nome ASC LIMIT 50'
         c.execute(query_pacientes_top, params_pacientes_top)
         pacientes_mais_solicitacoes = c.fetchall()
+
+    elif view == 'profissionais_solicitantes':
+        # Realizadas x em espera por profissional; período filtrado pela data de entrada
+        query_profissionais = '''
+            SELECT
+                COALESCE(NULLIF(TRIM(s.profissional_solicitante), ''), 'NÃO INFORMADO') AS profissional,
+                COALESCE(NULLIF(TRIM(s.ocupacao), ''), '-') AS ocupacao,
+                COUNT(*) FILTER (
+                    WHERE s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''
+                      AND UPPER(COALESCE(s.conclusao, '')) <> 'RETIRADO'
+                ) AS realizadas,
+                COUNT(*) FILTER (
+                    WHERE s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = ''
+                ) AS em_espera
+            FROM solicitacao s
+            WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO')
+              AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
+        '''
+        params_profissionais = []
+
+        if profissional:
+            query_profissionais += " AND UPPER(TRIM(COALESCE(s.profissional_solicitante, ''))) = %s"
+            params_profissionais.append(profissional.upper())
+
+        if tipo in tipos_relatorio_ativos():
+            query_profissionais += ' AND UPPER(s.tipo) = %s'
+            params_profissionais.append(tipo)
+
+        if financiamento:
+            query_profissionais += " AND UPPER(COALESCE(s.financiamento, '')) = %s"
+            params_profissionais.append(financiamento)
+
+        if especialidade:
+            query_profissionais += (
+                " AND translate(UPPER(COALESCE(s.especialidade, '')), "
+                "'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', "
+                "'AAAAAEEEEIIIIOOOOOUUUUC') LIKE %s"
+            )
+            params_profissionais.append(f"%{normalizar_texto_busca(especialidade)}%")
+
+        if data_inicio:
+            query_profissionais += ' AND s.data_entrada >= %s'
+            params_profissionais.append(data_inicio)
+
+        if data_fim:
+            query_profissionais += ' AND s.data_entrada <= %s'
+            params_profissionais.append(data_fim)
+
+        query_profissionais += '''
+            GROUP BY 1, 2
+            ORDER BY (COUNT(*) FILTER (
+                WHERE (s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''
+                       AND UPPER(COALESCE(s.conclusao, '')) <> 'RETIRADO')
+                   OR s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = ''
+            )) DESC, 1
+        '''
+        c.execute(query_profissionais, params_profissionais)
+        profissionais_relatorio = c.fetchall()
 
     elif view == 'especialidades_maior_espera':
         query_espera = '''
@@ -3742,6 +3828,8 @@ def relatorios():
         total_registros = sum(item[1] for item in resumo) if resumo else 0
     elif view == 'pacientes_mais_solicitacoes':
         total_registros = sum(item[2] for item in pacientes_mais_solicitacoes) if pacientes_mais_solicitacoes else 0
+    elif view == 'profissionais_solicitantes':
+        total_registros = sum(item[2] + item[3] for item in profissionais_relatorio)
     elif view == 'especialidades_maior_espera':
         total_registros = sum(item[2] for item in especialidades_maior_espera) if especialidades_maior_espera else 0
     elif view == 'ia':
@@ -3878,6 +3966,9 @@ def relatorios():
         solicitacoes_sem_financiamento=solicitacoes_sem_financiamento,
         total_registros=total_registros,
         pacientes_mais_solicitacoes=pacientes_mais_solicitacoes,
+        profissional=profissional,
+        profissionais_relatorio=profissionais_relatorio,
+        profissionais_catalogo=[i['valor'] for i in listar_catalogo_solicitante('profissional_solicitante')],
         especialidades_maior_espera=especialidades_maior_espera,
         pacientes_especialidade=pacientes_especialidade,
         tempo_medio_espera=tempo_medio_espera,
@@ -3895,6 +3986,9 @@ def nova_solicitacao():
         'paciente_id': request.form.get('paciente_id', '').strip(),
         'data_solicitacao': request.form.get('data_solicitacao', '').strip(),
         'data_entrada': request.form.get('data_entrada', '').strip(),
+        'profissional_solicitante': request.form.get('profissional_solicitante', '').strip(),
+        'ocupacao': request.form.get('ocupacao', '').strip(),
+        'unidade_solicitante': request.form.get('unidade_solicitante', '').strip(),
         'tipo': request.form.get('tipo', ''),
         'especialidade': request.form.get('especialidade', '').strip(),
         'especialidades_multiplas': request.form.getlist('especialidades_multiplas'),
@@ -3919,6 +4013,9 @@ def nova_solicitacao():
             especialidades_completas=especialidades_completas,
             sistemas_insercao=listar_sistemas_insercao(),
             sistemas_insercao_catalogo=listar_sistemas_insercao_catalogo(),
+            profissionais_solicitantes=listar_catalogo_solicitante('profissional_solicitante'),
+            ocupacoes=listar_catalogo_solicitante('ocupacao'),
+            unidades_solicitantes=listar_catalogo_solicitante('unidade_solicitante'),
             form_data=form_data,
             origem_retorno=origem_retorno,
         )
@@ -3949,6 +4046,16 @@ def nova_solicitacao():
         data_realizacao = normalizar_data_para_iso(request.form.get('data_realizacao'))
         data_retorno = normalizar_data_para_iso(request.form.get('data_retorno'))
         unidade_realizadora = request.form.get('unidade_realizadora', '').upper() if request.form.get('unidade_realizadora') else None
+        profissional_solicitante = form_data['profissional_solicitante'] or None
+        # A ocupação vem do cadastro do profissional, nunca do que foi enviado pelo formulário
+        ocupacao = None
+        if profissional_solicitante:
+            ocupacao = next(
+                (i['ocupacao'] for i in listar_catalogo_solicitante('profissional_solicitante')
+                 if i['valor'].upper() == profissional_solicitante.upper()),
+                None
+            ) or None
+        unidade_solicitante = form_data['unidade_solicitante'] or None
 
         # Validar datas futuras
         if data_solicitacao and eh_data_futura(data_solicitacao):
@@ -4030,11 +4137,14 @@ def nova_solicitacao():
             repeticoes = quantidade_solicitacoes if replicar else 1
             for _ in range(repeticoes):
                 c.execute(
-                    "INSERT INTO solicitacao (paciente_id, data_solicitacao, data_entrada, data_insercao, data_realizacao, data_retorno, unidade_realizadora, tipo, especialidade, descricao, prioridade, encaminhamento, status, sistema_insercao, cid, resumo_clinico) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    "INSERT INTO solicitacao (paciente_id, data_solicitacao, data_entrada, profissional_solicitante, ocupacao, unidade_solicitante, data_insercao, data_realizacao, data_retorno, unidade_realizadora, tipo, especialidade, descricao, prioridade, encaminhamento, status, sistema_insercao, cid, resumo_clinico) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                     (
                         paciente_id_resolvido,
                         data_solicitacao,
                         data_entrada,
+                        profissional_solicitante,
+                        ocupacao,
+                        unidade_solicitante,
                         data_insercao,
                         data_realizacao,
                         data_retorno,
@@ -4148,6 +4258,101 @@ def adicionar_sistema_insercao_admin():
     else:
         flash('Esse sistema de inserção já existe no catálogo.', 'info')
 
+    return redirect(url_for('admin_catalogos'))
+
+@app.route('/admin/catalogo-solicitante/adicionar', methods=['POST'])
+@login_required_admin
+def adicionar_catalogo_solicitante_admin():
+    tipo = request.form.get('tipo', '').strip()
+    valor = request.form.get('valor', '').strip().upper()
+    ocupacao = request.form.get('ocupacao', '').strip().upper() or None
+    if tipo not in CATALOGOS_SOLICITANTE or not valor:
+        flash('Informe o valor para adicionar ao catálogo.', 'warning')
+        return redirect(url_for('admin_catalogos'))
+    if tipo != 'profissional_solicitante':
+        ocupacao = None
+    elif not ocupacao:
+        flash('Informe a ocupação do profissional.', 'warning')
+        return redirect(url_for('admin_catalogos'))
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        'INSERT INTO sugestao_solicitacao (tipo, valor, categoria) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING',
+        (tipo, valor, ocupacao)
+    )
+    inseriu = c.rowcount > 0
+    conn.commit()
+    conn.close()
+
+    rotulo = CATALOGOS_SOLICITANTE[tipo]
+    if inseriu:
+        flash(f'{rotulo} adicionado(a) com sucesso ao catálogo.', 'success')
+    else:
+        flash(f'{rotulo} já existe no catálogo.', 'info')
+    return redirect(url_for('admin_catalogos'))
+
+@app.route('/admin/catalogo-solicitante/editar', methods=['POST'])
+@login_required_admin
+def editar_catalogo_solicitante_admin():
+    tipo = request.form.get('tipo', '').strip()
+    valor_atual = request.form.get('valor_atual', '').strip().upper()
+    valor_novo = request.form.get('valor_novo', '').strip().upper()
+    ocupacao = request.form.get('ocupacao', '').strip().upper() or None
+    if tipo not in CATALOGOS_SOLICITANTE or not valor_atual or not valor_novo:
+        flash('Informe o valor atual e o novo valor.', 'warning')
+        return redirect(url_for('admin_catalogos'))
+    if tipo != 'profissional_solicitante':
+        ocupacao = None
+    elif not ocupacao:
+        flash('Informe a ocupação do profissional.', 'warning')
+        return redirect(url_for('admin_catalogos'))
+
+    conn = conectar()
+    c = conn.cursor()
+    try:
+        if tipo == 'profissional_solicitante':
+            c.execute(
+                'UPDATE sugestao_solicitacao SET valor = %s, categoria = %s WHERE tipo = %s AND valor = %s',
+                (valor_novo, ocupacao, tipo, valor_atual)
+            )
+        else:
+            c.execute(
+                'UPDATE sugestao_solicitacao SET valor = %s WHERE tipo = %s AND valor = %s',
+                (valor_novo, tipo, valor_atual)
+            )
+        if c.rowcount == 0:
+            flash('Item não encontrado para edição.', 'warning')
+        else:
+            conn.commit()
+            flash('Item atualizado com sucesso.', 'success')
+    except Exception:
+        conn.rollback()
+        flash('Não foi possível atualizar o item. O valor já pode existir no catálogo.', 'warning')
+    finally:
+        conn.close()
+    return redirect(url_for('admin_catalogos'))
+
+@app.route('/admin/catalogo-solicitante/excluir', methods=['POST'])
+@login_required_admin
+def excluir_catalogo_solicitante_admin():
+    tipo = request.form.get('tipo', '').strip()
+    valor = request.form.get('valor', '').strip().upper()
+    if tipo not in CATALOGOS_SOLICITANTE or not valor:
+        flash('Informe o item para excluir.', 'warning')
+        return redirect(url_for('admin_catalogos'))
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute('DELETE FROM sugestao_solicitacao WHERE tipo = %s AND valor = %s', (tipo, valor))
+    removido = c.rowcount > 0
+    conn.commit()
+    conn.close()
+
+    if removido:
+        flash('Item removido do catálogo.', 'success')
+    else:
+        flash('Item não encontrado.', 'warning')
     return redirect(url_for('admin_catalogos'))
 
 @app.route('/api/buscar_paciente')
@@ -4459,6 +4664,11 @@ def admin_catalogos():
         ruas=listar_sugestoes_endereco('rua'),
         bairros=listar_sugestoes_endereco('bairro'),
         sistemas_insercao_catalogo=listar_sistemas_insercao_catalogo(),
+        catalogos_solicitante=[
+            {'tipo': tipo, 'rotulo': rotulo, 'itens': listar_catalogo_solicitante(tipo)}
+            for tipo, rotulo in CATALOGOS_SOLICITANTE.items()
+        ],
+        ocupacoes_catalogo=[i['valor'] for i in listar_catalogo_solicitante('ocupacao')],
     )
 
 # NOTE: Rotas de chat IA removidas (feature desativada)
