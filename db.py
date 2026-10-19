@@ -67,8 +67,16 @@ def conectar():
             DATABASE_URL,
             min_size=1,
             max_size=int(os.environ.get('DB_POOL_MAX', '6')),
+            kwargs={
+                'connect_timeout': 10,
+                'keepalives': 1,
+                'keepalives_idle': 30,
+                'keepalives_interval': 10,
+                'keepalives_count': 3,
+            },
             check=ConnectionPool.check_connection,
-            max_idle=300,
+            max_idle=60,
+            max_lifetime=900,
             timeout=15,
             open=True,
         )

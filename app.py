@@ -2992,7 +2992,9 @@ def editar_dados_solicitacao(solicitacao_id):
         return redirect(url_for('solicitacoes'))
 
     solicitacao_concluida = bool((solicitacao[7] or '').strip())
-    profissionais_solicitantes = listar_catalogo_solicitante('profissional_solicitante')
+    profissionais_solicitantes = []
+    if request.method == 'POST' and not solicitacao_concluida:
+        profissionais_solicitantes = listar_catalogo_solicitante('profissional_solicitante')
 
     if request.method == 'POST':
         prioridade = request.form.get('prioridade', '').strip()
@@ -3058,6 +3060,7 @@ def editar_dados_solicitacao(solicitacao_id):
 
     conn.close()
 
+    profissionais_solicitantes = listar_catalogo_solicitante('profissional_solicitante')
     paciente_id = resolver_id_paciente(request.args.get('paciente_id', solicitacao[1])) or solicitacao[1]
     if not request.args.get('next'):
         origem_retorno = url_for('historico_paciente', paciente_id=paciente_id)
