@@ -1,4 +1,7 @@
 import os
+import time
+import logging
+import threading
 import psycopg
 from psycopg import sql
 from datetime import datetime
@@ -15,7 +18,7 @@ except ImportError:  # pragma: no cover
     ConnectionPool = None
 
 _pool = None
-
+_pool_lock = threading.Lock()
 
 class _ConexaoPool:
     """Devolve a conexão ao pool em close(), mantendo a API do psycopg."""
@@ -58,11 +61,40 @@ def devolver_conexoes_pendentes(exception=None):
         conn.close()
 
 
-def conectar():
+def _fechar_pool():
     global _pool
+    pool, _pool = _pool, None
+    if pool is not None:
+        try:
+            pool.close(timeout=1)
+        except Exception:
+            pass
+
+
+def conectar():
     if ConnectionPool is None:
-        return psycopg.connect(DATABASE_URL)
-    if _pool is None:
+        return psycopg.connect(DATABASE_URL, connect_timeout=10)
+    ultimo_erro = None
+    for tentativa in range(3):
+        try:
+            pool = _obter_pool()
+            return _ConexaoPool(pool, pool.getconn())
+        except Exception as erro:
+            ultimo_erro = erro
+            logging.getLogger(__name__).warning(
+                'Falha ao obter conexão do banco (tentativa %s/3): %s: %s',
+                tentativa + 1, type(erro).__name__, erro
+            )
+            _fechar_pool()
+            time.sleep(0.5 * (tentativa + 1))
+    raise ultimo_erro
+
+
+def _obter_pool():
+    global _pool
+    with _pool_lock:
+        if _pool is not None:
+            return _pool
         _pool = ConnectionPool(
             DATABASE_URL,
             min_size=1,
@@ -80,7 +112,7 @@ def conectar():
             timeout=15,
             open=True,
         )
-    return _ConexaoPool(_pool, _pool.getconn())
+        return _pool
 
 def garantir_foreign_key_solicitacao_paciente():
     conn = conectar()
