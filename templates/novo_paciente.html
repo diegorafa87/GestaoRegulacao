@@ -297,8 +297,9 @@
     }
 
     // --- Máscara de telefone ---
-    if (campoTelefone) {
-        campoTelefone.addEventListener('input', (e) => {
+    [campoTelefone, document.getElementById('telefone2')].forEach((campo) => {
+        if (!campo) return;
+        campo.addEventListener('input', (e) => {
             let valor = e.target.value.replace(/\D/g, '');
             if (valor.length > 12) valor = valor.slice(0, 12);
             let formatado = '';
@@ -307,12 +308,12 @@
             if (valor.length > 7) formatado += '-' + valor.slice(7, 12);
             e.target.value = formatado;
         });
-        campoTelefone.addEventListener('keydown', (e) => {
+        campo.addEventListener('keydown', (e) => {
             if (e.key === 'Backspace' && (e.target.value.endsWith(' ') || e.target.value.endsWith('-'))) {
                 e.target.value = e.target.value.slice(0, -1);
             }
         });
-    }
+    });
 })();
 </script>
 {% endblock %}
