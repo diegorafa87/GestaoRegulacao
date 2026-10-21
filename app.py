@@ -3235,6 +3235,10 @@ def relatorios():
             query_sem_financiamento += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
             query_sem_financiamento += " AND UPPER(COALESCE(s.conclusao, '')) <> 'RETIRADO'"
 
+        if profissional:
+            query_sem_financiamento += " AND UPPER(TRIM(COALESCE(s.profissional_solicitante, ''))) = %s"
+            params_sem_financiamento.append(profissional.upper())
+
         if tipo in tipos_relatorio_ativos():
             query_sem_financiamento += ' AND UPPER(s.tipo) = %s'
             params_sem_financiamento.append(tipo)
@@ -3279,6 +3283,10 @@ def relatorios():
         else:
             query_resumo += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
             query_resumo += " AND UPPER(COALESCE(s.conclusao, '')) <> 'RETIRADO'"
+
+        if profissional:
+            query_resumo += " AND UPPER(TRIM(COALESCE(s.profissional_solicitante, ''))) = %s"
+            params_resumo.append(profissional.upper())
 
         if tipo in tipos_relatorio_ativos():
             query_resumo += ' AND UPPER(s.tipo) = %s'
@@ -3337,6 +3345,10 @@ def relatorios():
         else:
             query_pacientes_top += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
             query_pacientes_top += " AND UPPER(COALESCE(s.conclusao, '')) <> 'RETIRADO'"
+
+        if profissional:
+            query_pacientes_top += " AND UPPER(TRIM(COALESCE(s.profissional_solicitante, ''))) = %s"
+            params_pacientes_top.append(profissional.upper())
 
         if tipo in tipos_relatorio_ativos():
             query_pacientes_top += ' AND UPPER(s.tipo) = %s'
@@ -3452,6 +3464,10 @@ def relatorios():
             query_espera += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
             query_espera += " AND UPPER(COALESCE(s.conclusao, '')) <> 'RETIRADO'"
 
+        if profissional:
+            query_espera += " AND UPPER(TRIM(COALESCE(s.profissional_solicitante, ''))) = %s"
+            params_espera.append(profissional.upper())
+
         if tipo in tipos_relatorio_ativos():
             query_espera += ' AND UPPER(s.tipo) = %s'
             params_espera.append(tipo)
@@ -3508,6 +3524,10 @@ def relatorios():
         else:
             query_procedimentos_geral += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
             query_procedimentos_geral += " AND UPPER(COALESCE(s.conclusao, '')) <> 'RETIRADO'"
+
+        if profissional:
+            query_procedimentos_geral += " AND UPPER(TRIM(COALESCE(s.profissional_solicitante, ''))) = %s"
+            params_procedimentos_geral.append(profissional.upper())
 
         if tipo in tipos_relatorio_ativos():
             query_procedimentos_geral += ' AND UPPER(s.tipo) = %s'
@@ -3672,6 +3692,10 @@ def relatorios():
         '''
         params_tempo = []
 
+        if profissional:
+            query_tempo += " AND UPPER(TRIM(COALESCE(s.profissional_solicitante, ''))) = %s"
+            params_tempo.append(profissional.upper())
+
         if tipo in tipos_relatorio_ativos():
             query_tempo += ' AND UPPER(s.tipo) = %s'
             params_tempo.append(tipo)
@@ -3814,6 +3838,11 @@ def relatorios():
                 for especialidade_item, _ in resumo:
                     if not especialidade_item:
                         continue
+                    filtro_prof_pdf = ''
+                    params_pdf = [especialidade_item]
+                    if profissional:
+                        filtro_prof_pdf = " AND UPPER(TRIM(COALESCE(s.profissional_solicitante, ''))) = %s"
+                        params_pdf.append(profissional.upper())
                     cursor_pacientes.execute(
                         '''
                         SELECT p.id, p.nome
@@ -3822,11 +3851,12 @@ def relatorios():
                         WHERE UPPER(COALESCE(s.especialidade, '')) = UPPER(%s)
                           AND UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO')
                           AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
+                        ''' + filtro_prof_pdf + '''
                         GROUP BY p.id, p.nome
                         ORDER BY p.nome ASC
                         LIMIT 10
                         ''',
-                        (especialidade_item,)
+                        tuple(params_pdf)
                     )
                     pacientes_por_especialidade[especialidade_item] = cursor_pacientes.fetchall()
             finally:
@@ -3917,6 +3947,10 @@ def relatorios():
         else:
             query_pacientes += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
             query_pacientes += " AND UPPER(COALESCE(s.conclusao, '')) <> 'RETIRADO'"
+
+        if profissional:
+            query_pacientes += " AND UPPER(TRIM(COALESCE(s.profissional_solicitante, ''))) = %s"
+            params_pacientes.append(profissional.upper())
 
         if tipo in tipos_relatorio_ativos():
             query_pacientes += ' AND UPPER(s.tipo) = %s'
