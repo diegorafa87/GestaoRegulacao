@@ -327,7 +327,7 @@
                     <td class="text-center">{{ solicitacao[0] }}</td>
                     <td>{{ solicitacao[2] or '-' }}<br><small class="text-muted">{{ solicitacao[1]|formatar_documento }}</small></td>
                     <td class="text-center">{{ solicitacao[3] }}</td>
-                    <td>{{ solicitacao[4] or '-' }}</td>
+                    <td>{{ solicitacao[4]|rotular_especialidade_por_tipo(solicitacao[3]) or '-' }}</td>
                     <td class="text-center">{{ solicitacao[5]|formatar_data }}</td>
                     <td class="text-center">{{ solicitacao[6] or '-' }}</td>
                     <td class="text-center">
@@ -517,7 +517,7 @@
                             <td>{{ s[2]|formatar_data }}</td>
                             <td class="text-center">{{ s[3] }}</td>
                             <td class="text-center">{{ idade_paciente or '-' }}</td>
-                            <td>{{ s[4] }}</td>
+                            <td>{{ s[4]|rotular_especialidade_por_tipo(s[3]) }}</td>
                             <td class="text-center">{{ s[5] }}</td>
                             <td>{% if s[6] == 'URGENTE' %}<span class="text-danger fw-bold">{{ s[6] }}</span>{% else %}{{ s[6] }}{% endif %}</td>
                             <td>{{ (s[1] if situacao == 'EM_ESPERA' else s[7])|formatar_data }}</td>

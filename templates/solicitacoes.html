@@ -45,7 +45,7 @@
         <tr>
             <td class="text-center small" style="white-space: nowrap;">{{ s[0]|formatar_documento }}</td>
             <td class="small {% if s[8] %}text-danger fw-bold{% endif %}" {% if s[8] %}style="color: #dc3545;"{% endif %}>{{ s[1] }}</td>
-            <td class="small">{{ s[2] if s[2] else '-' }}</td>
+            <td class="small">{{ s[2]|rotular_especialidade_por_tipo(s[9]) if s[2] else '-' }}</td>
             <td class="small">{{ s[3] if s[3] else '-' }}</td>
             <td class="small">
                 {% if s[4] == 'URGENTE' %}<span class="text-danger fw-bold">{{ s[4] }}</span>{% else %}{{ s[4] if s[4] else '-' }}{% endif %}

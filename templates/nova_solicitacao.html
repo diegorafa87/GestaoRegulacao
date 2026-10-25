@@ -341,7 +341,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!categoria || item.categoria === categoria || !item.categoria) {
                 const option = document.createElement('option');
                 option.value = item.valor;
-                option.textContent = item.valor;
+                option.textContent = item.categoria === 'CONSULTA' && !item.valor.toUpperCase().startsWith('CONSULTA EM ')
+                    ? `CONSULTA EM ${item.valor}`
+                    : item.valor;
                 if (item.valor === valorAtual) {
                     option.selected = true;
                 }

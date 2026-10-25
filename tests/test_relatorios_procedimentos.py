@@ -1,8 +1,19 @@
-from app import gerar_relatorio_procedimentos_sintetico, gerar_relatorio_procedimentos_detalhado, listar_tipos_relatorio
+from app import (
+    gerar_relatorio_procedimentos_sintetico,
+    gerar_relatorio_procedimentos_detalhado,
+    listar_tipos_relatorio,
+    rotular_especialidade_por_tipo,
+)
 
 
 def test_listar_tipos_relatorio_inclui_cirurgia():
     assert listar_tipos_relatorio() == ['TODOS', 'CONSULTA', 'EXAME', 'CIRURGIA']
+
+
+def test_rotular_especialidade_por_tipo_prefixa_consultas_sem_alterar_outros_tipos():
+    assert rotular_especialidade_por_tipo('Mastologia', 'CONSULTA') == 'CONSULTA EM Mastologia'
+    assert rotular_especialidade_por_tipo('CONSULTA EM ORTOPEDIA', 'CONSULTA') == 'CONSULTA EM ORTOPEDIA'
+    assert rotular_especialidade_por_tipo('Ultrassonografia', 'EXAME') == 'Ultrassonografia'
 
 
 def test_gerar_relatorio_procedimentos_sintetico_agrupa_por_principio_sem_nomes_pacientes():

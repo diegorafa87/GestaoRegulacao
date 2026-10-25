@@ -1583,6 +1583,17 @@ def gerar_pdf_relatorio_paciente(paciente_relatorio, relatorio_paciente):
     return pdf.getvalue()
 
 
+def rotular_especialidade_por_tipo(especialidade, tipo):
+    especialidade = str(especialidade or '').strip()
+    if (tipo or '').strip().upper() != 'CONSULTA' or not especialidade:
+        return especialidade
+
+    especialidade_upper = especialidade.upper()
+    if especialidade_upper in {'CONSULTA', 'CONSULTAS'} or especialidade_upper.startswith('CONSULTA EM '):
+        return especialidade
+    return f'CONSULTA EM {especialidade}'
+
+
 def gerar_pdf_termo_retirada_solicitacao(paciente_nome, paciente_id, especialidade, data_entrada, data_retirada, solicitacao_id=None):
     largura_pagina = 595
     altura_pagina = 842
@@ -1714,6 +1725,7 @@ def gerar_pdf_termo_retirada_solicitacao(paciente_nome, paciente_id, especialida
 app.jinja_env.filters['formatar_data'] = formatar_data_br
 app.jinja_env.filters['formatar_endereco_lista'] = formatar_endereco_lista
 app.jinja_env.filters['formatar_documento'] = formatar_identificador_paciente
+app.jinja_env.filters['rotular_especialidade_por_tipo'] = rotular_especialidade_por_tipo
 
 @app.route('/healthz')
 def healthz():
@@ -1806,7 +1818,9 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                 s.data_solicitacao,
                 s.data_entrada,
                 0 AS retorno_agendado_count,
-                p.oncologico
+                p.oncologico,
+                s.tipo,
+                s.conclusao
             FROM solicitacao s
             INNER JOIN paciente p ON p.id = s.paciente_id
             WHERE UPPER(s.status) = 'URGENTE'
