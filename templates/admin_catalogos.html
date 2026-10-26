@@ -226,6 +226,14 @@
                             {% endfor %}
                         </select>
                     </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Conselho profissional (sigla)</label>
+                        <input type="text" name="conselho_profissional" class="form-control" placeholder="Ex: CRM">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Número do conselho</label>
+                        <input type="text" name="numero_conselho" class="form-control" placeholder="Ex: 13874">
+                    </div>
                     {% endif %}
                     <div class="col-12">
                         <button type="submit" class="btn btn-success">Adicionar</button>
@@ -238,6 +246,7 @@
                             <tr>
                                 <th>{{ catalogo.rotulo }}</th>
                                 {% if catalogo.tipo == 'profissional_solicitante' %}<th>Ocupação</th>{% endif %}
+                                {% if catalogo.tipo == 'profissional_solicitante' %}<th>Conselho</th><th>Número</th>{% endif %}
                                 <th style="width: 240px;">Ações</th>
                             </tr>
                         </thead>
@@ -246,6 +255,10 @@
                             <tr>
                                 <td>{{ item.valor }}</td>
                                 {% if catalogo.tipo == 'profissional_solicitante' %}<td>{{ item.ocupacao or '-' }}</td>{% endif %}
+                                {% if catalogo.tipo == 'profissional_solicitante' %}
+                                <td>{{ item.conselho_profissional or '-' }}</td>
+                                <td>{{ item.numero_conselho or '-' }}</td>
+                                {% endif %}
                                 <td class="d-flex gap-2 flex-wrap">
                                     <form method="post" action="{{ url_for('editar_catalogo_solicitante_admin') }}" class="d-flex gap-2 flex-wrap w-100">
                                         <input type="hidden" name="tipo" value="{{ catalogo.tipo }}">
@@ -260,6 +273,8 @@
                                             <option value="{{ oc }}" {% if item.ocupacao == oc %}selected{% endif %}>{{ oc }}</option>
                                             {% endfor %}
                                         </select>
+                                        <input type="text" name="conselho_profissional" class="form-control form-control-sm" value="{{ item.conselho_profissional }}" placeholder="Sigla (ex: CRM)" aria-label="Sigla do conselho profissional">
+                                        <input type="text" name="numero_conselho" class="form-control form-control-sm" value="{{ item.numero_conselho }}" placeholder="Número do conselho" aria-label="Número do conselho profissional">
                                         {% endif %}
                                         <button type="submit" class="btn btn-sm btn-primary">Salvar</button>
                                     </form>
@@ -272,7 +287,7 @@
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="{{ 3 if catalogo.tipo == 'profissional_solicitante' else 2 }}" class="text-center text-muted">Nenhum item cadastrado.</td>
+                                <td colspan="{{ 5 if catalogo.tipo == 'profissional_solicitante' else 2 }}" class="text-center text-muted">Nenhum item cadastrado.</td>
                             </tr>
                             {% endfor %}
                         </tbody>

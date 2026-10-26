@@ -25,14 +25,14 @@
     <div class="col-md-4">
         <label class="form-label">Profissional Solicitante:</label>
         <select id="profissional_solicitante" name="profissional_solicitante" class="form-control">
-            <option value="" data-ocupacao="">Selecione</option>
+            <option value="" data-ocupacao="" data-conselho="" data-numero-conselho="">Selecione</option>
             {% for item in profissionais_solicitantes %}
-            <option value="{{ item.valor }}" data-ocupacao="{{ item.ocupacao }}" {% if form_data.profissional_solicitante == item.valor %}selected{% endif %}>{{ item.valor }}</option>
+            <option value="{{ item.valor }}" data-ocupacao="{{ item.ocupacao }}" data-conselho="{{ item.conselho_profissional }}" data-numero-conselho="{{ item.numero_conselho }}" {% if form_data.profissional_solicitante == item.valor %}selected{% endif %}>{{ item.valor }}</option>
             {% endfor %}
         </select>
     </div>
     <div class="col-md-4">
-        <label class="form-label">Ocupação:</label>
+        <label class="form-label">Ocupação / Conselho:</label>
         <input id="ocupacao" name="ocupacao" class="form-control bg-light" readonly tabindex="-1" placeholder="Preenchida ao selecionar o profissional" value="{{ form_data.ocupacao or '' }}">
     </div>
     <div class="col-md-4">
@@ -168,7 +168,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!campoProfissional || !campoOcupacao) return;
     function preencherOcupacao() {
         const opcao = campoProfissional.options[campoProfissional.selectedIndex];
-        campoOcupacao.value = opcao ? (opcao.dataset.ocupacao || '') : '';
+        if (!opcao) {
+            campoOcupacao.value = '';
+            return;
+        }
+        const ocupacao = opcao.dataset.ocupacao || '';
+        const conselho = opcao.dataset.conselho || '';
+        const numeroConselho = opcao.dataset.numeroConselho || '';
+        const identificacaoConselho = conselho
+            ? `${conselho}${numeroConselho ? `: ${numeroConselho}` : ''}`
+            : '';
+        campoOcupacao.value = [ocupacao, identificacaoConselho].filter(Boolean).join(' | ');
     }
 
     campoProfissional.addEventListener('change', preencherOcupacao);

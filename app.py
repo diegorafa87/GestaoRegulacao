@@ -2069,7 +2069,10 @@ def listar_catalogo_solicitante(tipo):
     c = conn.cursor()
     c.execute(
         '''
-        SELECT TRIM(valor) AS valor, COALESCE(categoria, '') AS ocupacao
+        SELECT TRIM(valor) AS valor,
+               COALESCE(categoria, '') AS ocupacao,
+               COALESCE(conselho_profissional, '') AS conselho_profissional,
+               COALESCE(numero_conselho, '') AS numero_conselho
         FROM sugestao_solicitacao
         WHERE tipo = %s
           AND TRIM(valor) <> ''
@@ -2079,8 +2082,15 @@ def listar_catalogo_solicitante(tipo):
     )
     resultados = c.fetchall()
     conn.close()
-    # Para profissional_solicitante, "ocupacao" guarda a ocupação vinculada
-    return [{'valor': r[0], 'ocupacao': r[1]} for r in resultados if r and r[0]]
+    return [
+        {
+            'valor': r[0],
+            'ocupacao': r[1],
+            'conselho_profissional': r[2],
+            'numero_conselho': r[3],
+        }
+        for r in resultados if r and r[0]
+    ]
 
 def listar_sugestoes_endereco(tipo):
     if tipo not in ('rua', 'bairro'):
@@ -4343,11 +4353,15 @@ def adicionar_catalogo_solicitante_admin():
     tipo = request.form.get('tipo', '').strip()
     valor = request.form.get('valor', '').strip().upper()
     ocupacao = request.form.get('ocupacao', '').strip().upper() or None
+    conselho_profissional = request.form.get('conselho_profissional', '').strip().upper() or None
+    numero_conselho = request.form.get('numero_conselho', '').strip() or None
     if tipo not in CATALOGOS_SOLICITANTE or not valor:
         flash('Informe o valor para adicionar ao catálogo.', 'warning')
         return redirect(url_for('admin_catalogos'))
     if tipo != 'profissional_solicitante':
         ocupacao = None
+        conselho_profissional = None
+        numero_conselho = None
     elif not ocupacao:
         flash('Informe a ocupação do profissional.', 'warning')
         return redirect(url_for('admin_catalogos'))
@@ -4355,8 +4369,13 @@ def adicionar_catalogo_solicitante_admin():
     conn = conectar()
     c = conn.cursor()
     c.execute(
-        'INSERT INTO sugestao_solicitacao (tipo, valor, categoria) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING',
-        (tipo, valor, ocupacao)
+        '''
+        INSERT INTO sugestao_solicitacao
+            (tipo, valor, categoria, conselho_profissional, numero_conselho)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT DO NOTHING
+        ''',
+        (tipo, valor, ocupacao, conselho_profissional, numero_conselho)
     )
     inseriu = c.rowcount > 0
     conn.commit()
@@ -4376,11 +4395,15 @@ def editar_catalogo_solicitante_admin():
     valor_atual = request.form.get('valor_atual', '').strip().upper()
     valor_novo = request.form.get('valor_novo', '').strip().upper()
     ocupacao = request.form.get('ocupacao', '').strip().upper() or None
+    conselho_profissional = request.form.get('conselho_profissional', '').strip().upper() or None
+    numero_conselho = request.form.get('numero_conselho', '').strip() or None
     if tipo not in CATALOGOS_SOLICITANTE or not valor_atual or not valor_novo:
         flash('Informe o valor atual e o novo valor.', 'warning')
         return redirect(url_for('admin_catalogos'))
     if tipo != 'profissional_solicitante':
         ocupacao = None
+        conselho_profissional = None
+        numero_conselho = None
     elif not ocupacao:
         flash('Informe a ocupação do profissional.', 'warning')
         return redirect(url_for('admin_catalogos'))
@@ -4390,8 +4413,12 @@ def editar_catalogo_solicitante_admin():
     try:
         if tipo == 'profissional_solicitante':
             c.execute(
-                'UPDATE sugestao_solicitacao SET valor = %s, categoria = %s WHERE tipo = %s AND valor = %s',
-                (valor_novo, ocupacao, tipo, valor_atual)
+                '''
+                UPDATE sugestao_solicitacao
+                SET valor = %s, categoria = %s, conselho_profissional = %s, numero_conselho = %s
+                WHERE tipo = %s AND valor = %s
+                ''',
+                (valor_novo, ocupacao, conselho_profissional, numero_conselho, tipo, valor_atual)
             )
         else:
             c.execute(
