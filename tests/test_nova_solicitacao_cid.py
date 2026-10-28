@@ -3,7 +3,7 @@ import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from app import app as flask_app, listar_cids_sugestoes
+from app import app as flask_app, formatar_ocupacao_profissional, listar_cids_sugestoes
 
 
 def test_nova_solicitacao_template_has_cid_field():
@@ -32,6 +32,25 @@ def test_nova_solicitacao_template_has_requester_fields_after_entry_date():
     unidade = template.index('name="unidade_solicitante"')
 
     assert data_entrada < profissional < ocupacao < unidade
+
+
+def test_formatar_ocupacao_profissional_inclui_conselho_e_numero_quando_disponiveis():
+    profissional = {
+        'ocupacao': 'MÉDICO',
+        'conselho_profissional': 'CRM',
+        'numero_conselho': '12345',
+    }
+
+    assert formatar_ocupacao_profissional(profissional) == 'MÉDICO | CRM: 12345'
+
+
+def test_editar_solicitacao_carrega_e_mostra_conselho_do_profissional():
+    template = Path('templates/editar_dados_solicitacao.html').read_text(encoding='utf-8')
+
+    assert 'data-conselho="{{ item.conselho_profissional }}"' in template
+    assert 'data-numero-conselho="{{ item.numero_conselho }}"' in template
+    assert 'campoProfissional.addEventListener(\'change\', preencherOcupacao);' in template
+    assert 'preencherOcupacao();' in template
 
 
 def test_nova_solicitacao_template_has_specialty_feedback_in_both_modes():

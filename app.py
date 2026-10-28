@@ -2092,6 +2092,17 @@ def listar_catalogo_solicitante(tipo):
         for r in resultados if r and r[0]
     ]
 
+def formatar_ocupacao_profissional(profissional):
+    if not profissional:
+        return ''
+    ocupacao = (profissional.get('ocupacao') or '').strip()
+    conselho = (profissional.get('conselho_profissional') or '').strip()
+    numero_conselho = (profissional.get('numero_conselho') or '').strip()
+    identificacao_conselho = conselho
+    if conselho and numero_conselho:
+        identificacao_conselho = f'{conselho}: {numero_conselho}'
+    return ' | '.join(parte for parte in (ocupacao, identificacao_conselho) if parte)
+
 def listar_sugestoes_endereco(tipo):
     if tipo not in ('rua', 'bairro'):
         return []
@@ -3046,14 +3057,17 @@ def editar_dados_solicitacao(solicitacao_id):
         else:
             profissional_solicitante = request.form.get('profissional_solicitante', '').strip() or None
             unidade_solicitante = request.form.get('unidade_solicitante', '').strip() or None
-            # A ocupação vem do cadastro do profissional, nunca do formulário
-            ocupacao = None
-            if profissional_solicitante:
-                ocupacao = next(
-                    (i['ocupacao'] for i in profissionais_solicitantes
-                     if i['valor'].upper() == profissional_solicitante.upper()),
-                    None
-                ) or None
+            profissional_catalogo = next(
+                (i for i in profissionais_solicitantes
+                 if i['valor'].upper() == (profissional_solicitante or '').upper()),
+                None
+            )
+            # Atualiza os dados profissionais a partir do catálogo ao editar solicitações antigas.
+            ocupacao = formatar_ocupacao_profissional(profissional_catalogo) or None
+            if profissional_solicitante and not profissional_catalogo:
+                mesmo_profissional = (solicitacao[8] or '').upper() == profissional_solicitante.upper()
+                if mesmo_profissional:
+                    ocupacao = solicitacao[9]
 
         # Atualizar apenas a solicitação específica
         c.execute(
