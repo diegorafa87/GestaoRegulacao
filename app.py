@@ -2718,6 +2718,16 @@ def editar_paciente(paciente_id):
         telefone2 = request.form.get('telefone2', '').strip()
         sus = normalizar_documento(request.form.get('sus', '').strip())
         data_obito = normalizar_data_para_iso(request.form.get('data_obito'))
+        nascimento = None
+        if apenas_admin():
+            nascimento_raw = request.form.get('nascimento', '').strip()
+            try:
+                nascimento = normalizar_data_para_iso(nascimento_raw)
+                datetime.strptime(nascimento, '%Y-%m-%d')
+            except (TypeError, ValueError):
+                conn.close()
+                flash('Informe uma data de nascimento válida.', 'warning')
+                return redirect(url_for('editar_paciente', paciente_id=paciente_id_resolvido, next=origem_retorno))
         oncologico = request.form.get('oncologico') == 'on'
         rua = request.form.get('rua', '').strip().upper()
         numero = request.form.get('numero', '').strip().upper()
@@ -2730,10 +2740,16 @@ def editar_paciente(paciente_id):
             flash('O nome do paciente é obrigatório.', 'warning')
             return redirect(url_for('editar_paciente', paciente_id=paciente_id_resolvido, next=origem_retorno))
 
-        c.execute(
-            'UPDATE paciente SET nome = %s, nome_mae = %s, telefone = %s, telefone2 = %s, sus = %s, data_obito = %s, oncologico = %s, endereco = %s WHERE id = %s',
-            (nome, nome_mae or None, telefone, telefone2 or None, sus if sus else None, data_obito, oncologico, endereco, paciente_id_resolvido)
-        )
+        if apenas_admin():
+            c.execute(
+                'UPDATE paciente SET nome = %s, nome_mae = %s, telefone = %s, telefone2 = %s, sus = %s, data_obito = %s, oncologico = %s, endereco = %s, nascimento = %s WHERE id = %s',
+                (nome, nome_mae or None, telefone, telefone2 or None, sus if sus else None, data_obito, oncologico, endereco, nascimento, paciente_id_resolvido)
+            )
+        else:
+            c.execute(
+                'UPDATE paciente SET nome = %s, nome_mae = %s, telefone = %s, telefone2 = %s, sus = %s, data_obito = %s, oncologico = %s, endereco = %s WHERE id = %s',
+                (nome, nome_mae or None, telefone, telefone2 or None, sus if sus else None, data_obito, oncologico, endereco, paciente_id_resolvido)
+            )
 
         if data_obito:
             c.execute(

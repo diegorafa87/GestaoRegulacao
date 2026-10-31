@@ -23,7 +23,11 @@
     </div>
     <div class="col-md-3">
         <label class="form-label">Nascimento:</label>
+        {% if session['usuario_perfil'] == 'ADMIN' %}
+        <input name="nascimento" id="nascimento" class="form-control" value="{{ paciente[2]|formatar_data }}" required maxlength="10" placeholder="DD/MM/AAAA">
+        {% else %}
         <input class="form-control" value="{{ paciente[2]|formatar_data }}" readonly>
+        {% endif %}
     </div>
     <div class="col-md-4">
         <label class="form-label">Telefone:</label>
@@ -81,6 +85,7 @@
 <script>
 (() => {
     const campoObito = document.getElementById('data_obito');
+    const campoNascimento = document.getElementById('nascimento');
     const campoTelefone = document.getElementById('telefone');
     const campoTelefone2 = document.getElementById('telefone2');
     const campoSus = document.getElementById('sus');
@@ -109,6 +114,18 @@
             if (e.key === 'Backspace' && e.target.value.endsWith('/')) {
                 e.target.value = e.target.value.slice(0, -1);
             }
+        });
+    }
+
+    if (campoNascimento) {
+        campoNascimento.addEventListener('input', (e) => {
+            let valor = e.target.value.replace(/\D/g, '').slice(0, 8);
+            if (valor.length > 4) {
+                valor = valor.slice(0, 2) + '/' + valor.slice(2, 4) + '/' + valor.slice(4);
+            } else if (valor.length > 2) {
+                valor = valor.slice(0, 2) + '/' + valor.slice(2);
+            }
+            e.target.value = valor;
         });
     }
 
