@@ -4764,6 +4764,155 @@ def usuarios():
     conn.close()
     return render_template('usuarios.html', usuarios=lista_usuarios, especialidades_catalogo=listar_especialidades())
 
+@app.route('/usuarios/<int:usuario_id>/editar', methods=['GET', 'POST'])
+@login_required_admin
+def editar_usuario(usuario_id):
+    conn = conectar()
+    c = conn.cursor()
+
+    if request.method == 'POST':
+        c.execute(
+            'SELECT id, perfil, ativo FROM usuario WHERE id = %s',
+            (usuario_id,)
+        )
+        usuario_atual = c.fetchone()
+        if not usuario_atual:
+            conn.close()
+            flash('Usuário não encontrado.', 'warning')
+            return redirect(url_for('usuarios'))
+
+        nome = request.form.get('nome', '').strip()
+        username = request.form.get('username', '').strip()
+        senha = request.form.get('senha', '')
+        perfil = request.form.get('perfil', '').strip().upper()
+        ativo = request.form.get('ativo') == 'on'
+
+        if not nome or not username:
+            conn.close()
+            flash('Preencha nome e usuário.', 'warning')
+            return redirect(url_for('editar_usuario', usuario_id=usuario_id))
+        if perfil not in ('ADMIN', 'OPERADOR', PERFIL_SETOR):
+            conn.close()
+            flash('Selecione um perfil válido.', 'warning')
+            return redirect(url_for('editar_usuario', usuario_id=usuario_id))
+        if usuario_id == session.get('usuario_id') and (perfil != 'ADMIN' or not ativo):
+            conn.close()
+            flash('Não é possível alterar o próprio perfil de administrador ou desativar a própria conta.', 'warning')
+            return redirect(url_for('editar_usuario', usuario_id=usuario_id))
+
+        especialidades_setor = None
+        if perfil == PERFIL_SETOR:
+            catalogo = {e.upper() for e in listar_especialidades()}
+            escolhidas = [
+                e for e in request.form.getlist('especialidades_permitidas')
+                if e.strip().upper() in catalogo
+            ]
+            if not escolhidas:
+                conn.close()
+                flash('Selecione ao menos uma especialidade para o perfil Setor.', 'warning')
+                return redirect(url_for('editar_usuario', usuario_id=usuario_id))
+            especialidades_setor = serializar_especialidades(escolhidas)
+
+        c.execute(
+            'SELECT id FROM usuario WHERE username = %s AND id <> %s',
+            (username, usuario_id)
+        )
+        if c.fetchone():
+            conn.close()
+            flash('Nome de usuário já existe. Use outro.', 'danger')
+            return redirect(url_for('editar_usuario', usuario_id=usuario_id))
+
+        if usuario_atual[1] == 'ADMIN' and usuario_atual[2] and (perfil != 'ADMIN' or not ativo):
+            c.execute(
+                'SELECT id FROM usuario WHERE perfil = %s AND ativo = TRUE AND id <> %s LIMIT 1',
+                ('ADMIN', usuario_id)
+            )
+            if not c.fetchone():
+                conn.close()
+                flash('Não é possível remover ou desativar o último administrador ativo.', 'warning')
+                return redirect(url_for('editar_usuario', usuario_id=usuario_id))
+
+        if senha:
+            c.execute(
+                '''
+                UPDATE usuario
+                SET nome = %s, username = %s, senha_hash = %s, perfil = %s,
+                    ativo = %s, especialidades_permitidas = %s
+                WHERE id = %s
+                ''',
+                (nome, username, generate_password_hash(senha), perfil, ativo, especialidades_setor, usuario_id)
+            )
+        else:
+            c.execute(
+                '''
+                UPDATE usuario
+                SET nome = %s, username = %s, perfil = %s,
+                    ativo = %s, especialidades_permitidas = %s
+                WHERE id = %s
+                ''',
+                (nome, username, perfil, ativo, especialidades_setor, usuario_id)
+            )
+        conn.commit()
+        conn.close()
+        if usuario_id == session.get('usuario_id'):
+            session['usuario_nome'] = nome
+            session['usuario_username'] = username
+        flash('Usuário atualizado com sucesso!', 'success')
+        return redirect(url_for('usuarios'))
+
+    c.execute(
+        '''
+        SELECT id, nome, username, perfil, ativo, especialidades_permitidas
+        FROM usuario WHERE id = %s
+        ''',
+        (usuario_id,)
+    )
+    usuario = c.fetchone()
+    conn.close()
+    if not usuario:
+        flash('Usuário não encontrado.', 'warning')
+        return redirect(url_for('usuarios'))
+
+    return render_template(
+        'editar_usuario.html',
+        usuario=usuario,
+        especialidades_catalogo=listar_especialidades(),
+        especialidades_selecionadas=desserializar_especialidades(usuario[5]),
+        usuario_atual_id=session.get('usuario_id'),
+    )
+
+@app.route('/usuarios/<int:usuario_id>/excluir', methods=['POST'])
+@login_required_admin
+def excluir_usuario(usuario_id):
+    if usuario_id == session.get('usuario_id'):
+        flash('Não é possível excluir a própria conta.', 'warning')
+        return redirect(url_for('usuarios'))
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute('SELECT id, perfil, ativo FROM usuario WHERE id = %s', (usuario_id,))
+    usuario = c.fetchone()
+    if not usuario:
+        conn.close()
+        flash('Usuário não encontrado.', 'warning')
+        return redirect(url_for('usuarios'))
+
+    if usuario[1] == 'ADMIN' and usuario[2]:
+        c.execute(
+            'SELECT id FROM usuario WHERE perfil = %s AND ativo = TRUE AND id <> %s LIMIT 1',
+            ('ADMIN', usuario_id)
+        )
+        if not c.fetchone():
+            conn.close()
+            flash('Não é possível excluir o último administrador ativo.', 'warning')
+            return redirect(url_for('usuarios'))
+
+    c.execute('DELETE FROM usuario WHERE id = %s', (usuario_id,))
+    conn.commit()
+    conn.close()
+    flash('Usuário excluído com sucesso!', 'success')
+    return redirect(url_for('usuarios'))
+
 @app.route('/admin/pacientes', methods=['GET', 'POST'])
 @login_required_admin
 def admin_pacientes():

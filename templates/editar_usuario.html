@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}Editar usuário{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-1 text-primary fw-bold">Editar usuário</h2>
+        <div class="text-muted small">Atualize os dados e as permissões de acesso</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="{{ url_for('usuarios') }}">Voltar</a>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-body">
+        <form method="post" class="row g-3">
+            <div class="col-md-6">
+                <label class="form-label" for="nome">Nome completo</label>
+                <input id="nome" type="text" name="nome" class="form-control" value="{{ usuario[1] }}" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="username">Usuário</label>
+                <input id="username" type="text" name="username" class="form-control" value="{{ usuario[2] }}" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="senha">Nova senha</label>
+                <input id="senha" type="password" name="senha" class="form-control" autocomplete="new-password">
+                <div class="form-text">Deixe em branco para manter a senha atual.</div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label" for="perfil-select">Perfil</label>
+                <select name="perfil" id="perfil-select" class="form-select" required {% if usuario[0] == usuario_atual_id %}disabled{% endif %}>
+                    <option value="OPERADOR" {% if usuario[3] == 'OPERADOR' %}selected{% endif %}>Operador</option>
+                    <option value="ADMIN" {% if usuario[3] == 'ADMIN' %}selected{% endif %}>Administrador</option>
+                    <option value="SETOR" {% if usuario[3] == 'SETOR' %}selected{% endif %}>Setor (pacientes e especialidades restritas)</option>
+                </select>
+                {% if usuario[0] == usuario_atual_id %}
+                <input type="hidden" name="perfil" value="{{ usuario[3] }}">
+                <div class="form-text">O próprio administrador não pode alterar seu perfil nesta tela.</div>
+                {% endif %}
+            </div>
+            <div class="col-12" id="especialidades-setor" style="display:none;">
+                <label class="form-label" for="especialidades">Especialidades liberadas</label>
+                <select id="especialidades" name="especialidades_permitidas" class="form-select" multiple size="10">
+                    {% for e in especialidades_catalogo %}
+                    <option value="{{ e }}" {% if e.upper() in especialidades_selecionadas %}selected{% endif %}>{{ e }}</option>
+                    {% endfor %}
+                </select>
+                <div class="form-text">Segure Ctrl para selecionar várias.</div>
+            </div>
+            <div class="col-12 form-check ms-2">
+                <input type="checkbox" name="ativo" id="ativo" class="form-check-input" {% if usuario[4] %}checked{% endif %} {% if usuario[0] == usuario_atual_id %}disabled{% endif %}>
+                <label class="form-check-label" for="ativo">Usuário ativo</label>
+                {% if usuario[0] == usuario_atual_id %}
+                <input type="hidden" name="ativo" value="on">
+                {% endif %}
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">Salvar alterações</button>
+            </div>
+        </form>
+    </div>
+</div>
+<script>
+    (function () {
+        const perfil = document.getElementById('perfil-select');
+        const especialidades = document.getElementById('especialidades-setor');
+        const atualizar = () => { especialidades.style.display = perfil.value === 'SETOR' ? '' : 'none'; };
+        perfil.addEventListener('change', atualizar);
+        atualizar();
+    })();
+</script>
+{% endblock %}

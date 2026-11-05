@@ -74,6 +74,7 @@
                                 <th>Perfil</th>
                                 <th>Status</th>
                                 <th>Criado em</th>
+                                <th>Ações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -91,10 +92,18 @@
                                     {% endif %}
                                 </td>
                                 <td>{{ u[5] }}</td>
+                                <td class="text-nowrap">
+                                    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('editar_usuario', usuario_id=u[0]) }}">Editar</a>
+                                    {% if u[0] != session.get('usuario_id') %}
+                                    <form method="post" action="{{ url_for('excluir_usuario', usuario_id=u[0]) }}" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir este usuário?');">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">Excluir</button>
+                                    </form>
+                                    {% endif %}
+                                </td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="6" class="text-center text-muted">Nenhum usuário cadastrado.</td>
+                                <td colspan="7" class="text-center text-muted">Nenhum usuário cadastrado.</td>
                             </tr>
                             {% endfor %}
                         </tbody>
