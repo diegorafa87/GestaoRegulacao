@@ -28,6 +28,7 @@ def test_novo_paciente_salva_endereco_com_sem_numero():
             'sus': '123456789012345',
             'nome': 'JOAO DA SILVA',
             'nome_mae': 'MARIA DA SILVA',
+            'nome_pai': 'JOSE DA SILVA',
             'nascimento': '01/01/2000',
             'telefone': '999999999',
             'rua': 'RUA DAS FLORES',
@@ -39,3 +40,35 @@ def test_novo_paciente_salva_endereco_com_sem_numero():
     assert response.status_code == 302
     insert_args = fake_cursor.execute.call_args_list[0].args
     assert insert_args[1][4] == 'RUA DAS FLORES, S/N, BAIRRO CENTRO'
+    assert insert_args[1][-2:] == ('MARIA DA SILVA', 'JOSE DA SILVA')
+
+
+def test_novo_paciente_aceita_nome_da_mae_e_pai_desconhecidos():
+    client = flask_app.test_client()
+    with client.session_transaction() as sess:
+        sess['usuario_id'] = 1
+        sess['usuario_perfil'] = 'ADMIN'
+
+    fake_conn = MagicMock()
+    fake_cursor = fake_conn.cursor.return_value
+
+    with patch('app.conectar', return_value=fake_conn), \
+         patch('app.buscar_paciente_existente_por_documentos', return_value=None), \
+         patch('app.listar_sugestoes_endereco', side_effect=lambda tipo: []), \
+         patch('app.apenas_admin', return_value=True):
+        response = client.post('/novo_paciente', data={
+            'cpf': '12345678909',
+            'sus': '123456789012345',
+            'nome': 'JOAO DA SILVA',
+            'nome_mae_desconhecido': 'on',
+            'nome_pai_desconhecido': 'on',
+            'nascimento': '01/01/2000',
+            'telefone': '999999999',
+            'rua': 'RUA DAS FLORES',
+            'numero': '1',
+            'bairro': 'CENTRO',
+        }, follow_redirects=False)
+
+    assert response.status_code == 302
+    insert_args = fake_cursor.execute.call_args_list[0].args
+    assert insert_args[1][-2:] == ('DESCONHECIDO', 'DESCONHECIDO')

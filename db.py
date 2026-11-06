@@ -200,10 +200,12 @@ def criar_tabelas():
         data_obito TEXT,
         oncologico BOOLEAN DEFAULT FALSE,
         nome_mae TEXT,
+        nome_pai TEXT,
         telefone2 TEXT
     )''')
     c.execute('ALTER TABLE paciente ADD COLUMN IF NOT EXISTS sus TEXT')
     c.execute('ALTER TABLE paciente ADD COLUMN IF NOT EXISTS nome_mae TEXT')
+    c.execute('ALTER TABLE paciente ADD COLUMN IF NOT EXISTS nome_pai TEXT')
     c.execute('ALTER TABLE paciente ADD COLUMN IF NOT EXISTS telefone2 TEXT')
     c.execute('ALTER TABLE paciente ADD COLUMN IF NOT EXISTS data_obito TEXT')
     c.execute('ALTER TABLE paciente ADD COLUMN IF NOT EXISTS oncologico BOOLEAN DEFAULT FALSE')

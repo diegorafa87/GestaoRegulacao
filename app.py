@@ -2367,7 +2367,10 @@ def novo_paciente():
         cpf = normalizar_documento(cpf_input)
         sus = normalizar_documento(sus_input)
         nome = request.form.get('nome', '').strip().upper()
-        nome_mae = request.form.get('nome_mae', '').strip().upper()
+        nome_mae_desconhecido = request.form.get('nome_mae_desconhecido') == 'on'
+        nome_pai_desconhecido = request.form.get('nome_pai_desconhecido') == 'on'
+        nome_mae = 'DESCONHECIDO' if nome_mae_desconhecido else request.form.get('nome_mae', '').strip().upper()
+        nome_pai = 'DESCONHECIDO' if nome_pai_desconhecido else request.form.get('nome_pai', '').strip().upper()
         nascimento_raw = request.form.get('nascimento', '')
         nascimento = normalizar_data_para_iso(nascimento_raw)
         telefone = request.form.get('telefone', '').strip()
@@ -2386,7 +2389,10 @@ def novo_paciente():
             'cpf': cpf_input,
             'sus': sus_input,
             'nome': nome,
-            'nome_mae': nome_mae,
+            'nome_mae': '' if nome_mae_desconhecido else nome_mae,
+            'nome_pai': '' if nome_pai_desconhecido else nome_pai,
+            'nome_mae_desconhecido': nome_mae_desconhecido,
+            'nome_pai_desconhecido': nome_pai_desconhecido,
             'nascimento': nascimento_raw,
             'telefone': telefone,
             'oncologico': oncologico,
@@ -2405,6 +2411,7 @@ def novo_paciente():
             'sus': sus,
             'nome': nome,
             'nome_mae': nome_mae,
+            'nome_pai': nome_pai,
             'nascimento': nascimento,
             'telefone': telefone,
             'rua': rua,
@@ -2440,8 +2447,8 @@ def novo_paciente():
 
         try:
             c.execute(
-                "INSERT INTO paciente (id, nome, nascimento, telefone, endereco, sus, oncologico, nome_mae) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                (id, nome, nascimento, telefone, endereco, sus if sus else None, oncologico, nome_mae or None)
+                "INSERT INTO paciente (id, nome, nascimento, telefone, endereco, sus, oncologico, nome_mae, nome_pai) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (id, nome, nascimento, telefone, endereco, sus if sus else None, oncologico, nome_mae or None, nome_pai or None)
             )
             # Salva rua e bairro como sugestões para futuros cadastros (somente admin)
             if apenas_admin() and rua and rua not in ruas_catalogo:
@@ -2713,7 +2720,10 @@ def editar_paciente(paciente_id):
 
     if request.method == 'POST':
         nome = request.form.get('nome', '').strip().upper()
-        nome_mae = request.form.get('nome_mae', '').strip().upper()
+        nome_mae_desconhecido = request.form.get('nome_mae_desconhecido') == 'on'
+        nome_pai_desconhecido = request.form.get('nome_pai_desconhecido') == 'on'
+        nome_mae = 'DESCONHECIDO' if nome_mae_desconhecido else request.form.get('nome_mae', '').strip().upper()
+        nome_pai = 'DESCONHECIDO' if nome_pai_desconhecido else request.form.get('nome_pai', '').strip().upper()
         telefone = request.form.get('telefone', '').strip()
         telefone2 = request.form.get('telefone2', '').strip()
         sus = normalizar_documento(request.form.get('sus', '').strip())
@@ -2739,16 +2749,20 @@ def editar_paciente(paciente_id):
             conn.close()
             flash('O nome do paciente é obrigatório.', 'warning')
             return redirect(url_for('editar_paciente', paciente_id=paciente_id_resolvido, next=origem_retorno))
+        if not nome_mae or not nome_pai:
+            conn.close()
+            flash('Informe o nome da mãe e o nome do pai ou marque a opção de desconhecido.', 'warning')
+            return redirect(url_for('editar_paciente', paciente_id=paciente_id_resolvido, next=origem_retorno))
 
         if apenas_admin():
             c.execute(
-                'UPDATE paciente SET nome = %s, nome_mae = %s, telefone = %s, telefone2 = %s, sus = %s, data_obito = %s, oncologico = %s, endereco = %s, nascimento = %s WHERE id = %s',
-                (nome, nome_mae or None, telefone, telefone2 or None, sus if sus else None, data_obito, oncologico, endereco, nascimento, paciente_id_resolvido)
+                'UPDATE paciente SET nome = %s, nome_mae = %s, nome_pai = %s, telefone = %s, telefone2 = %s, sus = %s, data_obito = %s, oncologico = %s, endereco = %s, nascimento = %s WHERE id = %s',
+                (nome, nome_mae or None, nome_pai or None, telefone, telefone2 or None, sus if sus else None, data_obito, oncologico, endereco, nascimento, paciente_id_resolvido)
             )
         else:
             c.execute(
-                'UPDATE paciente SET nome = %s, nome_mae = %s, telefone = %s, telefone2 = %s, sus = %s, data_obito = %s, oncologico = %s, endereco = %s WHERE id = %s',
-                (nome, nome_mae or None, telefone, telefone2 or None, sus if sus else None, data_obito, oncologico, endereco, paciente_id_resolvido)
+                'UPDATE paciente SET nome = %s, nome_mae = %s, nome_pai = %s, telefone = %s, telefone2 = %s, sus = %s, data_obito = %s, oncologico = %s, endereco = %s WHERE id = %s',
+                (nome, nome_mae or None, nome_pai or None, telefone, telefone2 or None, sus if sus else None, data_obito, oncologico, endereco, paciente_id_resolvido)
             )
 
         if data_obito:

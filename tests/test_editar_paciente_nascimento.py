@@ -24,6 +24,7 @@ def _fake_connection():
         False,
         'MARIA DA SILVA',
         None,
+        'JOSE DA SILVA',
     )
     return conn
 
@@ -36,6 +37,8 @@ def test_admin_can_update_patient_birthdate():
          patch('app.resolver_id_paciente', return_value='12345678909'):
         response = client.post('/paciente/12345678909/editar', data={
             'nome': 'JOAO DA SILVA',
+            'nome_mae': 'MARIA DA SILVA',
+            'nome_pai': 'JOSE SILVA',
             'nascimento': '02/03/2001',
         })
 
@@ -45,7 +48,29 @@ def test_admin_can_update_patient_birthdate():
         if 'UPDATE paciente SET' in call.args[0]
     )
     assert 'nascimento = %s' in update.args[0]
+    assert 'nome_pai = %s' in update.args[0]
+    assert update.args[1][2] == 'JOSE SILVA'
     assert update.args[1][-2:] == ('2001-03-02', '12345678909')
+
+
+def test_editar_paciente_salva_nomes_desconhecidos():
+    client = _client('OPERADOR')
+    conn = _fake_connection()
+
+    with patch('app.conectar', return_value=conn), \
+         patch('app.resolver_id_paciente', return_value='12345678909'):
+        response = client.post('/paciente/12345678909/editar', data={
+            'nome': 'JOAO DA SILVA',
+            'nome_mae_desconhecido': 'on',
+            'nome_pai_desconhecido': 'on',
+        })
+
+    assert response.status_code == 302
+    update = next(
+        call for call in conn.cursor.return_value.execute.call_args_list
+        if 'UPDATE paciente SET' in call.args[0]
+    )
+    assert update.args[1][1:3] == ('DESCONHECIDO', 'DESCONHECIDO')
 
 
 def test_only_admin_sees_editable_patient_birthdate():
@@ -59,6 +84,10 @@ def test_only_admin_sees_editable_patient_birthdate():
 
         assert response.status_code == 200
         assert (b'name="nascimento"' in response.data) == (perfil == 'ADMIN')
+        assert b'name="nome_pai"' in response.data
+        assert b'name="nome_mae"' in response.data
+        assert b'id="nomeMae" name="nome_mae" class="form-control"' in response.data
+        assert b'value="JOSE DA SILVA"' in response.data
 
 
 def test_non_admin_cannot_update_patient_birthdate():
@@ -69,6 +98,8 @@ def test_non_admin_cannot_update_patient_birthdate():
          patch('app.resolver_id_paciente', return_value='12345678909'):
         response = client.post('/paciente/12345678909/editar', data={
             'nome': 'JOAO DA SILVA',
+            'nome_mae': 'MARIA DA SILVA',
+            'nome_pai': 'JOSE SILVA',
             'nascimento': '02/03/2001',
         })
 

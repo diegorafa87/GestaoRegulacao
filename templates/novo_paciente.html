@@ -42,6 +42,18 @@
     <div class="col-md-6">
         <label class="form-label">Nome da mãe: <span class="text-danger">*</span></label>
         <input id="nomeMae" name="nome_mae" class="form-control" value="{{ form_data.nome_mae if form_data else '' }}" required>
+        <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="nomeMaeDesconhecido" name="nome_mae_desconhecido" {% if form_data and form_data.nome_mae_desconhecido %}checked{% endif %}>
+            <label class="form-check-label small" for="nomeMaeDesconhecido">Caso desconhecido, selecionar a opção ao lado</label>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Nome do pai: <span class="text-danger">*</span></label>
+        <input id="nomePai" name="nome_pai" class="form-control" value="{{ form_data.nome_pai if form_data else '' }}" required>
+        <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="nomePaiDesconhecido" name="nome_pai_desconhecido" {% if form_data and form_data.nome_pai_desconhecido %}checked{% endif %}>
+            <label class="form-check-label small" for="nomePaiDesconhecido">Caso desconhecido, selecionar a opção ao lado</label>
+        </div>
     </div>
     <div class="col-md-6">
         <label class="form-label">Rua: <span class="text-danger">*</span></label>
@@ -88,10 +100,26 @@
     const campoCpf = document.getElementById('cpf');
     const campoSus = document.getElementById('sus');
     const campoNomeMae = document.getElementById('nomeMae');
+    const campoNomePai = document.getElementById('nomePai');
+    const campoNomeMaeDesconhecido = document.getElementById('nomeMaeDesconhecido');
+    const campoNomePaiDesconhecido = document.getElementById('nomePaiDesconhecido');
     const campoRua = document.getElementById('rua');
     const campoBairro = document.getElementById('bairro');
     const campoNumero = document.getElementById('numero');
     const campoSemNumero = document.getElementById('sem_numero');
+
+    const atualizarCampoNome = (campo, checkbox) => {
+        if (!campo || !checkbox) return;
+        campo.disabled = checkbox.checked;
+        campo.required = !checkbox.checked;
+        if (checkbox.checked) campo.value = '';
+    };
+
+    [[campoNomeMae, campoNomeMaeDesconhecido], [campoNomePai, campoNomePaiDesconhecido]].forEach(([campo, checkbox]) => {
+        if (!checkbox) return;
+        checkbox.addEventListener('change', () => atualizarCampoNome(campo, checkbox));
+        atualizarCampoNome(campo, checkbox);
+    });
 
     if (campoSemNumero && campoNumero) {
         const atualizarCampoNumero = () => {
@@ -189,6 +217,7 @@
             document.getElementById('nascimento'),
             campoTelefone,
             document.getElementById('nomeMae'),
+            document.getElementById('nomePai'),
             campoRua,
             campoBairro,
         ];
@@ -199,6 +228,7 @@
 
         return camposObrigatorios.every((campo) => {
             if (!campo) return true;
+            if (campo.disabled) return true;
             if (campo.tagName === 'SELECT') {
                 return Boolean((campo.value || '').trim());
             }

@@ -38,8 +38,20 @@
         <input name="telefone2" id="telefone2" class="form-control" value="{{ paciente[9] or '' }}" maxlength="15" placeholder="(00) 00000-0000">
     </div>
     <div class="col-md-6">
-        <label class="form-label">Nome da mãe:</label>
-        <input name="nome_mae" class="form-control" value="{{ paciente[8] or '' }}">
+        <label class="form-label">Nome da mãe: <span class="text-danger">*</span></label>
+        <input id="nomeMae" name="nome_mae" class="form-control" value="{{ '' if (paciente[8] or '')|upper == 'DESCONHECIDO' else (paciente[8] or '') }}" required>
+        <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="nomeMaeDesconhecido" name="nome_mae_desconhecido" {% if (paciente[8] or '')|upper == 'DESCONHECIDO' %}checked{% endif %}>
+            <label class="form-check-label small" for="nomeMaeDesconhecido">Caso desconhecido, selecionar a opção ao lado</label>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Nome do pai: <span class="text-danger">*</span></label>
+        <input id="nomePai" name="nome_pai" class="form-control" value="{{ '' if (paciente[10] or '')|upper == 'DESCONHECIDO' else (paciente[10] or '') }}" required>
+        <div class="form-check mt-2">
+            <input class="form-check-input" type="checkbox" id="nomePaiDesconhecido" name="nome_pai_desconhecido" {% if (paciente[10] or '')|upper == 'DESCONHECIDO' %}checked{% endif %}>
+            <label class="form-check-label small" for="nomePaiDesconhecido">Caso desconhecido, selecionar a opção ao lado</label>
+        </div>
     </div>
     <div class="col-md-6">
         <label class="form-label">Rua:</label>
@@ -89,8 +101,25 @@
     const campoTelefone = document.getElementById('telefone');
     const campoTelefone2 = document.getElementById('telefone2');
     const campoSus = document.getElementById('sus');
+    const campoNomeMae = document.getElementById('nomeMae');
+    const campoNomePai = document.getElementById('nomePai');
+    const campoNomeMaeDesconhecido = document.getElementById('nomeMaeDesconhecido');
+    const campoNomePaiDesconhecido = document.getElementById('nomePaiDesconhecido');
     const campoNumeroEndereco = document.getElementById('numero_endereco');
     const campoSemNumero = document.getElementById('sem_numero');
+
+    const atualizarCampoNome = (campo, checkbox) => {
+        if (!campo || !checkbox) return;
+        campo.disabled = checkbox.checked;
+        campo.required = !checkbox.checked;
+        if (checkbox.checked) campo.value = '';
+    };
+
+    [[campoNomeMae, campoNomeMaeDesconhecido], [campoNomePai, campoNomePaiDesconhecido]].forEach(([campo, checkbox]) => {
+        if (!checkbox) return;
+        checkbox.addEventListener('change', () => atualizarCampoNome(campo, checkbox));
+        atualizarCampoNome(campo, checkbox);
+    });
 
     if (campoObito) {
         campoObito.addEventListener('input', (e) => {
