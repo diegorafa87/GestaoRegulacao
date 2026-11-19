@@ -61,6 +61,7 @@
             <option value="EXAME" {% if form_data.tipo == 'EXAME' %}selected{% endif %}>Exame</option>
             <option value="CIRURGIA" {% if form_data.tipo == 'CIRURGIA' %}selected{% endif %}>Cirurgia</option>
             <option value="PROCEDIMENTO" {% if form_data.tipo == 'PROCEDIMENTO' %}selected{% endif %}>Procedimento</option>
+            <option value="FISIOTERAPIA" {% if form_data.tipo == 'FISIOTERAPIA' %}selected{% endif %}>Fisioterapia</option>
         </select>
     </div>
     <div id="especialidade_unica_container" class="col-md-4">
@@ -145,7 +146,7 @@
             value="{{ form_data.quantidade_solicitacoes or '1' }}"
         >
         <small id="ajuda_quantidade_solicitacoes" class="text-muted">
-            Use quantidade maior que 1 para EXAME anatomopatológico/laboratorial{% if perfil_setor() %} ou, no seu perfil, para qualquer solicitação (ex.: 10 sessões de fisioterapia){% endif %}.
+            Use quantidade maior que 1 para EXAME anatomopatológico/laboratorial ou FISIOTERAPIA{% if perfil_setor() %}; no seu perfil, para qualquer solicitação{% endif %}.
         </small>
     </div>
     <div class="col-12">
@@ -239,6 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const ehExame = tipo === 'EXAME';
+        const ehFisioterapia = tipo === 'FISIOTERAPIA';
         const permiteReplicacao = especialidadesAtuais.some((especialidade) =>
             especialidade.includes('ANATOMOPATOLOGIC') ||
             especialidade.includes('EXAMES LABORATORIAIS') ||
@@ -246,13 +248,13 @@ document.addEventListener('DOMContentLoaded', () => {
             especialidade.includes('LABORATORI')
         );
 
-        const habilitado = {{ 'true' if perfil_setor() else 'false' }} || (ehExame && permiteReplicacao);
+        const habilitado = {{ 'true' if perfil_setor() else 'false' }} || ehFisioterapia || (ehExame && permiteReplicacao);
         campoQuantidadeSolicitacoes.readOnly = !habilitado;
 
         if (!habilitado) {
             campoQuantidadeSolicitacoes.value = '1';
             if (ajudaQuantidadeSolicitacoes) {
-                ajudaQuantidadeSolicitacoes.textContent = 'Replicação disponível apenas para EXAME anatomopatológico/laboratorial.';
+                ajudaQuantidadeSolicitacoes.textContent = 'Replicação disponível para EXAME anatomopatológico/laboratorial e FISIOTERAPIA.';
             }
             return;
         }

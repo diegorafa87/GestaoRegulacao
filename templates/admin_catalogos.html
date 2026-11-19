@@ -47,6 +47,7 @@
                             <option value="EXAME">Exame</option>
                             <option value="CIRURGIA">Cirurgia</option>
                             <option value="PROCEDIMENTO">Procedimento</option>
+                            <option value="FISIOTERAPIA">Fisioterapia</option>
                         </select>
                     </div>
                     <div class="col-12">
@@ -78,6 +79,7 @@
                                             <option value="EXAME" {% if item.categoria == 'EXAME' %}selected{% endif %}>Exame</option>
                                             <option value="CIRURGIA" {% if item.categoria == 'CIRURGIA' %}selected{% endif %}>Cirurgia</option>
                                             <option value="PROCEDIMENTO" {% if item.categoria == 'PROCEDIMENTO' %}selected{% endif %}>Procedimento</option>
+                                            <option value="FISIOTERAPIA" {% if item.categoria == 'FISIOTERAPIA' %}selected{% endif %}>Fisioterapia</option>
                                         </select>
                                         <button type="submit" class="btn btn-sm btn-primary">Salvar</button>
                                     </form>

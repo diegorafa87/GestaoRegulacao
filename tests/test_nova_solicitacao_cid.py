@@ -3,7 +3,25 @@ import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from app import app as flask_app, formatar_ocupacao_profissional, listar_cids_sugestoes
+from app import (
+    app as flask_app,
+    formatar_ocupacao_profissional,
+    listar_cids_sugestoes,
+    permite_replicar_solicitacao,
+)
+
+
+def test_fisioterapia_permite_replicar_quantidade():
+    with patch('app.perfil_setor', return_value=False):
+        assert permite_replicar_solicitacao('FISIOTERAPIA', 'FISIOTERAPIA') is True
+
+
+def test_nova_solicitacao_template_has_fisioterapia_quantity_option():
+    template = Path('templates/nova_solicitacao.html').read_text(encoding='utf-8')
+
+    assert '<option value="FISIOTERAPIA"' in template
+    assert "const ehFisioterapia = tipo === 'FISIOTERAPIA';" in template
+    assert 'habilitado = {{' in template
 
 
 def test_nova_solicitacao_template_has_cid_field():
