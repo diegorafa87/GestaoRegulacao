@@ -25,6 +25,9 @@ def _fake_connection():
         'MARIA DA SILVA',
         None,
         'JOSE DA SILVA',
+        'FEMININO',
+        False,
+        False,
     )
     return conn
 
@@ -40,6 +43,9 @@ def test_admin_can_update_patient_birthdate():
             'nome_mae': 'MARIA DA SILVA',
             'nome_pai': 'JOSE SILVA',
             'nascimento': '02/03/2001',
+            'sexo': 'MASCULINO',
+            'hipertensao': 'on',
+            'diabetes': 'on',
         })
 
     assert response.status_code == 302
@@ -50,6 +56,7 @@ def test_admin_can_update_patient_birthdate():
     assert 'nascimento = %s' in update.args[0]
     assert 'nome_pai = %s' in update.args[0]
     assert update.args[1][2] == 'JOSE SILVA'
+    assert update.args[1][8:11] == ('MASCULINO', True, True)
     assert update.args[1][-2:] == ('2001-03-02', '12345678909')
 
 
@@ -63,6 +70,7 @@ def test_editar_paciente_salva_nomes_desconhecidos():
             'nome': 'JOAO DA SILVA',
             'nome_mae_desconhecido': 'on',
             'nome_pai_desconhecido': 'on',
+            'sexo': 'FEMININO',
         })
 
     assert response.status_code == 302
@@ -86,8 +94,15 @@ def test_only_admin_sees_editable_patient_birthdate():
         assert (b'name="nascimento"' in response.data) == (perfil == 'ADMIN')
         assert b'name="nome_pai"' in response.data
         assert b'name="nome_mae"' in response.data
+        assert b'name="sexo"' in response.data
+        assert b'name="hipertensao"' in response.data
+        assert b'name="diabetes"' in response.data
         assert b'id="nomeMae" name="nome_mae" class="form-control"' in response.data
         assert b'value="JOSE DA SILVA"' in response.data
+        if perfil == 'ADMIN':
+            html = response.data.decode()
+            assert html.index('id="nascimento"') < html.index('name="sexo"') < html.index('id="telefone"')
+            assert html.index('name="diabetes"') < html.index('id="data_obito"')
 
 
 def test_non_admin_cannot_update_patient_birthdate():
@@ -101,6 +116,7 @@ def test_non_admin_cannot_update_patient_birthdate():
             'nome_mae': 'MARIA DA SILVA',
             'nome_pai': 'JOSE SILVA',
             'nascimento': '02/03/2001',
+            'sexo': 'FEMININO',
         })
 
     assert response.status_code == 302
@@ -120,6 +136,7 @@ def test_admin_must_submit_a_valid_patient_birthdate():
         response = client.post('/paciente/12345678909/editar', data={
             'nome': 'JOAO DA SILVA',
             'nascimento': '31/02/2001',
+            'sexo': 'FEMININO',
         })
 
     assert response.status_code == 302

@@ -2741,6 +2741,7 @@ def editar_paciente(paciente_id):
         telefone = request.form.get('telefone', '').strip()
         telefone2 = request.form.get('telefone2', '').strip()
         sus = normalizar_documento(request.form.get('sus', '').strip())
+        sexo = request.form.get('sexo', '').strip().upper()
         data_obito = normalizar_data_para_iso(request.form.get('data_obito'))
         nascimento = None
         if apenas_admin():
@@ -2753,6 +2754,8 @@ def editar_paciente(paciente_id):
                 flash('Informe uma data de nascimento válida.', 'warning')
                 return redirect(url_for('editar_paciente', paciente_id=paciente_id_resolvido, next=origem_retorno))
         oncologico = request.form.get('oncologico') == 'on'
+        hipertensao = request.form.get('hipertensao') == 'on'
+        diabetes = request.form.get('diabetes') == 'on'
         rua = request.form.get('rua', '').strip().upper()
         numero = request.form.get('numero', '').strip().upper()
         bairro = request.form.get('bairro', '').strip().strip().upper()
@@ -2767,16 +2770,20 @@ def editar_paciente(paciente_id):
             conn.close()
             flash('Informe o nome da mãe e o nome do pai ou marque a opção de desconhecido.', 'warning')
             return redirect(url_for('editar_paciente', paciente_id=paciente_id_resolvido, next=origem_retorno))
+        if sexo not in ('FEMININO', 'MASCULINO', 'OUTRO'):
+            conn.close()
+            flash('Selecione uma opção válida para o sexo do paciente.', 'warning')
+            return redirect(url_for('editar_paciente', paciente_id=paciente_id_resolvido, next=origem_retorno))
 
         if apenas_admin():
             c.execute(
-                'UPDATE paciente SET nome = %s, nome_mae = %s, nome_pai = %s, telefone = %s, telefone2 = %s, sus = %s, data_obito = %s, oncologico = %s, endereco = %s, nascimento = %s WHERE id = %s',
-                (nome, nome_mae or None, nome_pai or None, telefone, telefone2 or None, sus if sus else None, data_obito, oncologico, endereco, nascimento, paciente_id_resolvido)
+                'UPDATE paciente SET nome = %s, nome_mae = %s, nome_pai = %s, telefone = %s, telefone2 = %s, sus = %s, data_obito = %s, oncologico = %s, sexo = %s, hipertensao = %s, diabetes = %s, endereco = %s, nascimento = %s WHERE id = %s',
+                (nome, nome_mae or None, nome_pai or None, telefone, telefone2 or None, sus if sus else None, data_obito, oncologico, sexo, hipertensao, diabetes, endereco, nascimento, paciente_id_resolvido)
             )
         else:
             c.execute(
-                'UPDATE paciente SET nome = %s, nome_mae = %s, nome_pai = %s, telefone = %s, telefone2 = %s, sus = %s, data_obito = %s, oncologico = %s, endereco = %s WHERE id = %s',
-                (nome, nome_mae or None, nome_pai or None, telefone, telefone2 or None, sus if sus else None, data_obito, oncologico, endereco, paciente_id_resolvido)
+                'UPDATE paciente SET nome = %s, nome_mae = %s, nome_pai = %s, telefone = %s, telefone2 = %s, sus = %s, data_obito = %s, oncologico = %s, sexo = %s, hipertensao = %s, diabetes = %s, endereco = %s WHERE id = %s',
+                (nome, nome_mae or None, nome_pai or None, telefone, telefone2 or None, sus if sus else None, data_obito, oncologico, sexo, hipertensao, diabetes, endereco, paciente_id_resolvido)
             )
 
         if data_obito:
@@ -2798,7 +2805,7 @@ def editar_paciente(paciente_id):
         return redirect(origem_retorno)
 
     c.execute(
-        'SELECT id, nome, nascimento, telefone, endereco, sus, data_obito, oncologico, nome_mae, telefone2 FROM paciente WHERE id = %s',
+        'SELECT id, nome, nascimento, telefone, endereco, sus, data_obito, oncologico, nome_mae, telefone2, nome_pai, sexo, hipertensao, diabetes FROM paciente WHERE id = %s',
         (paciente_id_resolvido,)
     )
     paciente = c.fetchone()
