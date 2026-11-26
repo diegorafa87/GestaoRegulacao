@@ -3235,6 +3235,9 @@ def relatorios():
     if tipo not in tipos_relatorio_ativos() and tipo != '':
         tipo = ''
     especialidade = request.args.get('especialidade', '').strip()
+    sexo = request.args.get('sexo', '').strip().upper()
+    if sexo not in ('FEMININO', 'MASCULINO', 'OUTRO'):
+        sexo = ''
     paciente = request.args.get('paciente', '').strip()
     profissional = request.args.get('profissional', '').strip()
     situacao = request.args.get('situacao', 'REALIZADOS').strip().upper()
@@ -3270,7 +3273,7 @@ def relatorios():
             resposta_ia = ia_utils.processar_pergunta_ia(pergunta_ia)
 
     filtros_aplicados = bool(
-        tipo or especialidade or paciente or profissional or data_inicio_raw or data_fim_raw or situacao in ('EM_ESPERA', 'RETIRADOS') or financiamento or tempo_espera or view != 'resumo' or pergunta_ia
+        tipo or especialidade or sexo or paciente or profissional or data_inicio_raw or data_fim_raw or situacao in ('EM_ESPERA', 'RETIRADOS') or financiamento or tempo_espera or view != 'resumo' or pergunta_ia
     )
 
     resumo = []
@@ -3316,6 +3319,10 @@ def relatorios():
         '''
         params_sem_financiamento = []
 
+        if sexo:
+            query_sem_financiamento += " AND UPPER(COALESCE(p.sexo, '')) = %s"
+            params_sem_financiamento.append(sexo)
+
         if situacao == 'RETIRADOS':
             query_sem_financiamento += " AND UPPER(COALESCE(s.conclusao, '')) = 'RETIRADO'"
         elif situacao == 'EM_ESPERA':
@@ -3360,10 +3367,15 @@ def relatorios():
                 s.especialidade,
                 COUNT(*) AS total_registros
             FROM solicitacao s
+            LEFT JOIN paciente p ON p.id = s.paciente_id
             WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO', 'FISIOTERAPIA')
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
         params_resumo = []
+
+        if sexo:
+            query_resumo += " AND UPPER(COALESCE(p.sexo, '')) = %s"
+            params_resumo.append(sexo)
 
         if situacao == 'RETIRADOS':
             query_resumo += " AND UPPER(COALESCE(s.conclusao, '')) = 'RETIRADO'"
@@ -3447,6 +3459,10 @@ def relatorios():
             query_pacientes_top += " AND UPPER(COALESCE(s.financiamento, '')) = %s"
             params_pacientes_top.append(financiamento)
 
+        if sexo:
+            query_pacientes_top += " AND UPPER(COALESCE(p.sexo, '')) = %s"
+            params_pacientes_top.append(sexo)
+
         if data_inicio:
             if situacao == 'EM_ESPERA':
                 query_pacientes_top += ' AND s.data_entrada >= %s'
@@ -3486,10 +3502,15 @@ def relatorios():
                     WHERE s.data_realizacao IS NULL OR TRIM(s.data_realizacao) = ''
                 ) AS em_espera
             FROM solicitacao s
+            LEFT JOIN paciente p ON p.id = s.paciente_id
             WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO', 'FISIOTERAPIA')
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
         params_profissionais = []
+
+        if sexo:
+            query_profissionais += " AND UPPER(COALESCE(p.sexo, '')) = %s"
+            params_profissionais.append(sexo)
 
         if profissional:
             query_profissionais += " AND UPPER(TRIM(COALESCE(s.profissional_solicitante, ''))) = %s"
@@ -3537,6 +3558,7 @@ def relatorios():
                 AVG(DATE(%s) - DATE(s.data_entrada))::numeric(10,1) AS tempo_medio_dias,
                 COUNT(*) AS total_registros
             FROM solicitacao s
+            LEFT JOIN paciente p ON p.id = s.paciente_id
             WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO', 'FISIOTERAPIA')
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
@@ -3552,6 +3574,10 @@ def relatorios():
             query_espera = query_espera.replace('%s', 's.data_realizacao')
             query_espera += " AND s.data_realizacao IS NOT NULL AND TRIM(s.data_realizacao) <> ''"
             query_espera += " AND UPPER(COALESCE(s.conclusao, '')) <> 'RETIRADO'"
+
+        if sexo:
+            query_espera += " AND UPPER(COALESCE(p.sexo, '')) = %s"
+            params_espera.append(sexo)
 
         if profissional:
             query_espera += " AND UPPER(TRIM(COALESCE(s.profissional_solicitante, ''))) = %s"
@@ -3605,6 +3631,10 @@ def relatorios():
             WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO', 'FISIOTERAPIA')
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
+
+        if sexo:
+            query_procedimentos_geral += " AND UPPER(COALESCE(p.sexo, '')) = %s"
+            params_procedimentos_geral.append(sexo)
 
         if situacao == 'RETIRADOS':
             query_procedimentos_geral += " AND UPPER(COALESCE(s.conclusao, '')) = 'RETIRADO'"
@@ -3721,16 +3751,21 @@ def relatorios():
             query_paciente = '''
                 SELECT id, nome, nascimento, sus
                 FROM paciente
-                WHERE regexp_replace(COALESCE(id, ''), '\\D', '', 'g') LIKE %s
+                WHERE (
+                   regexp_replace(COALESCE(id, ''), '\\D', '', 'g') LIKE %s
                    OR regexp_replace(COALESCE(sus, ''), '\\D', '', 'g') LIKE %s
                    OR translate(UPPER(COALESCE(nome, '')), 'ÁÀÂÃÄÉÈÊËÍÌÎÏÓÒÔÕÖÚÙÛÜÇ', 'AAAAAEEEEIIIIOOOOOUUUUC') LIKE %s
                    OR UPPER(COALESCE(nome, '')) LIKE %s
-                LIMIT 1
+                )
             '''
             params_paciente.append(f"%{paciente_id_normalizado}%")
             params_paciente.append(f"%{paciente_id_normalizado}%")
             params_paciente.append(f"%{texto_paciente}%")
             params_paciente.append(f"%{paciente.upper()}%")
+            if sexo:
+                query_paciente += " AND UPPER(COALESCE(sexo, '')) = %s"
+                params_paciente.append(sexo)
+            query_paciente += ' LIMIT 1'
             c.execute(query_paciente, params_paciente)
             paciente_relatorio = c.fetchone()
 
@@ -3777,10 +3812,15 @@ def relatorios():
                 UPPER(s.tipo) AS tipo,
                 AVG(DATE(s.data_realizacao) - DATE(s.data_entrada))::numeric(10,1) AS tempo_medio_dias
             FROM solicitacao s
+            LEFT JOIN paciente p ON p.id = s.paciente_id
             WHERE UPPER(s.tipo) IN ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO', 'FISIOTERAPIA')
               AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO')
         '''
         params_tempo = []
+
+        if sexo:
+            query_tempo += " AND UPPER(COALESCE(p.sexo, '')) = %s"
+            params_tempo.append(sexo)
 
         if profissional:
             query_tempo += " AND UPPER(TRIM(COALESCE(s.profissional_solicitante, ''))) = %s"
@@ -3933,6 +3973,9 @@ def relatorios():
                     if profissional:
                         filtro_prof_pdf = " AND UPPER(TRIM(COALESCE(s.profissional_solicitante, ''))) = %s"
                         params_pdf.append(profissional.upper())
+                    if sexo:
+                        filtro_prof_pdf += " AND UPPER(COALESCE(p.sexo, '')) = %s"
+                        params_pdf.append(sexo)
                     cursor_pacientes.execute(
                         '''
                         SELECT p.id, p.nome
@@ -4030,6 +4073,10 @@ def relatorios():
             query_pacientes += " AND UPPER(COALESCE(s.financiamento, '')) = %s"
             params_pacientes.append(financiamento)
 
+        if sexo:
+            query_pacientes += " AND UPPER(COALESCE(p.sexo, '')) = %s"
+            params_pacientes.append(sexo)
+
         if situacao == 'RETIRADOS':
             query_pacientes += " AND UPPER(COALESCE(s.conclusao, '')) = 'RETIRADO'"
         elif situacao == 'EM_ESPERA':
@@ -4096,6 +4143,7 @@ def relatorios():
         'relatorios.html',
         tipo=tipo,
         especialidade=especialidade,
+        sexo=sexo,
         situacao=situacao,
         data_inicio=data_inicio_raw,
         data_fim=data_fim_raw,

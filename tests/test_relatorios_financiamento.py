@@ -4,10 +4,12 @@ import app as app_module
 class FakeCursor:
     def __init__(self):
         self.queries = []
+        self.executions = []
         self.current_query = ''
 
     def execute(self, query, params=None):
         self.queries.append(query)
+        self.executions.append((query, params))
         self.current_query = query
 
     def fetchall(self):
@@ -81,6 +83,56 @@ def test_relatorios_retirados_continua_exibindo_retirados(monkeypatch):
     query_resumo = next(query for query in queries if 'COUNT(*) AS total_registros' in query)
     assert "UPPER(COALESCE(s.conclusao, '')) = 'RETIRADO'" in query_resumo
     assert "UPPER(COALESCE(s.conclusao, '')) <> 'RETIRADO'" not in query_resumo
+
+
+def test_relatorios_filtra_especialidade_por_sexo(monkeypatch):
+    connection = FakeConnection()
+    monkeypatch.setattr(app_module, 'conectar', lambda: connection)
+
+    client = app_module.app.test_client()
+    with client.session_transaction() as session:
+        session['usuario_id'] = 1
+
+    response = client.get('/relatorios?especialidade=Cardiologia&sexo=FEMININO')
+
+    assert response.status_code == 200
+    assert b'value="FEMININO" selected' in response.data
+    query_resumo, params_resumo = next(
+        execution for execution in connection.fake_cursor.executions
+        if 'COUNT(*) AS total_registros' in execution[0]
+    )
+    assert 'LEFT JOIN paciente p ON p.id = s.paciente_id' in query_resumo
+    assert "UPPER(COALESCE(p.sexo, '')) = %s" in query_resumo
+    assert 'FEMININO' in params_resumo
+
+    query_pacientes, params_pacientes = next(
+        execution for execution in connection.fake_cursor.executions
+        if 'COUNT(s.id) AS total_solicitacoes' in execution[0]
+    )
+    assert "UPPER(COALESCE(p.sexo, '')) = %s" in query_pacientes
+    assert 'FEMININO' in params_pacientes
+
+
+def test_filtro_sexo_na_visao_tempo_de_espera_mantem_parametros(monkeypatch):
+    connection = FakeConnection()
+    monkeypatch.setattr(app_module, 'conectar', lambda: connection)
+
+    client = app_module.app.test_client()
+    with client.session_transaction() as session:
+        session['usuario_id'] = 1
+
+    response = client.get(
+        '/relatorios?view=especialidades_maior_espera&especialidade=Cardiologia&sexo=MASCULINO'
+    )
+
+    assert response.status_code == 200
+    query_espera, params_espera = next(
+        execution for execution in connection.fake_cursor.executions
+        if 'AVG(DATE(s.data_realizacao)' in execution[0]
+    )
+    assert "UPPER(COALESCE(p.sexo, '')) = %s" in query_espera
+    assert query_espera.count('%s') == len(params_espera)
+    assert 'MASCULINO' in params_espera
 
 
 def test_grafico_nao_informado_abre_lista_com_acao_de_correcao(monkeypatch):

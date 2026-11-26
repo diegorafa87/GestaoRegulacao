@@ -82,6 +82,15 @@
             <label class="form-label">Especialidade</label>
             <input type="text" name="especialidade" class="form-control" value="{{ especialidade }}" placeholder="Ex.: Cardiologia">
         </div>
+        <div class="col-md-2">
+            <label class="form-label">Sexo</label>
+            <select name="sexo" class="form-control">
+                <option value="" {% if not sexo %}selected{% endif %}>Todos</option>
+                <option value="FEMININO" {% if sexo == 'FEMININO' %}selected{% endif %}>Feminino</option>
+                <option value="MASCULINO" {% if sexo == 'MASCULINO' %}selected{% endif %}>Masculino</option>
+                <option value="OUTRO" {% if sexo == 'OUTRO' %}selected{% endif %}>Outro</option>
+            </select>
+        </div>
         <div class="col-md-3">
             <label class="form-label">Paciente</label>
             <input id="paciente" type="text" name="paciente" class="form-control" value="{{ paciente }}" placeholder="CPF, SUS ou nome" autocomplete="off" list="pacientes-sugestoes">
@@ -177,7 +186,7 @@
                 {% if grafico.dados %}
                     {% for item in grafico.dados %}
                     {% if grafico.titulo == 'Atendimentos por financiamento' and item.label == 'NAO INFORMADO' and situacao == 'REALIZADOS' %}
-                    <a href="{{ url_for('relatorios', view='financiamento_nao_informado', situacao=situacao, tipo=tipo, especialidade=especialidade, data_inicio=data_inicio, data_fim=data_fim) }}" class="d-block text-reset text-decoration-none" title="Clique para revisar e corrigir estas solicitações">
+                    <a href="{{ url_for('relatorios', view='financiamento_nao_informado', situacao=situacao, tipo=tipo, especialidade=especialidade, sexo=sexo, data_inicio=data_inicio, data_fim=data_fim) }}" class="d-block text-reset text-decoration-none" title="Clique para revisar e corrigir estas solicitações">
                     {% endif %}
                     <div class="mb-3">
                         <div class="d-flex justify-content-between small mb-1">
