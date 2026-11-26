@@ -76,7 +76,7 @@ def apenas_admin():
 
 PERFIL_SETOR = 'SETOR'
 ENDPOINTS_SETOR = {
-    'index', 'pacientes', 'novo_paciente', 'historico_paciente',
+    'index', 'pacientes', 'novo_paciente', 'visualizar_paciente', 'historico_paciente',
     'nova_solicitacao', 'editar_solicitacao', 'editar_dados_solicitacao',
     'solicitacoes', 'pesquisar', 'healthz',
     'api_buscar_paciente', 'api_verificar_paciente_existente',
@@ -2817,6 +2817,42 @@ def editar_paciente(paciente_id):
 
     endereco_campos = separar_endereco_em_campos(paciente[4])
     return render_template('editar_paciente.html', paciente=paciente, endereco_campos=endereco_campos, origem_retorno=origem_retorno)
+
+@app.route('/paciente/<paciente_id>/visualizar')
+def visualizar_paciente(paciente_id):
+    paciente_id_resolvido = resolver_id_paciente(paciente_id)
+    if not paciente_id_resolvido:
+        flash('Paciente não encontrado.', 'warning')
+        return redirect(url_for('pacientes'))
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        '''
+        SELECT id, nome, nascimento, sexo, telefone, telefone2, sus, endereco,
+               nome_mae, nome_pai, oncologico, hipertensao, diabetes, data_obito
+        FROM paciente
+        WHERE id = %s
+        ''',
+        (paciente_id_resolvido,)
+    )
+    paciente = c.fetchone()
+    conn.close()
+
+    if not paciente:
+        flash('Paciente não encontrado.', 'warning')
+        return redirect(url_for('pacientes'))
+
+    origem_retorno = normalizar_url_retorno(
+        request.args.get('next'),
+        fallback=url_for('pacientes')
+    )
+    return render_template(
+        'visualizar_paciente.html',
+        paciente=paciente,
+        idade_paciente=calcular_idade(paciente[2]),
+        origem_retorno=origem_retorno,
+    )
 
 @app.route('/paciente/<paciente_id>')
 def historico_paciente(paciente_id):

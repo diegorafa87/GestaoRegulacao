@@ -46,7 +46,19 @@
             <td class="small" style="white-space: nowrap;">{{ p[3] }}</td>
             <td class="small">{{ p[4]|formatar_endereco_lista }}</td>
             <td class="text-nowrap small" style="white-space: nowrap;">
-                {% if not perfil_setor() %}<a href="{{ url_for('editar_paciente', paciente_id=p[0], next=request.full_path) }}" class="btn btn-sm btn-outline-primary">Editar</a>{% endif %}
+                <a href="{{ url_for('visualizar_paciente', paciente_id=p[0], next=request.full_path) }}" class="btn btn-sm btn-outline-secondary" title="Visualizar paciente" aria-label="Visualizar paciente">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8ZM1.173 8a13.134 13.134 0 0 1 1.66-2.043C4.12 4.7 5.879 3.5 8 3.5s3.879 1.2 5.168 2.457A13.134 13.134 0 0 1 14.828 8c-.058.087-.14.203-.246.34-.214.278-.526.65-.923 1.018C12.371 10.1 10.63 11.5 8 11.5s-4.371-1.4-5.66-2.142A11.55 11.55 0 0 1 1.173 8Z"/>
+                        <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5ZM6.5 8a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0Z"/>
+                    </svg>
+                </a>
+                {% if not perfil_setor() %}
+                <a href="{{ url_for('editar_paciente', paciente_id=p[0], next=request.full_path) }}" class="btn btn-sm btn-outline-primary" title="Editar paciente" aria-label="Editar paciente">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793l3.707 3.707 1.647-1.646a.5.5 0 0 0 0-.708l-3-3ZM9.793 2.5 1 11.293V15h3.707L13.5 6.207 9.793 2.5ZM2 11.707l8.146-8.146 2.293 2.293L4.293 14H2v-2.293Z"/>
+                    </svg>
+                </a>
+                {% endif %}
             </td>
         </tr>
     {% else %}
@@ -125,7 +137,7 @@
                 mensagem.textContent = `${pacientes.length} paciente(s) encontrado(s).`;
                 pacientes.forEach(p => {
                     const item = document.createElement('a');
-                    item.href = `/paciente/${encodeURIComponent(p.id)}/editar?next=${encodeURIComponent(origemAtual)}`;
+                    item.href = `/paciente/${encodeURIComponent(p.id)}/visualizar?next=${encodeURIComponent(origemAtual)}`;
                     item.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
                     const nomeClasse = p.oncologico ? 'fw-bold text-danger' : 'fw-semibold';
                     const nomeStyle = p.oncologico ? 'color: #dc3545;' : '';
