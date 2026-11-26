@@ -2376,8 +2376,11 @@ def novo_paciente():
         nome_pai = 'DESCONHECIDO' if nome_pai_desconhecido else request.form.get('nome_pai', '').strip().upper()
         nascimento_raw = request.form.get('nascimento', '')
         nascimento = normalizar_data_para_iso(nascimento_raw)
+        sexo = request.form.get('sexo', '').strip().upper()
         telefone = request.form.get('telefone', '').strip()
         oncologico = request.form.get('oncologico') == 'on'
+        hipertensao = request.form.get('hipertensao') == 'on'
+        diabetes = request.form.get('diabetes') == 'on'
 
         rua = request.form.get('rua', '').strip().upper()
         numero = request.form.get('numero', '').strip()
@@ -2397,8 +2400,11 @@ def novo_paciente():
             'nome_mae_desconhecido': nome_mae_desconhecido,
             'nome_pai_desconhecido': nome_pai_desconhecido,
             'nascimento': nascimento_raw,
+            'sexo': sexo,
             'telefone': telefone,
             'oncologico': oncologico,
+            'hipertensao': hipertensao,
+            'diabetes': diabetes,
             'rua': rua,
             'numero': numero,
             'bairro': bairro,
@@ -2416,6 +2422,7 @@ def novo_paciente():
             'nome_mae': nome_mae,
             'nome_pai': nome_pai,
             'nascimento': nascimento,
+            'sexo': sexo,
             'telefone': telefone,
             'rua': rua,
             'numero': numero if not sem_numero else 'S/N',
@@ -2425,6 +2432,10 @@ def novo_paciente():
         campos_vazios = [campo for campo, valor in campos_obrigatorios.items() if not valor]
         if campos_vazios:
             flash('Preencha todos os campos obrigatórios antes de salvar o paciente.', 'warning')
+            return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo, origem_retorno=origem_retorno)
+
+        if sexo not in ('FEMININO', 'MASCULINO', 'OUTRO'):
+            flash('Selecione uma opção válida para o sexo do paciente.', 'warning')
             return render_template('novo_paciente.html', form_data=form_data, ruas=ruas_catalogo, bairros=bairros_catalogo, origem_retorno=origem_retorno)
 
         if rua and rua not in ruas_catalogo and not apenas_admin():
@@ -2450,8 +2461,8 @@ def novo_paciente():
 
         try:
             c.execute(
-                "INSERT INTO paciente (id, nome, nascimento, telefone, endereco, sus, oncologico, nome_mae, nome_pai) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                (id, nome, nascimento, telefone, endereco, sus if sus else None, oncologico, nome_mae or None, nome_pai or None)
+                "INSERT INTO paciente (id, nome, nascimento, telefone, endereco, sus, oncologico, sexo, hipertensao, diabetes, nome_mae, nome_pai) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                (id, nome, nascimento, telefone, endereco, sus if sus else None, oncologico, sexo, hipertensao, diabetes, nome_mae or None, nome_pai or None)
             )
             # Salva rua e bairro como sugestões para futuros cadastros (somente admin)
             if apenas_admin() and rua and rua not in ruas_catalogo:

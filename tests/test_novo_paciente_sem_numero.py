@@ -30,7 +30,10 @@ def test_novo_paciente_salva_endereco_com_sem_numero():
             'nome_mae': 'MARIA DA SILVA',
             'nome_pai': 'JOSE DA SILVA',
             'nascimento': '01/01/2000',
+            'sexo': 'FEMININO',
             'telefone': '999999999',
+            'hipertensao': 'on',
+            'diabetes': 'on',
             'rua': 'RUA DAS FLORES',
             'numero': '',
             'bairro': 'CENTRO',
@@ -40,6 +43,8 @@ def test_novo_paciente_salva_endereco_com_sem_numero():
     assert response.status_code == 302
     insert_args = fake_cursor.execute.call_args_list[0].args
     assert insert_args[1][4] == 'RUA DAS FLORES, S/N, BAIRRO CENTRO'
+    assert insert_args[1][7] == 'FEMININO'
+    assert insert_args[1][8:10] == (True, True)
     assert insert_args[1][-2:] == ('MARIA DA SILVA', 'JOSE DA SILVA')
 
 
@@ -63,6 +68,7 @@ def test_novo_paciente_aceita_nome_da_mae_e_pai_desconhecidos():
             'nome_mae_desconhecido': 'on',
             'nome_pai_desconhecido': 'on',
             'nascimento': '01/01/2000',
+            'sexo': 'MASCULINO',
             'telefone': '999999999',
             'rua': 'RUA DAS FLORES',
             'numero': '1',
@@ -71,4 +77,35 @@ def test_novo_paciente_aceita_nome_da_mae_e_pai_desconhecidos():
 
     assert response.status_code == 302
     insert_args = fake_cursor.execute.call_args_list[0].args
+    assert insert_args[1][7] == 'MASCULINO'
+    assert insert_args[1][8:10] == (False, False)
     assert insert_args[1][-2:] == ('DESCONHECIDO', 'DESCONHECIDO')
+
+
+def test_novo_paciente_rejeita_sexo_invalido():
+    client = flask_app.test_client()
+    with client.session_transaction() as sess:
+        sess['usuario_id'] = 1
+        sess['usuario_perfil'] = 'ADMIN'
+
+    with patch('app.listar_sugestoes_endereco', side_effect=lambda tipo: []):
+        response = client.post('/novo_paciente', data={
+            'cpf': '12345678909',
+            'sus': '123456789012345',
+            'nome': 'JOAO DA SILVA',
+            'nome_mae': 'MARIA DA SILVA',
+            'nome_pai': 'JOSE DA SILVA',
+            'nascimento': '01/01/2000',
+            'sexo': 'INVALIDO',
+            'telefone': '999999999',
+            'rua': 'RUA DAS FLORES',
+            'numero': '1',
+            'bairro': 'CENTRO',
+        }, follow_redirects=False)
+
+    assert response.status_code == 200
+    assert 'Selecione uma opção válida para o sexo do paciente.'.encode() in response.data
+    html = response.data.decode()
+    assert html.index('id="nascimento"') < html.index('id="sexo"') < html.index('id="telefone"')
+    for opcao in ('FEMININO', 'MASCULINO', 'OUTRO'):
+        assert f'>{opcao}</option>'.encode() in response.data
