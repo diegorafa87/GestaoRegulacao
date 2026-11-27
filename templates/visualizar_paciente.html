@@ -21,7 +21,7 @@
                     <dt class="col-sm-5">CPF / Identificação</dt>
                     <dd class="col-sm-7">{{ paciente[0]|formatar_documento }}</dd>
                     <dt class="col-sm-5">Cartão SUS</dt>
-                    <dd class="col-sm-7">{{ paciente[6] or '-' }}</dd>
+                    <dd class="col-sm-7">{{ paciente[6]|formatar_sus if paciente[6] else '-' }}</dd>
                     <dt class="col-sm-5">Nascimento</dt>
                     <dd class="col-sm-7">{{ paciente[2]|formatar_data or '-' }}</dd>
                     <dt class="col-sm-5">Sexo</dt>

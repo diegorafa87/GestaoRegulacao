@@ -98,6 +98,8 @@ def especialidade_permitida(especialidade):
     permitidas = especialidades_permitidas()
     if permitidas is None:
         return True
+    if re.match(r'^\d{10}\s+-\s+\S', (especialidade or '').strip()):
+        return True
     return (especialidade or '').strip().upper() in permitidas
 
 def serializar_especialidades(lista):
@@ -173,7 +175,6 @@ def formatar_data_br(data_str):
     except ValueError:
         pass
     return data_str
-
 
 def calcular_idade(data_nascimento):
     if not data_nascimento:
@@ -734,6 +735,12 @@ def formatar_identificador_paciente(valor):
     if eh_cpf(valor):
         return formatar_cpf(valor)
     return valor
+
+def formatar_sus(valor):
+    sus = normalizar_documento(valor)
+    if len(sus) != 15:
+        return '' if valor is None else str(valor).strip()
+    return f'{sus[:3]} {sus[3:7]} {sus[7:11]} {sus[11:]}'
 
 
 def listar_tipos_relatorio():
@@ -1725,6 +1732,7 @@ def gerar_pdf_termo_retirada_solicitacao(paciente_nome, paciente_id, especialida
 app.jinja_env.filters['formatar_data'] = formatar_data_br
 app.jinja_env.filters['formatar_endereco_lista'] = formatar_endereco_lista
 app.jinja_env.filters['formatar_documento'] = formatar_identificador_paciente
+app.jinja_env.filters['formatar_sus'] = formatar_sus
 app.jinja_env.filters['rotular_especialidade_por_tipo'] = rotular_especialidade_por_tipo
 
 @app.route('/healthz')
@@ -1820,7 +1828,8 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                 0 AS retorno_agendado_count,
                 p.oncologico,
                 s.tipo,
-                s.conclusao
+                s.conclusao,
+                p.nome_mae
             FROM solicitacao s
             INNER JOIN paciente p ON p.id = s.paciente_id
             WHERE UPPER(s.status) = 'URGENTE'
@@ -1902,7 +1911,8 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
                   {filtro_setor('sr')}
             ) AS retorno_agendado_count,
             {tipos_radiografia_expr},
-            p.oncologico
+            p.oncologico,
+            p.nome_mae
         FROM paciente p
         LEFT JOIN solicitacao s ON s.paciente_id = p.id AND UPPER(COALESCE(s.conclusao, '')) NOT IN ('CANCELADO', 'OBITO'){filtro_setor('s')}
         WHERE 1=1
@@ -1928,7 +1938,7 @@ def consultar_solicitacoes(cpf, sus, especialidade, prioridade, status):
     if status:
         query += " AND EXISTS (SELECT 1 FROM solicitacao sx WHERE sx.paciente_id = p.id AND sx.status LIKE %s AND UPPER(COALESCE(sx.conclusao, '')) NOT IN ('CANCELADO', 'OBITO'))"
         params.append(f"%{status}%")
-    query += ' GROUP BY p.id, p.nome, p.oncologico ORDER BY p.nome ASC'
+    query += ' GROUP BY p.id, p.nome, p.oncologico, p.nome_mae ORDER BY p.nome ASC'
 
     conn = conectar()
     c = conn.cursor()
@@ -2011,6 +2021,63 @@ def listar_especialidades(categoria=None, full=False):
             for r in resultados if r and r[0]
         ]
     return [r[0] for r in resultados if r and r[0]]
+
+def buscar_sigtap_por_termo(termo, limit=20):
+    termo_normalizado = normalizar_texto_busca(termo)
+    if len(termo_normalizado) < 2:
+        return []
+    try:
+        limit = max(0, min(30, int(limit)))
+    except (TypeError, ValueError):
+        limit = 20
+    if limit == 0:
+        return []
+
+    codigo_prefixo = re.sub(r'\D', '', termo_normalizado)
+    codigo_filtro = f'{codigo_prefixo}%' if codigo_prefixo else '!%'
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        '''
+        SELECT codigo, descricao
+        FROM sigtap_procedimento
+        WHERE codigo LIKE %s
+           OR POSITION(%s IN descricao_busca) > 0
+        ORDER BY CASE WHEN codigo LIKE %s THEN 0 ELSE 1 END, codigo
+        LIMIT %s
+        ''',
+        (codigo_filtro, termo_normalizado, codigo_filtro, limit)
+    )
+    resultados = c.fetchall()
+    conn.close()
+    return [
+        f'{codigo} - {descricao}'
+        for codigo, descricao in resultados
+        if codigo and descricao
+    ]
+
+def buscar_sigtap_exatos(valores):
+    valores_sigtap = [
+        valor.strip().upper()
+        for valor in valores
+        if re.match(r'^\d{10}\s+-\s+\S', (valor or '').strip())
+    ]
+    if not valores_sigtap:
+        return set()
+
+    conn = conectar()
+    c = conn.cursor()
+    c.execute(
+        '''
+        SELECT codigo || ' - ' || UPPER(descricao)
+        FROM sigtap_procedimento
+        WHERE codigo || ' - ' || UPPER(descricao) = ANY(%s)
+        ''',
+        (valores_sigtap,)
+    )
+    resultados = c.fetchall()
+    conn.close()
+    return {resultado[0] for resultado in resultados if resultado and resultado[0]}
 
 SISTEMAS_INSERCAO_PADRAO = [
     'COPIRN',
@@ -2323,7 +2390,11 @@ def pacientes():
 
     offset = (pagina - 1) * pacientes_por_pagina
     c.execute(
-        'SELECT * FROM paciente ORDER BY nome ASC LIMIT %s OFFSET %s',
+        '''SELECT id, nome, nascimento, telefone, endereco, sus, data_obito,
+                  oncologico, sexo, hipertensao, diabetes, nome_mae, nome_pai, telefone2
+           FROM paciente
+           ORDER BY nome ASC
+           LIMIT %s OFFSET %s''',
         (pacientes_por_pagina, offset)
     )
     pacientes = c.fetchall()
@@ -2600,7 +2671,7 @@ def editar_especialidade_admin():
     categoria_nova = request.form.get('categoria_nova', '').strip().upper()
 
     if not valor_atual or not valor_novo or categoria_nova not in ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO', 'FISIOTERAPIA'):
-        flash('Informe a especialidade e selecione se é Consulta, Exame, Cirurgia ou Procedimento.', 'warning')
+        flash('Informe a especialidade e selecione a categoria correta.', 'warning')
         return redirect(url_for('admin_catalogos'))
 
     conn = conectar()
@@ -3739,7 +3810,7 @@ def relatorios():
                         'EXAME': 'EXAMES',
                         'CIRURGIA': 'CIRURGIAS',
                         'PROCEDIMENTO': 'PROCEDIMENTOS',
-                        'FISIOTERAPIA': 'FISIOTERAPIAS',
+                    'FISIOTERAPIA': 'FISIOTERAPIAS',
                     }.get(valor, 'OUTROS')
                 else:
                     valor = valor or 'SEM ESPECIALIDADE'
@@ -4241,13 +4312,11 @@ def nova_solicitacao():
 
     tipo_selecionado = form_data['tipo'].strip().upper()
     especialidades_filtradas = [e for e in listar_especialidades(tipo_selecionado if tipo_selecionado in tipos_relatorio_ativos() else None) if especialidade_permitida(e)]
-    especialidades_completas = [e for e in listar_especialidades(full=True) if especialidade_permitida(e['valor'])]
 
     def render_nova_solicitacao_page():
         return render_template(
             'nova_solicitacao.html',
             especialidades=especialidades_filtradas,
-            especialidades_completas=especialidades_completas,
             sistemas_insercao=listar_sistemas_insercao(),
             sistemas_insercao_catalogo=listar_sistemas_insercao_catalogo(),
             profissionais_solicitantes=listar_catalogo_solicitante('profissional_solicitante'),
@@ -4331,9 +4400,11 @@ def nova_solicitacao():
         else:
             especialidades = [especialidade] if especialidade else []
 
+        especialidades_sigtap = buscar_sigtap_exatos(especialidades)
+
         if len(especialidades) == 1 and quantidade_solicitacoes > 1 and not permite_replicar_solicitacao(tipo, especialidades[0]):
             flash(
-                'A replicação em quantidade é permitida apenas para exames anatomopatológicos e laboratoriais.',
+                'A replicação em quantidade é permitida para exames anatomopatológicos/laboratoriais e fisioterapia.',
                 'warning'
             )
             return render_nova_solicitacao_page()
@@ -4350,7 +4421,10 @@ def nova_solicitacao():
             return render_nova_solicitacao_page()
 
         especialidades_catalogo = listar_especialidades()
-        especialidades_invalidas = [esp for esp in especialidades if esp not in especialidades_catalogo]
+        especialidades_invalidas = [
+            esp for esp in especialidades
+            if esp not in especialidades_catalogo and esp not in especialidades_sigtap
+        ]
         sistemas_catalogo = listar_sistemas_insercao()
         sistema_existe_catalogo = sistema_insercao in sistemas_catalogo
 
@@ -4444,7 +4518,7 @@ def adicionar_especialidade_admin():
     especialidade = request.form.get('especialidade_nova', '').strip().upper()
     categoria = request.form.get('categoria_nova', '').strip().upper()
     if not especialidade or categoria not in ('CONSULTA', 'EXAME', 'CIRURGIA', 'PROCEDIMENTO', 'FISIOTERAPIA'):
-        flash('Informe a especialidade e selecione se é Consulta, Exame, Cirurgia ou Procedimento.', 'warning')
+        flash('Informe a especialidade e selecione a categoria correta.', 'warning')
         return redirect(url_for('admin_catalogos'))
 
     conn = conectar()
@@ -4622,33 +4696,39 @@ def api_buscar_paciente():
     if termo_normalizado:
         c.execute(
             """
-            SELECT id, nome, oncologico
+            SELECT id, nome, oncologico, nome_mae
             FROM paciente
             WHERE regexp_replace(COALESCE(id, ''), '\\D', '', 'g') LIKE %s
                OR regexp_replace(COALESCE(sus, ''), '\\D', '', 'g') LIKE %s
                OR id ILIKE %s
                OR sus ILIKE %s
                OR nome ILIKE %s
+               OR nome_mae ILIKE %s
             ORDER BY nome
             LIMIT 10
             """,
-            (f"%{termo_normalizado}%", f"%{termo_normalizado}%", f"%{termo}%", f"%{termo}%", f"%{termo}%")
+            (f"%{termo_normalizado}%", f"%{termo_normalizado}%", f"%{termo}%", f"%{termo}%", f"%{termo}%", f"%{termo}%")
         )
     else:
         c.execute(
             """
-            SELECT id, nome, oncologico
+            SELECT id, nome, oncologico, nome_mae
             FROM paciente
-            WHERE id ILIKE %s OR sus ILIKE %s OR nome ILIKE %s
+            WHERE id ILIKE %s OR sus ILIKE %s OR nome ILIKE %s OR nome_mae ILIKE %s
             ORDER BY nome
             LIMIT 10
             """,
-            (f"%{termo}%", f"%{termo}%", f"%{termo}%")
+            (f"%{termo}%", f"%{termo}%", f"%{termo}%", f"%{termo}%")
         )
     pacientes = c.fetchall()
     conn.close()
 
-    resultado = [{'id': formatar_identificador_paciente(p[0]), 'nome': p[1], 'oncologico': bool(p[2])} for p in pacientes]
+    resultado = [{
+        'id': formatar_identificador_paciente(p[0]),
+        'nome': p[1],
+        'oncologico': bool(p[2]),
+        'nome_mae': p[3] or '',
+    } for p in pacientes]
     return jsonify(resultado)
 
 
@@ -4773,6 +4853,21 @@ def api_sugestoes_solicitacao():
             LIMIT 30
         '''
         c.execute(query, tuple(params))
+        resultados_especialidades = c.fetchall()
+        conn.close()
+
+        sugestoes_salvas = [
+            resultado[0]
+            for resultado in resultados_especialidades
+            if resultado and resultado[0] and especialidade_permitida(resultado[0])
+        ]
+        sugestoes = buscar_sigtap_por_termo(termo, limit=30)
+        for sugestao in sugestoes_salvas:
+            if sugestao not in sugestoes:
+                sugestoes.append(sugestao)
+            if len(sugestoes) >= 30:
+                break
+        return jsonify(sugestoes)
     else:
         if len(termo) < 1:
             conn.close()
@@ -4794,7 +4889,7 @@ def api_sugestoes_solicitacao():
     resultados = c.fetchall()
     conn.close()
 
-    return jsonify([r[0] for r in resultados if r and r[0] and (campo != 'especialidade' or especialidade_permitida(r[0]))])
+    return jsonify([r[0] for r in resultados if r and r[0]])
 
 @app.route('/api/alertas_antigos')
 def api_alertas_antigos():

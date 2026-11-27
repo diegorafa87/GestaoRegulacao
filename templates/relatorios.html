@@ -23,18 +23,6 @@
     </div>
 </div>
 
-<div class="card mb-4">
-    <div class="card-header bg-secondary text-white">Atalhos de Relatórios</div>
-    <div class="card-body d-flex flex-wrap gap-2">
-        <a class="btn btn-outline-primary btn-sm" href="{{ url_for('relatorios', next=request.full_path) }}">Consultas e Exames Realizados</a>
-        <a class="btn btn-outline-warning btn-sm" href="{{ url_for('relatorios', tipo='CONSULTA', situacao='EM_ESPERA', next=request.full_path) }}">Consultas em Espera</a>
-        <a class="btn btn-outline-warning btn-sm" href="{{ url_for('relatorios', tipo='EXAME', situacao='EM_ESPERA', next=request.full_path) }}">Exames em Espera</a>
-        <a class="btn btn-outline-primary btn-sm" href="{{ url_for('solicitacoes', next=request.full_path) }}">Resumo de Solicitações</a>
-        <a class="btn btn-outline-primary btn-sm" href="{{ url_for('solicitacoes', status='URGENTE', next=request.full_path) }}">Urgentes em Espera</a>
-        <a class="btn btn-outline-primary btn-sm" href="{{ url_for('pacientes', next=request.full_path) }}">Pacientes Cadastrados</a>
-    </div>
-</div>
-
 <form method="get" class="mb-4">
     <div class="row g-3 align-items-end mb-3">
         <div class="col-md-2">
@@ -918,7 +906,7 @@ async function gerarPdfTexto(tipo) {
                     pacientes.forEach((p) => {
                         const option = document.createElement('option');
                         option.value = p.id;
-                        option.label = `${p.nome} (${p.id})`;
+                        option.label = `${p.nome} - Mãe: ${p.nome_mae || 'Não informado'} (${p.id})`;
                         listaSugestoes.appendChild(option);
                     });
 

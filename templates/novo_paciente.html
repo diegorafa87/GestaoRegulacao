@@ -14,7 +14,7 @@
     </div>
     <div class="col-md-3">
         <label class="form-label">Cartão SUS: <span class="text-danger">*</span></label>
-        <input id="sus" name="sus" class="form-control" maxlength="15" pattern="\d{0,15}" inputmode="numeric" placeholder="Somente números (até 15)" value="{{ form_data.sus if form_data else '' }}" oninput="this.value=this.value.replace(/\D/g,'').slice(0,15)" required>
+        <input id="sus" name="sus" class="form-control" maxlength="18" pattern="\d{3} \d{4} \d{4} \d{4}" inputmode="numeric" placeholder="000 0000 0000 0000" value="{{ form_data.sus|formatar_sus if form_data else '' }}" required>
     </div>
     <div class="col-md-6">
         <label class="form-label">Nome: <span class="text-danger">*</span></label>
@@ -180,6 +180,17 @@
         return formatado;
     }
 
+    function aplicarMascaraSus(valor) {
+        const digitos = somenteDigitos(valor).slice(0, 15);
+        if (!digitos) return '';
+        return [
+            digitos.slice(0, 3),
+            digitos.slice(3, 7),
+            digitos.slice(7, 11),
+            digitos.slice(11, 15),
+        ].filter(grupo => grupo).join(' ');
+    }
+
     function limparAvisoDuplicidade() {
         if (!avisoDuplicidade) return;
         avisoDuplicidade.className = 'col-12 d-none';
@@ -302,6 +313,13 @@
         campoCpf.addEventListener('input', (e) => {
             e.target.value = aplicarMascaraCpf(e.target.value);
         });
+    }
+
+    if (campoSus) {
+        campoSus.addEventListener('input', (e) => {
+            e.target.value = aplicarMascaraSus(e.target.value);
+        });
+        campoSus.value = aplicarMascaraSus(campoSus.value);
     }
 
     if (btnCopiarRuaAtual && campoRuaNovaAdmin && campoRua) {

@@ -15,7 +15,7 @@
     </div>
     <div class="col-md-3">
         <label class="form-label">Cartão SUS:</label>
-        <input name="sus" id="sus" class="form-control" value="{{ paciente[5] or '' }}" maxlength="15" pattern="\d{0,15}" inputmode="numeric" placeholder="Somente números (até 15)">
+        <input name="sus" id="sus" class="form-control" value="{{ paciente[5]|formatar_sus if paciente[5] else '' }}" maxlength="18" pattern="\d{3} \d{4} \d{4} \d{4}" inputmode="numeric" placeholder="000 0000 0000 0000">
     </div>
     <div class="col-md-6">
         <label class="form-label">Nome:</label>
@@ -177,8 +177,20 @@
 
     if (campoSus) {
         campoSus.addEventListener('input', (e) => {
-            e.target.value = e.target.value.replace(/\D/g, '').slice(0, 15);
+            const digitos = e.target.value.replace(/\D/g, '').slice(0, 15);
+            e.target.value = [
+                digitos.slice(0, 3),
+                digitos.slice(3, 7),
+                digitos.slice(7, 11),
+                digitos.slice(11, 15),
+            ].filter(grupo => grupo).join(' ');
         });
+        campoSus.value = [
+            campoSus.value.replace(/\D/g, '').slice(0, 3),
+            campoSus.value.replace(/\D/g, '').slice(3, 7),
+            campoSus.value.replace(/\D/g, '').slice(7, 11),
+            campoSus.value.replace(/\D/g, '').slice(11, 15),
+        ].filter(grupo => grupo).join(' ');
     }
 
     if (campoSemNumero && campoNumeroEndereco) {
